@@ -1,0 +1,31 @@
+# =====================================================================
+#  .gitignore do Royale Cars
+#  Tudo que está listado aqui o Git IGNORA: não aparece no GitHub Desktop
+#  e nunca vai para o GitHub. Serve para três tipos de arquivo:
+#   1. Pastas que o computador gera sozinho (dá para recriar a qualquer hora)
+#   2. Arquivos com senha ou configuração pessoal de cada computador
+#   3. Lixo do sistema operacional
+# =====================================================================
+
+# --- 1. Gerado automaticamente ---------------------------------------
+# Desktop (Electron): bibliotecas baixadas pelo "npm install"
+node_modules/
+dist/
+out/
+
+# Mobile (Flutter): o próprio Flutter já tem um .gitignore dentro de
+# mobile/, mas repetimos as pastas grandes aqui por segurança
+mobile/build/
+mobile/.dart_tool/
+
+# --- 2. Senhas e configuração de cada computador ---------------------
+.env
+.env.*
+web/config/config.local.php
+supabase/.temp/
+
+# --- 3. Lixo do sistema ----------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+*.log
