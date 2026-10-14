@@ -14,6 +14,10 @@ const sessao = {
 
 // O chefe pode tudo. Os outros só o que estiver na lista de permissões.
 // As chaves são as 13 do banco unificado (ex.: "clientes_ver").
+//
+// "administracao" (cadastrar a equipe e mexer nos modelos) NÃO é uma das
+// 13: ninguém recebe essa chave. Então temPermissao("administracao") só
+// é verdadeiro para o chefe, que é exatamente a regra combinada.
 function temPermissao(chave) {
   const usuario = sessao.usuario;
   if (!usuario) return false;

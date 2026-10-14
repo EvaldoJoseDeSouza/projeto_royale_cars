@@ -33,11 +33,10 @@ src/
     │   ├── veiculo/
     │   ├── locacao/
     │   ├── colaborador/
-    │   ├── grupo-permissao/
+    │   ├── grupo-permissao/  (modelos de permissão)
     │   ├── confirmacao/
     │   ├── trocar-senha/
-    │   ├── redefinir-senha-colaborador/
-    │   └── ver-colaboradores/
+    │   └── redefinir-senha-colaborador/
     └── estilos/              CSS usado por várias telas (modal.css)
 ```
 

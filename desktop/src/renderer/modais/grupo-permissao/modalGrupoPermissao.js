@@ -1,43 +1,45 @@
 document.addEventListener('DOMContentLoaded', async () => {
 
+  // As 13 permissões do banco unificado: as MESMAS chaves na web, no
+  // desktop e no celular. "dependeDe" lista o que é ligado junto: não
+  // adianta poder cadastrar cliente sem poder ver a lista de clientes.
   const CATEGORIAS_PERMISSOES = [
-    {
-      categoria: 'Frota',
-      permissoes: [
-        { chave: 'ver_frota', titulo: 'Ver Frota', descricao: 'Visualiza a lista de veículos cadastrados.' },
-        { chave: 'editar_frota', titulo: 'Cadastrar e Editar Veículos', descricao: 'Cadastra novos veículos e edita os existentes.', dependeDe: 'ver_frota' },
-        { chave: 'arquivar_frota', titulo: 'Arquivar Veículos', descricao: 'Arquiva e reativa veículos da frota.', dependeDe: 'ver_frota' }
-      ]
-    },
     {
       categoria: 'Clientes',
       permissoes: [
-        { chave: 'ver_clientes', titulo: 'Ver Clientes', descricao: 'Visualiza a lista de clientes cadastrados.' },
-        { chave: 'editar_clientes', titulo: 'Cadastrar e Editar Clientes', descricao: 'Cadastra novos clientes e edita os existentes.', dependeDe: 'ver_clientes' },
-        { chave: 'arquivar_clientes', titulo: 'Arquivar Clientes', descricao: 'Arquiva e reativa cadastros de clientes.', dependeDe: 'ver_clientes' }
+        { chave: 'clientes_ver', titulo: 'Ver Clientes', descricao: 'Vê a lista e a ficha dos clientes.' },
+        { chave: 'clientes_gerenciar', titulo: 'Cadastrar e Editar Clientes', descricao: 'Cadastra novos clientes e edita os existentes.', dependeDe: ['clientes_ver'] },
+        { chave: 'clientes_arquivar', titulo: 'Arquivar Clientes', descricao: 'Arquiva e reativa cadastros de clientes.', dependeDe: ['clientes_ver'] }
+      ]
+    },
+    {
+      categoria: 'Frota',
+      permissoes: [
+        { chave: 'veiculos_ver', titulo: 'Ver Frota', descricao: 'Vê a lista de veículos.' },
+        { chave: 'veiculos_gerenciar', titulo: 'Cadastrar e Editar Veículos', descricao: 'Cadastra veículos e edita os dados, inclusive o preço da diária.', dependeDe: ['veiculos_ver'] },
+        { chave: 'veiculos_arquivar', titulo: 'Arquivar Veículos', descricao: 'Arquiva e reativa veículos da frota.', dependeDe: ['veiculos_ver'] }
       ]
     },
     {
       categoria: 'Locações',
       permissoes: [
-        { chave: 'ver_locacoes', titulo: 'Ver Locações', descricao: 'Visualiza locações ativas e o histórico.' },
-        { chave: 'criar_locacoes', titulo: 'Criar Locações', descricao: 'Registra novos contratos de locação.', dependeDe: 'ver_locacoes' },
-        { chave: 'finalizar_locacoes', titulo: 'Finalizar Locações', descricao: 'Encerra contratos e libera veículos.', dependeDe: 'ver_locacoes' }
+        { chave: 'locacoes_ver', titulo: 'Ver Locações', descricao: 'Vê as locações em andamento e o histórico.' },
+        { chave: 'locacoes_gerenciar', titulo: 'Registrar Retirada e Devolução', descricao: 'Registra novas locações e a devolução dos carros.', dependeDe: ['locacoes_ver', 'clientes_ver', 'veiculos_ver'] },
+        { chave: 'locacoes_cancelar', titulo: 'Cancelar Locações', descricao: 'Cancela uma locação em andamento, informando o motivo.', dependeDe: ['locacoes_ver'] }
       ]
     },
     {
-      categoria: 'Financeiro',
+      categoria: 'Manutenção',
       permissoes: [
-        { chave: 'ver_financeiro', titulo: 'Ver Financeiro', descricao: 'Acessa o painel financeiro e seus indicadores.' }
+        { chave: 'manutencoes', titulo: 'Manutenção', descricao: 'Envia veículos para a oficina e libera informando o custo.', dependeDe: ['veiculos_ver'] }
       ]
     },
     {
-      categoria: 'Colaboradores',
+      categoria: 'Financeiro e Relatórios',
       permissoes: [
-        { chave: 'ver_colaboradores', titulo: 'Ver Colaboradores', descricao: 'Acessa a lista de colaboradores e grupos.' },
-        { chave: 'criar_colaboradores', titulo: 'Criar Colaboradores', descricao: 'Adiciona novos colaboradores ao sistema.', dependeDe: 'ver_colaboradores' },
-        { chave: 'editar_colaboradores', titulo: 'Editar Colaboradores', descricao: 'Edita dados e grupo dos colaboradores.', dependeDe: 'ver_colaboradores' },
-        { chave: 'excluir_colaboradores', titulo: 'Excluir Colaboradores', descricao: 'Remove colaboradores do sistema.', dependeDe: 'ver_colaboradores' }
+        { chave: 'financeiro', titulo: 'Ver Financeiro', descricao: 'Vê faturamento, custos e resultado do mês.' },
+        { chave: 'relatorios', titulo: 'Relatórios', descricao: 'Gera relatórios de clientes, frota, locações e manutenções.' },
+        { chave: 'relatorios_financeiros', titulo: 'Valores nos Relatórios', descricao: 'Vê o relatório de faturamento e as colunas de valores.', dependeDe: ['relatorios'] }
       ]
     }
   ];
@@ -154,9 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) {
             permissoesSelecionadas.add(perm.chave);
-            if (perm.dependeDe) {
-              permissoesSelecionadas.add(perm.dependeDe);
-            }
+            (perm.dependeDe || []).forEach(chave => permissoesSelecionadas.add(chave));
           } else {
             permissoesSelecionadas.delete(perm.chave);
           }
@@ -171,11 +171,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     CATEGORIAS_PERMISSOES.forEach(cat => {
       cat.permissoes.forEach(perm => {
-        if (!perm.dependeDe) return;
-        if (permissoesSelecionadas.has(perm.chave)) {
-          const checkboxPai = listaCategorias.querySelector(`input[data-chave="${perm.dependeDe}"]`);
+        if (!perm.dependeDe || !permissoesSelecionadas.has(perm.chave)) return;
+        // Trava as caixas de que esta permissão precisa (não dá para desmarcar)
+        perm.dependeDe.forEach(chave => {
+          const checkboxPai = listaCategorias.querySelector(`input[data-chave="${chave}"]`);
           if (checkboxPai) checkboxPai.disabled = true;
-        }
+        });
       });
     });
 
@@ -183,12 +184,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function montarPasso1() {
-    listaTemplates.innerHTML = `<p style="color:#999; font-size:0.85rem;">Carregando grupos existentes...</p>`;
+    listaTemplates.innerHTML = `<p style="color:#999; font-size:0.85rem;">Carregando modelos existentes...</p>`;
 
     const templates = [
       {
         nome: 'Começar do zero',
-        descricaoTemplate: 'Crie o grupo do zero e selecione manualmente cada permissão.',
+        descricaoTemplate: 'Crie o modelo do zero e marque cada permissão.',
         icone: 'ri-file-add-line',
         permissoes: []
       }
@@ -205,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       });
     } catch (erro) {
-      console.error('Erro ao carregar grupos existentes:', erro);
+      console.error('Erro ao carregar modelos existentes:', erro);
     }
 
     listaTemplates.innerHTML = '';
@@ -229,13 +230,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- Decide qual modo abrir ----
   if (grupoEmEdicao) {
-    grupoTitulo.textContent = 'Editar Grupo de Permissão';
+    grupoTitulo.textContent = 'Editar Modelo de Permissão';
     inputNome.value = grupoEmEdicao.nome || '';
     inputDescricao.value = grupoEmEdicao.descricao || '';
     btnVoltarTemplates.style.display = 'none';
     irParaFormulario(grupoEmEdicao.permissoes || []);
   } else {
-    grupoTitulo.textContent = 'Novo Grupo de Permissão';
+    grupoTitulo.textContent = 'Novo Modelo de Permissão';
     await montarPasso1();
   }
 

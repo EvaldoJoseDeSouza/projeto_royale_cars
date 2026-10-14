@@ -90,31 +90,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const pegar = (sel) => document.querySelector(sel);
 
     // Menu lateral
-    esconderSe(pegar('.menu-item[data-target="view-frota"]'), !tem('ver_frota'));
-    esconderSe(pegar('.menu-item[data-target="view-clientes"]'), !tem('ver_clientes'));
-    esconderSe(pegar('.menu-item[data-target="view-financeiro"]'), !tem('ver_financeiro'));
+    esconderSe(pegar('.menu-item[data-target="view-frota"]'), !tem('veiculos_ver'));
+    esconderSe(pegar('.menu-item[data-target="view-clientes"]'), !tem('clientes_ver'));
+    esconderSe(pegar('.menu-item[data-target="view-financeiro"]'), !tem('financeiro'));
     const wrapLocacoes = document.getElementById('btn-locacoes-master')?.closest('.menu-dropdown-wrapper');
-    esconderSe(wrapLocacoes, !tem('ver_locacoes'));
+    esconderSe(wrapLocacoes, !tem('locacoes_ver'));
     const wrapAdmin = document.getElementById('btn-administracao-master')?.closest('.menu-dropdown-wrapper');
-    esconderSe(wrapAdmin, !tem('ver_colaboradores'));
+    esconderSe(wrapAdmin, !tem('administracao'));
 
     // Cards de resumo do Dashboard
-    esconderSe(pegar('.stat-card[data-target="view-financeiro"]'), !tem('ver_financeiro'));
-    esconderSe(pegar('.stat-card[data-target="view-locacoes-ativas"]'), !tem('ver_locacoes'));
-    esconderSe(pegar('.stat-card[data-target="view-clientes"]'), !tem('ver_clientes'));
-    esconderSe(pegar('.stat-card[data-target="view-frota"]'), !tem('ver_frota'));
+    esconderSe(pegar('.stat-card[data-target="view-financeiro"]'), !tem('financeiro'));
+    esconderSe(pegar('.stat-card[data-target="view-locacoes-ativas"]'), !tem('locacoes_ver'));
+    esconderSe(pegar('.stat-card[data-target="view-clientes"]'), !tem('clientes_ver'));
+    esconderSe(pegar('.stat-card[data-target="view-frota"]'), !tem('veiculos_ver'));
 
     // Botões de ação das telas
-    esconderSe(btnAbrirModal, !tem('editar_frota'));
-    esconderSe(btnAbrirModalCliente, !tem('editar_clientes'));
-    esconderSe(btnAbrirModalLocacao, !tem('criar_locacoes'));
-    esconderSe(btnAbrirCadastroColaborador, !tem('criar_colaboradores'));
-    esconderSe(btnAbrirModalGrupo, !tem('criar_colaboradores'));
+    esconderSe(btnAbrirModal, !tem('veiculos_gerenciar'));
+    esconderSe(btnAbrirModalCliente, !tem('clientes_gerenciar'));
+    esconderSe(btnAbrirModalLocacao, !tem('locacoes_gerenciar'));
+    esconderSe(btnAbrirCadastroColaborador, !tem('administracao'));
+    esconderSe(btnAbrirModalGrupo, !tem('administracao'));
 
     // Botões "Arquivados"
-    esconderSe(document.getElementById('btn-toggle-arquivados-frota'), !tem('arquivar_frota'));
-    esconderSe(document.getElementById('btn-toggle-arquivados-clientes'), !tem('arquivar_clientes'));
-    esconderSe(btnToggleArquivadosColaboradores, !tem('excluir_colaboradores'));
+    esconderSe(document.getElementById('btn-toggle-arquivados-frota'), !tem('veiculos_arquivar'));
+    esconderSe(document.getElementById('btn-toggle-arquivados-clientes'), !tem('clientes_arquivar'));
+    esconderSe(btnToggleArquivadosColaboradores, !tem('administracao'));
   }
 
   let listaColaboradoresAtual = [];
@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'view-financeiro': 'Painel Financeiro & Fluxo de Caixa',
     'view-configuracoes': 'Configurações da Conta',
     'view-colaboradores': 'Gerenciar Colaboradores',
-    'view-grupos-permissao': 'Grupos de Permissão'
+    'view-grupos-permissao': 'Modelos de Permissão'
   };
 
   async function carregarResumoDashboard() {
@@ -390,9 +390,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       aplicarPermissoesNoCard(card, {
-        '.edit-btn': 'editar_frota',
-        '.archive-btn': 'arquivar_frota',
-        '.reativar-btn': 'arquivar_frota'
+        '.edit-btn': 'veiculos_gerenciar',
+        '.archive-btn': 'veiculos_arquivar',
+        '.reativar-btn': 'veiculos_arquivar'
       });
       containerFrota.appendChild(card);
     });
@@ -508,9 +508,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       aplicarPermissoesNoCard(card, {
-        '.edit-btn': 'editar_clientes',
-        '.archive-btn': 'arquivar_clientes',
-        '.reativar-btn': 'arquivar_clientes'
+        '.edit-btn': 'clientes_gerenciar',
+        '.archive-btn': 'clientes_arquivar',
+        '.reativar-btn': 'clientes_arquivar'
       });
       containerClientes.appendChild(card);
     });
@@ -545,8 +545,8 @@ document.addEventListener('DOMContentLoaded', () => {
       tabelaLocacoesAtivasBody.appendChild(tr);
     });
 
-    // Sem a permissão "finalizar_locacoes", o botão Finalizar nem aparece
-    if (!tem('finalizar_locacoes')) {
+    // Sem a permissão "locacoes_gerenciar", o botão Finalizar nem aparece
+    if (!tem('locacoes_gerenciar')) {
       tabelaLocacoesAtivasBody.querySelectorAll('.btn-dar-baixa').forEach(b => b.remove());
     }
 
@@ -951,10 +951,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       aplicarPermissoesNoCard(card, {
-        '.edit-btn': 'editar_colaboradores',
-        '.redefinir-senha-btn': 'editar_colaboradores',
-        '.archive-btn': 'excluir_colaboradores',
-        '.reativar-btn': 'excluir_colaboradores'
+        '.edit-btn': 'administracao',
+        '.redefinir-senha-btn': 'administracao',
+        '.archive-btn': 'administracao',
+        '.reativar-btn': 'administracao'
       });
       containerColaboradores.appendChild(card);
     });
@@ -1025,7 +1025,7 @@ document.addEventListener('DOMContentLoaded', () => {
     containerGruposPermissao.innerHTML = '';
 
     if (listaGrupos.length === 0) {
-      containerGruposPermissao.innerHTML = `<p style="color: var(--text-muted); padding: 20px;">Nenhum grupo de permissão criado ainda.</p>`;
+      containerGruposPermissao.innerHTML = `<p style="color: var(--text-muted); padding: 20px;">Nenhum modelo de permissão criado ainda.</p>`;
       return;
     }
 
@@ -1036,11 +1036,10 @@ document.addEventListener('DOMContentLoaded', () => {
       card.innerHTML = `
       <button class="btn-card-options"><i class="ri-more-2-fill"></i></button>
       <div class="card-dropdown">
-        <button class="card-dropdown-item ver-colaboradores-btn" data-id="${grupo.id}"><i class="ri-team-line"></i> Ver Colaboradores</button>
         <button class="card-dropdown-item edit-btn" data-id="${grupo.id}"><i class="ri-edit-line"></i> Editar</button>
         <button class="card-dropdown-item delete-item delete-btn" data-id="${grupo.id}"><i class="ri-delete-bin-line"></i> Excluir</button>
       </div>
-      <span class="badge-contagem">${grupo.totalColaboradores} colaborador${grupo.totalColaboradores !== 1 ? 'es' : ''}</span>
+      <span class="badge-contagem">${(grupo.permissoes || []).length} permiss${(grupo.permissoes || []).length !== 1 ? 'ões' : 'ão'}</span>
       <div class="vehicle-info">
         <h4>${grupo.nome}</h4>
         <p style="text-transform: none; font-weight: 400;">${grupo.descricao || 'Sem descrição'}</p>
@@ -1056,13 +1055,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dropdown.classList.toggle('show');
       });
 
-      card.querySelector('.ver-colaboradores-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        dropdown.classList.remove('show');
-        localStorage.setItem('grupoParaVerColaboradores', JSON.stringify({ id: grupo.id, nome: grupo.nome }));
-        window.apiAcesso.abrirModalVerColaboradores();
-      });
-
       card.querySelector('.edit-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         dropdown.classList.remove('show');
@@ -1075,8 +1067,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dropdown.classList.remove('show');
 
         const confirmou = await window.apiAcesso.confirmar({
-          titulo: "Excluir Grupo",
-          mensagem: `Tem certeza que deseja excluir o grupo "${grupo.nome}"? Esta ação não pode ser desfeita.`,
+          titulo: "Excluir Modelo",
+          mensagem: `Excluir o modelo "${grupo.nome}"? As permissões de quem já foi cadastrado com ele não mudam.`,
           textoConfirmar: "Excluir",
           tipo: "perigo"
         });
@@ -1087,9 +1079,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       aplicarPermissoesNoCard(card, {
-        '.ver-colaboradores-btn': 'ver_colaboradores',
-        '.edit-btn': 'editar_colaboradores',
-        '.delete-btn': 'excluir_colaboradores'
+        '.edit-btn': 'administracao',
+        '.delete-btn': 'administracao'
       });
       containerGruposPermissao.appendChild(card);
     });

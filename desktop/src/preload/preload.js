@@ -50,7 +50,7 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     fecharModalTrocarSenha: () => ipcRenderer.send('fechar-modal-trocar-senha'),
     trocarSenhaLogado: (dados) => ipcRenderer.invoke('trocar-senha-logado', dados),
 
-    // ==================== GRUPOS DE PERMISSÃO ====================
+    // ==================== MODELOS DE PERMISSÃO (antigos grupos) ====================
     pedirGruposPermissao: () => ipcRenderer.invoke('buscar-grupos-permissao'),
     excluirGrupoPermissao: (idGrupo) => ipcRenderer.invoke('excluir-grupo-permissao', idGrupo),
     aoAtualizarGrupos: (funcao) => ipcRenderer.on('grupos-atualizados', (event, ...args) => funcao(...args)),
@@ -72,10 +72,4 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     abrirModalRedefinirSenhaColaborador: () => ipcRenderer.send('abrir-modal-redefinir-senha-colaborador'),
     fecharModalRedefinirSenhaColaborador: () => ipcRenderer.send('fechar-modal-redefinir-senha-colaborador'),
     redefinirSenhaColaborador: (dados) => ipcRenderer.invoke('redefinir-senha-colaborador', dados),
-
-    // ==================== VER COLABORADORES DO GRUPO ====================
-    abrirModalVerColaboradores: () => ipcRenderer.send('abrir-modal-ver-colaboradores'),
-    fecharModalVerColaboradores: () => ipcRenderer.send('fechar-modal-ver-colaboradores'),
-    pedirColaboradoresDoGrupo: (idGrupo) => ipcRenderer.invoke('buscar-colaboradores-do-grupo', idGrupo),
-    moverColaboradorDeGrupo: (dados) => ipcRenderer.invoke('mover-colaborador-de-grupo', dados),
 });

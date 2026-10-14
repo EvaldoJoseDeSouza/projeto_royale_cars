@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs"); // ainda usado no cadastro de colaborador (s
 const supabase = require("./supabase");
 const { temPermissao } = require("./sessao");
 const { registrarIpcSessao } = require("./ipc/sessao");
+const { registrarIpcModelos } = require("./ipc/modelos");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -30,7 +31,6 @@ let resolverConfirmacao = null;
 let janelaModalGrupoPermissao;
 let janelaModalColaborador;
 let janelaModalRedefinirSenhaColaborador;
-let janelaModalVerColaboradores;
 
 // Sai nos pacotes 2.5 a 2.8: o banco unificado tem uma empresa só
 let idEmpresaLogada = null;
@@ -147,6 +147,12 @@ registrarIpcSessao({
   mostrarAviso,
   obterJanelaPrincipal: () => janelaPrincipal,
   obterJanelaTrocarSenha: () => janelaModalTrocarSenha,
+});
+
+registrarIpcModelos({
+  mostrarAviso,
+  obterJanelaDashboard: () => janelaDashboard,
+  obterJanelaModelo: () => janelaModalGrupoPermissao,
 });
 
 ipcMain.on("abrir-modal-trocar-senha", (evento) => {
@@ -369,7 +375,7 @@ ipcMain.on("fechar-modal-veiculo", () => {
 
 ipcMain.handle("salvar-veiculo-banco", async (event, dadosVeiculo) => {
   try {
-    if (await negarSemPermissao(janelaModalVeiculo, "editar_frota")) return { sucesso: false };
+    if (await negarSemPermissao(janelaModalVeiculo, "veiculos_gerenciar")) return { sucesso: false };
 
     let query;
 
@@ -427,7 +433,7 @@ ipcMain.handle("salvar-veiculo-banco", async (event, dadosVeiculo) => {
 
 ipcMain.handle("arquivar-veiculo-banco", async (event, idVeiculo) => {
   try {
-    if (await negarSemPermissao(janelaDashboard, "arquivar_frota")) return { sucesso: false };
+    if (await negarSemPermissao(janelaDashboard, "veiculos_arquivar")) return { sucesso: false };
 
     const { data: locacoesAtivas, error: erroLocacoes } = await supabase
       .from("locacoes")
@@ -490,7 +496,7 @@ ipcMain.handle("arquivar-veiculo-banco", async (event, idVeiculo) => {
 
 ipcMain.handle("reativar-veiculo-banco", async (event, idVeiculo) => {
   try {
-    if (await negarSemPermissao(janelaDashboard, "arquivar_frota")) return { sucesso: false };
+    if (await negarSemPermissao(janelaDashboard, "veiculos_arquivar")) return { sucesso: false };
 
     const { error } = await supabase
       .from("veiculos")
@@ -604,7 +610,7 @@ ipcMain.on("fechar-modal-cliente", () => {
 
 ipcMain.handle("salvar-cliente-banco", async (event, dadosCliente) => {
   try {
-    if (await negarSemPermissao(janelaModalCliente, "editar_clientes")) return { sucesso: false };
+    if (await negarSemPermissao(janelaModalCliente, "clientes_gerenciar")) return { sucesso: false };
 
     let query;
 
@@ -662,7 +668,7 @@ ipcMain.handle("salvar-cliente-banco", async (event, dadosCliente) => {
 
 ipcMain.handle("arquivar-cliente-banco", async (event, idCliente) => {
   try {
-    if (await negarSemPermissao(janelaDashboard, "arquivar_clientes")) return { sucesso: false };
+    if (await negarSemPermissao(janelaDashboard, "clientes_arquivar")) return { sucesso: false };
 
     const { data: locacoesAtivas, error: erroLocacoes } = await supabase
       .from("locacoes")
@@ -725,7 +731,7 @@ ipcMain.handle("arquivar-cliente-banco", async (event, idCliente) => {
 
 ipcMain.handle("reativar-cliente-banco", async (event, idCliente) => {
   try {
-    if (await negarSemPermissao(janelaDashboard, "arquivar_clientes")) return { sucesso: false };
+    if (await negarSemPermissao(janelaDashboard, "clientes_arquivar")) return { sucesso: false };
 
     const { error } = await supabase
       .from("clientes")
@@ -854,7 +860,7 @@ ipcMain.on("fechar-modal-locacao", () => {
 
 ipcMain.handle("salvar-locacao-banco", async (event, novaLocacao) => {
   try {
-    if (await negarSemPermissao(janelaModalLocacao, "criar_locacoes")) return { sucesso: false };
+    if (await negarSemPermissao(janelaModalLocacao, "locacoes_gerenciar")) return { sucesso: false };
 
     const { data: veiculoAtual, error: erroConsultaVeiculo } = await supabase
       .from("veiculos")
@@ -937,7 +943,7 @@ ipcMain.handle(
   "finalizar-locacao-manual",
   async (event, { idLocacao, idVeiculo }) => {
     try {
-      if (await negarSemPermissao(janelaDashboard, "finalizar_locacoes")) return { sucesso: false };
+      if (await negarSemPermissao(janelaDashboard, "locacoes_gerenciar")) return { sucesso: false };
 
       const { error: erroLocacao } = await supabase
         .from("locacoes")
@@ -1078,94 +1084,6 @@ ipcMain.handle("buscar-dados-financeiros", async () => {
 
 
 // =========================== GRUPOS DE PERMISSÃO ======================
-ipcMain.handle('buscar-grupos-permissao', async () => {
-  try {
-    const { data: grupos, error } = await supabase
-      .from('grupos_permissao')
-      .select('*')
-      .eq('id_empresa', idEmpresaLogada)
-      .order('nome', { ascending: true });
-
-    if (error) {
-      console.error('Erro ao buscar grupos de permissão:', error.message);
-      return [];
-    }
-
-    const { data: usuarios, error: erroUsuarios } = await supabase
-      .from('usuarios')
-      .select('id_grupo_permissao')
-      .eq('id_empresa', idEmpresaLogada);
-
-    if (erroUsuarios) {
-      console.error('Erro ao contar colaboradores por grupo:', erroUsuarios.message);
-      return grupos.map(grupo => ({ ...grupo, totalColaboradores: 0 }));
-    }
-
-    const gruposComContagem = grupos.map(grupo => {
-      const total = usuarios.filter(u => u.id_grupo_permissao === grupo.id).length;
-      return { ...grupo, totalColaboradores: total };
-    });
-
-    return gruposComContagem;
-  } catch (err) {
-    console.error('Erro inesperado ao bucar grupos de permissão:', err);
-    return [];
-  }
-});
-
-ipcMain.handle('excluir-grupo-permissao', async (event, idGrupo) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "excluir_colaboradores")) return { sucesso: false };
-
-    const { data: colaboradoresVinculados, error: erroConsulta } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('id_grupo_permissao', idGrupo);
-
-    if (erroConsulta) {
-      console.error('Erro ao verificar colaboradores do grupo:', erroConsulta.message);
-      await mostrarAviso(janelaDashboard, {
-        tipo: 'erro', titulo: 'Erro na Verificação',
-        mensagem: 'Não foi possível verificar os colaboradores deste grupo. Tente novamente.'
-      });
-      return { sucesso: false };
-    }
-
-    if (colaboradoresVinculados && colaboradoresVinculados.length > 0) {
-      await mostrarAviso(janelaDashboard, {
-        tipo: 'erro', titulo: 'Não é Possível Excluir',
-        mensagem: 'Este grupo ainda possui colaboradores vinculados. Mova todos os colaboradores para outro grupo antes de excluí-lo.'
-      });
-      return { sucesso: false };
-    }
-
-    const { error } = await supabase
-      .from('grupos_permissao')
-      .delete()
-      .eq('id', idGrupo);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send('grupos-atualizados');
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: 'sucesso', titulo: 'Grupo Excluído',
-      mensagem: 'O grupo de permissão foi excluído com sucesso!'
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro ao excluir grupo de permissão:', err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: 'erro', titulo: 'Erro ao Excluir',
-      mensagem: 'Não foi possível excluir o grupo. Tente novamente.'
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
-
 ipcMain.on('abrir-modal-grupo', (evento) => {
   if (janelaModalGrupoPermissao) {
     janelaModalGrupoPermissao.focus();
@@ -1198,79 +1116,9 @@ ipcMain.on('fechar-modal-grupo', () => {
   if (janelaModalGrupoPermissao) janelaModalGrupoPermissao.close();
 });
 
-ipcMain.handle('salvar-grupo-permissao', async (event, dadosGrupo) => {
-  try {
-    if (await negarSemPermissao(janelaModalGrupoPermissao, dadosGrupo.id ? "editar_colaboradores" : "criar_colaboradores")) return { sucesso: false };
-
-    if (!dadosGrupo.nome || !dadosGrupo.nome.trim()) {
-      await mostrarAviso(janelaModalGrupoPermissao, {
-        tipo: 'erro', titulo: 'Nome Obrigatório',
-        mensagem: 'Por favor, informe um nome para o grupo.'
-      });
-      return { sucesso: false };
-    }
-
-    let query;
-
-    if (dadosGrupo.id) {
-      query = supabase
-        .from('grupos_permissao')
-        .update({
-          nome: dadosGrupo.nome,
-          descricao: dadosGrupo.descricao || null,
-          permissoes: dadosGrupo.permissoes
-        })
-        .eq('id', dadosGrupo.id);
-    } else {
-      query = supabase
-        .from('grupos_permissao')
-        .insert([{
-          id_empresa: String(idEmpresaLogada),
-          nome: dadosGrupo.nome,
-          descricao: dadosGrupo.descricao || null,
-          permissoes: dadosGrupo.permissoes
-        }])
-        .select('id')
-        .single();
-    }
-
-    const { data: grupoSalvo, error } = await query;
-
-    if (error) {
-      console.error('Erro ao salvar grupo de permissão:', error.message);
-      await mostrarAviso(janelaModalGrupoPermissao, {
-        tipo: 'erro', titulo: 'Erro ao Salvar',
-        mensagem: `Não foi possível salvar o grupo. Motivo: ${error.message}`
-      });
-      return { sucesso: false, mensagem: error.message };
-    }
-
-    // Avisa TODAS as janelas abertas (dashboard e, se existir, o modal de colaborador)
-    const idGrupoSalvo = dadosGrupo.id || (grupoSalvo ? grupoSalvo.id : null);
-    BrowserWindow.getAllWindows().forEach(janela => {
-      if (!janela.isDestroyed()) {
-        janela.webContents.send('grupos-atualizados', { id: idGrupoSalvo, nome: dadosGrupo.nome });
-      }
-    });
-
-    await mostrarAviso(janelaModalGrupoPermissao, {
-      tipo: 'sucesso', titulo: 'Sucesso',
-      mensagem: dadosGrupo.id
-        ? `O grupo "${dadosGrupo.nome}" foi atualizado com sucesso!`
-        : `O grupo "${dadosGrupo.nome}" foi criado com sucesso!`
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro interno ao salvar grupo:', err);
-    return { sucesso: false, mensagem: 'Erro interno no servidor.' };
-  }
-});
-
-// =========================== COLABORADORES ======================
 ipcMain.handle('buscar-colaboradores', async () => {
   try {
-    if (!temPermissao('ver_colaboradores')) return [];
+    if (!temPermissao('administracao')) return [];
 
     const { data, error } = await supabase
       .from('usuarios')
@@ -1293,7 +1141,7 @@ ipcMain.handle('buscar-colaboradores', async () => {
 
 ipcMain.handle('buscar-colaboradores-arquivados', async () => {
   try {
-    if (!temPermissao('ver_colaboradores')) return [];
+    if (!temPermissao('administracao')) return [];
 
     const { data, error } = await supabase
       .from('usuarios')
@@ -1316,7 +1164,7 @@ ipcMain.handle('buscar-colaboradores-arquivados', async () => {
 
 ipcMain.handle('arquivar-colaborador-banco', async (event, idColaborador) => {
   try {
-    if (await negarSemPermissao(janelaDashboard, "excluir_colaboradores")) return { sucesso: false };
+    if (await negarSemPermissao(janelaDashboard, "administracao")) return { sucesso: false };
 
     const { error } = await supabase
       .from('usuarios')
@@ -1347,7 +1195,7 @@ ipcMain.handle('arquivar-colaborador-banco', async (event, idColaborador) => {
 
 ipcMain.handle('reativar-colaborador-banco', async (event, idColaborador) => {
   try {
-    if (await negarSemPermissao(janelaDashboard, "excluir_colaboradores")) return { sucesso: false };
+    if (await negarSemPermissao(janelaDashboard, "administracao")) return { sucesso: false };
 
     const { error } = await supabase
       .from('usuarios')
@@ -1413,7 +1261,7 @@ ipcMain.handle('salvar-colaborador-banco', async (event, dados) => {
   try {
     const editando = !!dados.id;
 
-    if (await negarSemPermissao(janelaModalColaborador, editando ? 'editar_colaboradores' : 'criar_colaboradores')) {
+    if (await negarSemPermissao(janelaModalColaborador, editando ? 'administracao' : 'administracao')) {
       return { sucesso: false };
     }
 
@@ -1632,7 +1480,7 @@ ipcMain.on('fechar-modal-redefinir-senha-colaborador', () => {
 
 ipcMain.handle('redefinir-senha-colaborador', async (event, { idColaborador, novaSenha, confirmarSenha }) => {
   try {
-    if (await negarSemPermissao(janelaModalRedefinirSenhaColaborador, 'editar_colaboradores')) {
+    if (await negarSemPermissao(janelaModalRedefinirSenhaColaborador, 'administracao')) {
       return { sucesso: false };
     }
 
@@ -1684,110 +1532,3 @@ ipcMain.handle('redefinir-senha-colaborador', async (event, { idColaborador, nov
 });
 
 // =========================== VER COLABORADORES DO GRUPO (E MOVER) ======================
-ipcMain.on('abrir-modal-ver-colaboradores', (evento) => {
-  if (janelaModalVerColaboradores) {
-    janelaModalVerColaboradores.focus();
-    return;
-  }
-
-  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
-
-  janelaModalVerColaboradores = new BrowserWindow({
-    width: 600,
-    height: 620,
-    parent: janelaMae,
-    modal: true,
-    frame: false,
-    resizable: false,
-    show: false,
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-
-  janelaModalVerColaboradores.loadFile(path.join(__dirname, '../renderer/modais/ver-colaboradores/modalVerColaboradores.html'));
-  janelaModalVerColaboradores.once('ready-to-show', () => janelaModalVerColaboradores.show());
-  janelaModalVerColaboradores.on('closed', () => { janelaModalVerColaboradores = null; });
-});
-
-ipcMain.on('fechar-modal-ver-colaboradores', () => {
-  if (janelaModalVerColaboradores) janelaModalVerColaboradores.close();
-});
-
-ipcMain.handle('buscar-colaboradores-do-grupo', async (event, idGrupo) => {
-  try {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('id, nome, username, ativo')
-      .eq('id_empresa', idEmpresaLogada)
-      .eq('cargo', 'Colaborador')
-      .eq('id_grupo_permissao', idGrupo)
-      .order('nome', { ascending: true });
-
-    if (error) {
-      console.error('Erro ao buscar colaboradores do grupo:', error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error('Erro inesperado ao buscar colaboradores do grupo:', err);
-    return [];
-  }
-});
-
-ipcMain.handle('mover-colaborador-de-grupo', async (event, { idColaborador, idNovoGrupo }) => {
-  try {
-    if (await negarSemPermissao(janelaModalVerColaboradores, 'editar_colaboradores')) {
-      return { sucesso: false };
-    }
-
-    const { data: novoGrupo, error: erroGrupo } = await supabase
-      .from('grupos_permissao')
-      .select('id, nome')
-      .eq('id', idNovoGrupo)
-      .eq('id_empresa', String(idEmpresaLogada))
-      .single();
-
-    if (erroGrupo || !novoGrupo) {
-      await mostrarAviso(janelaModalVerColaboradores, {
-        tipo: 'erro', titulo: 'Grupo Inválido',
-        mensagem: 'O grupo de destino não foi encontrado. Atualize a lista e tente novamente.'
-      });
-      return { sucesso: false };
-    }
-
-    const { data: atualizado, error } = await supabase
-      .from('usuarios')
-      .update({ id_grupo_permissao: novoGrupo.id })
-      .eq('id', idColaborador)
-      .eq('id_empresa', idEmpresaLogada)
-      .eq('cargo', 'Colaborador')
-      .select('id');
-
-    if (error || !atualizado || atualizado.length === 0) {
-      console.error('Erro ao mover colaborador:', error?.message);
-      await mostrarAviso(janelaModalVerColaboradores, {
-        tipo: 'erro', titulo: 'Erro ao Mover',
-        mensagem: 'Não foi possível mover o colaborador. Tente novamente.'
-      });
-      return { sucesso: false };
-    }
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send('grupos-atualizados');
-      janelaDashboard.webContents.send('colaboradores-atualizados');
-    }
-
-    await mostrarAviso(janelaModalVerColaboradores, {
-      tipo: 'sucesso', titulo: 'Colaborador Movido',
-      mensagem: `O colaborador foi movido para o grupo "${novoGrupo.nome}" com sucesso!`
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro inesperado ao mover colaborador:', err);
-    return { sucesso: false };
-  }
-});
