@@ -31,7 +31,8 @@ src/
 │       ├── colaboradores.js  a equipe (usa a Edge Function admin-usuarios)
 │       ├── clientes.js       clientes
 │       ├── frota.js          veículos
-│       └── locacoes.js       retirada, devolução e cancelamento (funções do banco)
+│       ├── locacoes.js       retirada, devolução e cancelamento (funções do banco)
+│       └── painel.js         números do Dashboard e Financeiro (visões do banco)
 ├── preload/preload.js        a ponte entre as telas e o processo principal
 ├── imagens/                  ícone do sistema (bandeja e telas)
 └── renderer/                 as telas, organizadas por tela

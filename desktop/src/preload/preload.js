@@ -46,7 +46,8 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     cancelarLocacao: (dados) => ipcRenderer.invoke('cancelar-locacao', dados),
 
     // ============================ FINANÇAS ============================
-    pedirDadosFinanceiros: () => ipcRenderer.invoke('buscar-dados-financeiros'),
+    pedirResumoPainel: () => ipcRenderer.invoke('buscar-resumo-painel'),
+    pedirFinanceiro: (periodo) => ipcRenderer.invoke('buscar-financeiro', periodo),
 
     // =======================  MODAL DE CONFIRMAÇÃO ====================
     confirmar: (dados) => ipcRenderer.invoke('abrir-modal-confirmacao', dados),

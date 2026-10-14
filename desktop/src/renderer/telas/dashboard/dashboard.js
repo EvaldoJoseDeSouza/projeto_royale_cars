@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const submenuAdministracao = document.getElementById('submenu-administracao');
   const arrowIconAdmin = document.querySelector('.arrow-icon-admin');
 
-  let dadosFinanceirosOriginais = null;
 
   let listaFrotaAtual = [];
   let listaClientesAtual = [];
@@ -180,74 +179,109 @@ document.addEventListener('DOMContentLoaded', () => {
     'view-clientes': 'Gestão de Clientes',
     'view-locacoes-ativas': 'Locações em Andamento',
     'view-locacoes-historico': 'Histórico de Locações',
-    'view-financeiro': 'Painel Financeiro & Fluxo de Caixa',
+    'view-financeiro': 'Financeiro',
     'view-configuracoes': 'Configurações da Conta',
     'view-colaboradores': 'Gerenciar Colaboradores',
     'view-grupos-permissao': 'Modelos de Permissão'
   };
 
+  // ============================== DASHBOARD ==============================
+  // Os números do topo vêm das visões do banco (main/ipc/painel.js) e das
+  // listas de locações e clientes. Cada pessoa só vê o que tem permissão.
   async function carregarResumoDashboard() {
     try {
-      const dadosFin = await window.apiAcesso.pedirDadosFinanceiros();
+      const [resumo, locacoesAtivas, clientes] = await Promise.all([
+        window.apiAcesso.pedirResumoPainel(),
+        window.apiAcesso.pedirLocacoesAtivas(),
+        window.apiAcesso.pedirClientes(),
+      ]);
 
-      const listaLocacoesAtivas = await window.apiAcesso.pedirLocacoesAtivas();
-      const listaClientes = await window.apiAcesso.pedirClientes();
-      const listaFrota = await window.apiAcesso.pedirFrota();
-
-      const formatador = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-
-      if (dashFaturamento && dadosFin && dadosFin.sucesso) {
-        dashFaturamento.textContent = formatador.format(dadosFin.indicadores.faturamentoTotal);
-
-        if (dashSublegenda) {
-          const variacao = dadosFin.indicadores.variacaoPercentual;
-
-          if (variacao >= 0) {
-            dashSublegenda.innerHTML = `↑ ${variacao}% em relação ao mês passado`;
-            dashSublegenda.style.color = '#10b981';
-          } else {
-            dashSublegenda.innerHTML = `↓ ${Math.abs(variacao)}% em relação ao mês passado`;
-            dashSublegenda.style.color = '#ef4444';
-          }
+      // Faturamento do mês, comparado com o mês passado
+      if (resumo.faturamento) {
+        const { mes, anterior } = resumo.faturamento;
+        dashFaturamento.textContent = formatarDinheiro(mes);
+        if (anterior > 0) {
+          const variacao = ((mes - anterior) / anterior) * 100;
+          dashSublegenda.textContent = `${variacao >= 0 ? '↑' : '↓'} ${Math.abs(variacao).toFixed(0)}% em relação ao mês passado`;
+          dashSublegenda.style.color = variacao >= 0 ? '#10b981' : '#ef4444';
+        } else {
+          dashSublegenda.textContent = 'Aluguéis devolvidos neste mês';
+          dashSublegenda.style.color = '';
         }
       }
 
-      if (dashLocacoesAtivas && listaLocacoesAtivas) {
-        dashLocacoesAtivas.textContent = listaLocacoesAtivas.length;
+      // Locações: total e quantas estão atrasadas
+      const atrasadas = locacoesAtivas.filter(loc => loc.status_exibicao === 'Atrasada').length;
+      dashLocacoesAtivas.textContent = locacoesAtivas.length;
+      const descLocacoes = document.getElementById('dash-locacoes-desc');
+      descLocacoes.textContent = atrasadas > 0 ? `${atrasadas} atrasada(s)` : 'Nenhuma atrasada';
+      descLocacoes.style.color = atrasadas > 0 ? '#ef4444' : '';
+
+      dashClientesAtivos.textContent = clientes.length;
+
+      // Frota: disponíveis de quantos, e onde estão os outros
+      if (resumo.frota) {
+        const f = resumo.frota;
+        dashStatusFrota.textContent = f.disponiveis;
+        document.getElementById('dash-frota-desc').textContent =
+          `de ${f.total} · ${f.alugados} alugado(s) · ${f.em_manutencao} na oficina`;
       }
 
-      if (dashClientesAtivos && listaClientes) {
-        dashClientesAtivos.textContent = listaClientes.length;
+      renderizarAlertas(resumo.alertas);
+
+      // Próximas devoluções: a lista já vem ordenada por data prevista
+      tabelaUltimasLocacoesBody.innerHTML = '';
+      if (locacoesAtivas.length === 0) {
+        tabelaUltimasLocacoesBody.innerHTML = linhaVazia(4, 'Nenhuma locação em andamento no momento.');
+        return;
       }
-
-      if (dashStatusFrota && listaFrota) {
-        dashStatusFrota.textContent = listaFrota.length;
-      }
-
-      if (tabelaUltimasLocacoesBody && listaLocacoesAtivas) {
-        tabelaUltimasLocacoesBody.innerHTML = '';
-
-        if (listaLocacoesAtivas.length === 0) {
-          tabelaUltimasLocacoesBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 15px;">Nenhuma locação ativa no momento.</td></tr>`;
-          return;
-        }
-
-        const ultimasCinco = listaLocacoesAtivas.slice(0, 5);
-
-        ultimasCinco.forEach(loc => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td><strong>${escaparHtml(loc.modelo)}</strong> (${formatarPlaca(loc.placa)})</td>
-            <td>${escaparHtml(loc.cliente_nome)}</td>
-            <td>${formatarData(loc.data_retirada)}</td>
-            <td>${etiquetaSituacao(loc.status_exibicao, loc.dias_atraso_atual)}</td>
-          `;
-          tabelaUltimasLocacoesBody.appendChild(tr);
-        });
-      }
+      locacoesAtivas.slice(0, 5).forEach(loc => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${escaparHtml(loc.modelo)}</strong> (${formatarPlaca(loc.placa)})</td>
+          <td>${escaparHtml(loc.cliente_nome)}</td>
+          <td>${formatarData(loc.data_retirada)}</td>
+          <td>${etiquetaSituacao(loc.status_exibicao, loc.dias_atraso_atual)}</td>
+        `;
+        tabelaUltimasLocacoesBody.appendChild(tr);
+      });
     } catch (erro) {
-      console.error("Erro ao renderizar o resumo do dashboard:", erro);
+      console.error("Erro ao montar o resumo do dashboard:", erro);
     }
+  }
+
+  // Cada tipo de alerta da visão vw_alertas: ícone, cor e para onde leva
+  const TIPOS_DE_ALERTA = {
+    atraso: { icone: 'ri-alarm-warning-line', classe: 'alerta-critico', rotulo: 'Atraso', tela: 'view-locacoes-ativas' },
+    devolucao_proxima: { icone: 'ri-calendar-event-line', classe: 'alerta-aviso', rotulo: 'Devolução próxima', tela: 'view-locacoes-ativas' },
+    manutencao: { icone: 'ri-tools-line', classe: 'alerta-aviso', rotulo: 'Na oficina', tela: 'view-frota' },
+    cnh: { icone: 'ri-id-card-line', classe: 'alerta-aviso', rotulo: 'CNH', tela: 'view-clientes' },
+    login_suspeito: { icone: 'ri-shield-keyhole-line', classe: 'alerta-critico', rotulo: 'Login suspeito', tela: null },
+  };
+
+  function renderizarAlertas(alertas) {
+    const caixa = document.getElementById('lista-alertas');
+    caixa.innerHTML = '';
+
+    if (!alertas || alertas.length === 0) {
+      caixa.innerHTML = '<p class="alertas-vazio"><i class="ri-checkbox-circle-line"></i> Tudo em dia. Nenhum alerta agora.</p>';
+      return;
+    }
+
+    alertas.forEach(alerta => {
+      const tipo = TIPOS_DE_ALERTA[alerta.tipo] || { icone: 'ri-information-line', classe: 'alerta-aviso', rotulo: alerta.tipo, tela: null };
+      const item = document.createElement(tipo.tela ? 'button' : 'div');
+      item.className = `alerta-item ${tipo.classe}`;
+      // O texto vem do banco: escaparHtml para entrar como texto, nunca como HTML
+      item.innerHTML = `
+        <i class="${tipo.icone}"></i>
+        <span class="alerta-rotulo">${tipo.rotulo}</span>
+        <span class="alerta-titulo">${escaparHtml(alerta.titulo)}</span>
+        <span class="alerta-detalhe">${escaparHtml(alerta.detalhe)}</span>
+      `;
+      if (tipo.tela) item.addEventListener('click', () => switchView(tipo.tela));
+      caixa.appendChild(item);
+    });
   }
 
   async function carregarUsuarioLogado() {
@@ -630,92 +664,140 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function renderizarFinanceiro(dadosFinanceiros) {
-    if (dadosFinanceiros && !dadosFinanceirosOriginais) {
-      dadosFinanceirosOriginais = dadosFinanceiros;
+  // ============================== FINANCEIRO ==============================
+  const inputFinInicio = document.getElementById('fin-data-inicio');
+  const inputFinFim = document.getElementById('fin-data-fim');
+
+  // Primeiro dia do mês de uma data "AAAA-MM-DD"
+  const inicioDoMes = (data) => `${data.slice(0, 7)}-01`;
+
+  // Botões de atalho do período
+  function periodoDoBotao(qual) {
+    const hoje = hojeTexto();
+    if (qual === 'mes-passado') {
+      const fimMesPassado = somarDias(inicioDoMes(hoje), -1); // dia anterior ao dia 1 = último dia do mês passado
+      return { inicio: inicioDoMes(fimMesPassado), fim: fimMesPassado };
     }
+    if (qual === 'ano') return { inicio: `${hoje.slice(0, 4)}-01-01`, fim: hoje };
+    return { inicio: inicioDoMes(hoje), fim: hoje }; // "Este mês"
+  }
 
-    const txtFaturamento = document.getElementById('fin-faturamento-total');
-    const txtRecebimento = document.getElementById('fin-recebimento-projetado');
-    const txtTicket = document.getElementById('fin-ticket-medio');
-    const inputInicio = document.getElementById('fin-data-inicio');
-    const inputFim = document.getElementById('fin-data-fim');
-
-    const dadosParaProcessar = dadosFinanceirosOriginais || dadosFinanceiros;
-    if (!dadosParaProcessar || !dadosParaProcessar.sucesso) return;
-
-    const dataInicioFiltro = inputInicio && inputInicio.value ? new Date(inputInicio.value + 'T00:00:00Z') : null;
-    const dataFimFiltro = inputFim && inputFim.value ? new Date(inputFim.value + 'T23:59:59Z') : null;
-
-    let faturamentoFiltrado = 0;
-    let totalContratosFiltrados = 0;
-    let fluxoCaixaFiltrado = [];
-    let recebimentoProjetado = dadosParaProcessar.financeiro?.recebimentoProjetado || 0;
-
-    const listaFluxo = dadosParaProcessar.fluxoCaixa || [];
-    listaFluxo.forEach(mov => {
-      const dataMov = new Date(mov.data_fim);
-      let passaNoFiltro = true;
-
-      if (dataInicioFiltro && dataMov < dataInicioFiltro) passaNoFiltro = false;
-      if (dataFimFiltro && dataMov > dataFimFiltro) passaNoFiltro = false;
-
-      if (passaNoFiltro) {
-        faturamentoFiltrado += parseFloat(mov.valor_total) || 0;
-        totalContratosFiltrados++;
-        fluxoCaixaFiltrado.push(mov);
-      }
-    });
-
-    if (listaFluxo.length === 0 && dadosParaProcessar.financeiro) {
-      faturamentoFiltrado = dadosParaProcessar.financeiro.faturamentoTotal;
-      recebimentoProjetado = dadosParaProcessar.financeiro.recebimentoProjetado;
+  async function carregarFinanceiro(periodo) {
+    if (periodo) {
+      inputFinInicio.value = periodo.inicio;
+      inputFinFim.value = periodo.fim;
     }
+    const dados = await window.apiAcesso.pedirFinanceiro({ inicio: inputFinInicio.value, fim: inputFinFim.value });
+    if (!dados || !dados.sucesso) return;
 
-    const ticketMedioFiltrado = totalContratosFiltrados > 0 ? (faturamentoFiltrado / totalContratosFiltrados) : (dadosParaProcessar.financeiro?.ticketMedio || 0);
-    const formatador = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    inputFinInicio.value = dados.periodo.inicio;
+    inputFinFim.value = dados.periodo.fim;
+    renderizarFinanceiro(dados);
+  }
 
-    if (txtFaturamento) txtFaturamento.textContent = formatador.format(faturamentoFiltrado);
-    if (txtRecebimento) txtRecebimento.textContent = formatador.format(recebimentoProjetado);
-    if (txtTicket) txtTicket.textContent = formatador.format(ticketMedioFiltrado);
+  document.querySelectorAll('.btn-periodo').forEach(botao => {
+    botao.addEventListener('click', () => carregarFinanceiro(periodoDoBotao(botao.dataset.periodo)));
+  });
+  [inputFinInicio, inputFinFim].forEach(campo => campo.addEventListener('change', () => carregarFinanceiro()));
 
-    if (!tabelaFinanceiroBody) return;
+  function renderizarFinanceiro(dados) {
+    const ind = dados.indicadores;
+    document.getElementById('fin-faturamento').textContent = formatarDinheiro(ind.faturamento);
+    document.getElementById('fin-alugueis').textContent = `${ind.alugueis} aluguel(éis) finalizado(s)`;
+    document.getElementById('fin-manutencao').textContent = formatarDinheiro(ind.gastoManutencao);
+    const elResultado = document.getElementById('fin-resultado');
+    elResultado.textContent = formatarDinheiro(ind.resultado);
+    elResultado.style.color = ind.resultado < 0 ? '#ef4444' : '';
+    document.getElementById('fin-ticket').textContent = formatarDinheiro(ind.ticketMedio);
+    document.getElementById('fin-a-receber').textContent = formatarDinheiro(ind.aReceber);
+
+    desenharGraficoMeses(dados.meses);
+
+    // Entradas do período. Cliente/veículo podem vir vazios para quem só
+    // tem a permissão Financeiro (ele não pode ver o cadastro de clientes).
     tabelaFinanceiroBody.innerHTML = '';
-
-    if (fluxoCaixaFiltrado.length === 0) {
-      tabelaFinanceiroBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum registro financeiro encontrado para o período selecionado.</td></tr>`;
+    if (dados.entradas.length === 0) {
+      tabelaFinanceiroBody.innerHTML = linhaVazia(5, 'Nenhum aluguel finalizado neste período.');
       return;
     }
+    dados.entradas.forEach(ent => {
+      const extras = [
+        ent.dias_atraso > 0 ? `${ent.dias_atraso} dia(s) de atraso` : '',
+        Number(ent.taxas_extras) > 0 ? `inclui taxas de ${formatarDinheiro(ent.taxas_extras)}` : '',
+      ].filter(Boolean).join(' · ');
+      const carro = ent.veiculos ? `${escaparHtml(ent.veiculos.marca)} ${escaparHtml(ent.veiculos.modelo)} <small>${formatarPlaca(ent.veiculos.placa)}</small>` : '-';
 
-    fluxoCaixaFiltrado.forEach(mov => {
-      const valorMovFormatado = formatador.format(mov.valor_total);
-      const dataFechamento = new Date(mov.data_fim).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
       const tr = document.createElement('tr');
-
       tr.innerHTML = `
-        <td><strong>${mov.clientes?.nome || 'Cliente Oculto'}</strong></td>
-        <td><i class="ri-car-fill" style="color: #64748b; margin-right: 4px;"></i> ${mov.veiculos?.modelo || 'Veículo Desconhecido'}</td>
-        <td>${dataFechamento}</td>
-        <td><span style="color: #2ecc71; font-weight: 700;">+ ${valorMovFormatado}</span></td>
-        <td><span class="badge-concluido" style="background: #e8f8f5; color: #1e8449; border-color: #d1f2eb;"><i class="ri-checkbox-circle-line"></i> Recebido</span></td>
+        <td>${formatarData(ent.data_devolucao)}</td>
+        <td>#${ent.id}</td>
+        <td>${ent.clientes ? escaparHtml(ent.clientes.nome) : '-'}</td>
+        <td>${carro}</td>
+        <td><strong class="valor-entrada">+ ${formatarDinheiro(ent.valor_total)}</strong>${extras ? `<br><small>${extras}</small>` : ''}</td>
       `;
       tabelaFinanceiroBody.appendChild(tr);
     });
+  }
 
-    if (inputInicio && !inputInicio.dataset.listenerAtivo) {
-      inputInicio.dataset.listenerAtivo = "true";
-      inputInicio.addEventListener('change', () => renderizarFinanceiro());
-      inputFim.addEventListener('change', () => renderizarFinanceiro());
+  // Gráfico de colunas dos 12 meses, feito só com HTML e CSS:
+  // cada coluna é uma <div> com a altura em % do maior valor do gráfico.
+  const NOMES_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-      const btnLimpar = document.getElementById('btn-limpar-filtro-fin');
-      if (btnLimpar) {
-        btnLimpar.addEventListener('click', () => {
-          inputInicio.value = '';
-          inputFim.value = '';
-          renderizarFinanceiro();
-        });
-      }
-    }
+  function desenharGraficoMeses(meses) {
+    const grafico = document.getElementById('grafico-meses');
+    const dica = document.getElementById('grafico-dica');
+    const corpoTabela = document.getElementById('tabela-meses-body');
+    grafico.innerHTML = '';
+    corpoTabela.innerHTML = '';
+
+    // O maior valor vira 100% da altura (no mínimo 1, para não dividir por zero)
+    const maior = Math.max(1, ...meses.map(m => Math.max(m.faturamento, m.manutencao)));
+    const ultimo = meses.length - 1;
+
+    // Linhas de grade: 0, metade e o máximo
+    [1, 0.5, 0].forEach(fracao => {
+      const linha = document.createElement('div');
+      linha.className = 'grafico-grade';
+      linha.style.bottom = `${fracao * 100}%`;
+      linha.innerHTML = `<span>${formatarDinheiro(maior * fracao).replace(',00', '')}</span>`;
+      grafico.appendChild(linha);
+    });
+
+    meses.forEach((m, i) => {
+      const [ano, mes] = m.mes.split('-');
+      const nomeMes = `${NOMES_MESES[Number(mes) - 1]}/${ano.slice(2)}`;
+
+      const grupo = document.createElement('div');
+      grupo.className = 'grafico-grupo';
+      grupo.innerHTML = `
+        <div class="grafico-barras">
+          <div class="grafico-barra serie-faturamento" style="height:${(m.faturamento / maior) * 100}%">
+            ${i === ultimo && m.faturamento > 0 ? `<span class="grafico-rotulo">${formatarDinheiro(m.faturamento).replace(',00', '')}</span>` : ''}
+          </div>
+          <div class="grafico-barra serie-manutencao" style="height:${(m.manutencao / maior) * 100}%"></div>
+        </div>
+        <span class="grafico-mes">${nomeMes}</span>
+      `;
+
+      // Passar o mouse no mês mostra os números exatos
+      grupo.addEventListener('mouseenter', () => {
+        dica.innerHTML = `<strong>${nomeMes}</strong> · ${m.alugueis} aluguel(éis)<br>
+          <i class="legenda-cor serie-faturamento"></i> Faturamento: ${formatarDinheiro(m.faturamento)}<br>
+          <i class="legenda-cor serie-manutencao"></i> Manutenção: ${formatarDinheiro(m.manutencao)}`;
+        dica.hidden = false;
+        const caixaGrafico = grafico.getBoundingClientRect();
+        const caixaGrupo = grupo.getBoundingClientRect();
+        const esquerda = caixaGrupo.left - caixaGrafico.left + caixaGrupo.width / 2;
+        dica.style.left = `${Math.min(Math.max(esquerda, 90), caixaGrafico.width - 90)}px`;
+      });
+      grupo.addEventListener('mouseleave', () => { dica.hidden = true; });
+      grafico.appendChild(grupo);
+
+      // A mesma informação em tabela (para quem prefere ler os números)
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${nomeMes}</td><td>${m.alugueis}</td><td>${formatarDinheiro(m.faturamento)}</td><td>${formatarDinheiro(m.manutencao)}</td>`;
+      corpoTabela.appendChild(tr);
+    });
   }
 
   // ============================ MINHA CONTA ============================
@@ -878,9 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (targetId === 'view-financeiro') {
         try {
-          dadosFinanceirosOriginais = null;
-          const balancoFinanceiro = await window.apiAcesso.pedirDadosFinanceiros();
-          renderizarFinanceiro(balancoFinanceiro);
+          await carregarFinanceiro(periodoDoBotao('mes'));
         } catch (erro) { console.error("Erro ao carregar financeiro:", erro); }
       }
 

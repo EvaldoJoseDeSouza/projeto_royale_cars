@@ -10,6 +10,7 @@ const { registrarIpcColaboradores } = require("./ipc/colaboradores");
 const { registrarIpcClientes } = require("./ipc/clientes");
 const { registrarIpcFrota } = require("./ipc/frota");
 const { registrarIpcLocacoes } = require("./ipc/locacoes");
+const { registrarIpcPainel } = require("./ipc/painel");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -34,9 +35,6 @@ let resolverConfirmacao = null;
 let janelaModalGrupoPermissao;
 let janelaModalColaborador;
 let janelaModalSenhaTemporaria;
-
-// Sai nos pacotes 2.5 a 2.8: o banco unificado tem uma empresa só
-let idEmpresaLogada = null;
 
 let tray = null;
 
@@ -498,110 +496,9 @@ registrarIpcLocacoes({
   obterJanelaCancelamento: () => janelaModalCancelamento,
 });
 
-// ============================== FINANÇAS =======================
-ipcMain.handle("buscar-dados-financeiros", async () => {
-  try {
-    console.log(
-      "Calculando balanço financeiro inteligente para a empresa: ",
-      idEmpresaLogada,
-    );
-
-    const { data: todasLocacoes, error } = await supabase
-      .from("locacoes")
-      .select(
-        `
-        id, data_fim, valor_total, status,
-        clientes ( nome ), veiculos ( modelo, placa )
-      `,
-      )
-      .eq("id_empresa", idEmpresaLogada)
-      .order("data_fim", { ascending: false });
-
-    if (error) {
-      console.error(
-        "Erro ao consultar dados para o financeiro:",
-        error.message,
-      );
-      throw error;
-    }
-
-    const agora = new Date();
-    const mesAtual = agora.getMonth();
-    const anoAtual = agora.getFullYear();
-
-    // Data do mês passado
-    const dataMesPassado = new Date(anoAtual, mesAtual - 1, 1);
-    const mesPassado = dataMesPassado.getMonth();
-    const anoMesPassado = dataMesPassado.getFullYear();
-
-    let faturamentoTotalMesAtual = 0;
-    let faturamentoTotalMesAnterior = 0;
-    let recebimentoProjetado = 0;
-    let totalContratosConcluidos = 0;
-    let fluxoCaixaEntradas = [];
-
-    if (todasLocacoes && todasLocacoes.length > 0) {
-      todasLocacoes.forEach((loc) => {
-        const valor = parseFloat(loc.valor_total) || 0;
-
-        if (loc.status === "Concluído") {
-          totalContratosConcluidos++;
-          fluxoCaixaEntradas.push(loc);
-
-          if (loc.data_fim) {
-            const dataFimContrato = new Date(loc.data_fim);
-            const mContrato = dataFimContrato.getMonth();
-            const aContrato = dataFimContrato.getFullYear();
-
-            if (mContrato === mesAtual && aContrato === anoAtual) {
-              faturamentoTotalMesAtual += valor;
-            } else if (
-              mContrato === mesPassado &&
-              aContrato === anoMesPassado
-            ) {
-              faturamentoTotalMesAnterior += valor;
-            }
-          }
-        } else if (loc.status === "Ativo") {
-          recebimentoProjetado += valor;
-        }
-      });
-    }
-
-    let variacaoPercentual = 0;
-    if (faturamentoTotalMesAnterior > 0) {
-      variacaoPercentual =
-        ((faturamentoTotalMesAtual - faturamentoTotalMesAnterior) /
-          faturamentoTotalMesAnterior) *
-        100;
-    } else if (
-      faturamentoTotalMesAnterior === 0 &&
-      faturamentoTotalMesAtual > 0
-    ) {
-      variacaoPercentual = 100;
-    }
-
-    const ticketMedio =
-      totalContratosConcluidos > 0
-        ? faturamentoTotalMesAtual / totalContratosConcluidos
-        : 0;
-
-    return {
-      sucesso: true,
-      indicadores: {
-        faturamentoTotal: faturamentoTotalMesAtual,
-        recebimentoProjetado,
-        ticketMedio,
-        variacaoPercentual: parseFloat(variacaoPercentual.toFixed(1)),
-      },
-      fluxoCaixa: fluxoCaixaEntradas,
-    };
-  } catch (err) {
-    console.error("Erro fatal no motor financeiro:", err.message);
-    return { sucesso: false, mensagem: err.message };
-  }
-});
-
+// ============================== PAINEL E FINANÇAS =======================
+// Resumo do Dashboard e Financeiro: main/ipc/painel.js (pelas visões do banco)
+registrarIpcPainel();
 
 // =========================== GRUPOS DE PERMISSÃO ======================
 ipcMain.on('abrir-modal-grupo', (evento) => {

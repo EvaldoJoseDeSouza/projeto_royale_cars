@@ -132,12 +132,12 @@
           <div class="stat-card clickable" data-target="view-financeiro">
             <span class="stat-label">FATURAMENTO DO MÊS</span>
             <div class="stat-value" id="dash-faturamento">R$ 0,00</div>
-            <span id="dash-faturamento-sublegenda" class="legenda-dinamica">↑ 12% em relação ao mês anterior</span>
+            <span id="dash-faturamento-sublegenda" class="stat-desc"></span>
           </div>
           <div class="stat-card clickable" data-target="view-locacoes-ativas">
-            <span class="stat-label">LOCAÇÕES ATIVAS</span>
+            <span class="stat-label">LOCAÇÕES EM ANDAMENTO</span>
             <div class="stat-value" id="dash-locacoes-ativas">0</div>
-            <span class="stat-desc">Contratos em andamento</span>
+            <span class="stat-desc" id="dash-locacoes-desc">Carros na rua agora</span>
           </div>
           <div class="stat-card clickable" data-target="view-clientes">
             <span class="stat-label">CLIENTES ATIVOS</span>
@@ -145,16 +145,24 @@
             <span class="stat-desc">Clientes na base</span>
           </div>
           <div class="stat-card clickable" data-target="view-frota">
-            <span class="stat-label">STATUS DA FROTA</span>
+            <span class="stat-label">CARROS DISPONÍVEIS</span>
             <div class="stat-value" id="dash-status-frota">0</div>
-            <span class="stat-desc">Total de veículos</span>
+            <span class="stat-desc" id="dash-frota-desc">-</span>
           </div>
+        </section>
+
+        <!-- ALERTAS: o que precisa de atenção hoje (visão vw_alertas do banco) -->
+        <section class="data-section">
+          <div class="section-header">
+            <h3>Precisa de atenção</h3>
+          </div>
+          <div id="lista-alertas" class="lista-alertas"></div>
         </section>
 
         <section class="data-section">
           <div class="section-header">
-            <h3>Últimas locações realizadas</h3>
-            <button class="text-link" id="link-ver-todas">Ver todas →</button>
+            <h3>Próximas devoluções</h3>
+            <button class="text-link" id="link-ver-todas" data-target="view-locacoes-ativas">Ver todas →</button>
           </div>
           <div class="table-container">
             <table class="custom-table">
@@ -162,8 +170,8 @@
                 <tr>
                   <th>Veículo</th>
                   <th>Cliente</th>
-                  <th>Data Saída</th>
-                  <th>Status</th>
+                  <th>Retirada</th>
+                  <th>Situação</th>
                 </tr>
               </thead>
               <tbody id="tabela-ultimas-locacoes-body">
@@ -293,68 +301,91 @@
       <!-- FINANCEIRO -->
       <div id="view-financeiro" class="content-view">
         <div class="view-header-row">
-          <h2>Painel Financeiro & Fluxo de Caixa</h2>
+          <h2>Financeiro</h2>
         </div>
 
-        <section class="stats-row" style="margin-top: 20px">
-          <div class="stat-card">
-            <span class="stat-label">FATURAMENTO TOTAL (CAIXA)</span>
-            <div class="stat-value" id="fin-faturamento-total" style="color: #2ecc71">R$ 0,00</div>
-            <span class="stat-desc">Locações finalizadas e pagas</span>
+        <!-- Período: por padrão, do dia 1 deste mês até hoje -->
+        <div class="filtro-periodo">
+          <div class="campo-periodo">
+            <label for="fin-data-inicio">De</label>
+            <input type="date" id="fin-data-inicio" />
           </div>
-
-          <div class="stat-card">
-            <span class="stat-label">RECEBIMENTO PROJETADO</span>
-            <div class="stat-value" id="fin-recebimento-projetado" style="color: #3498db">R$ 0,00</div>
-            <span class="stat-desc">Contratos em andamento na rua</span>
+          <div class="campo-periodo">
+            <label for="fin-data-fim">Até</label>
+            <input type="date" id="fin-data-fim" />
           </div>
+          <button type="button" class="btn-periodo" data-periodo="mes">Este mês</button>
+          <button type="button" class="btn-periodo" data-periodo="mes-passado">Mês passado</button>
+          <button type="button" class="btn-periodo" data-periodo="ano">Este ano</button>
+        </div>
 
+        <section class="stats-row stats-row-financeiro">
+          <div class="stat-card">
+            <span class="stat-label">FATURAMENTO</span>
+            <div class="stat-value" id="fin-faturamento">R$ 0,00</div>
+            <span class="stat-desc" id="fin-alugueis">0 aluguéis finalizados</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">GASTO COM MANUTENÇÃO</span>
+            <div class="stat-value" id="fin-manutencao">R$ 0,00</div>
+            <span class="stat-desc">Manutenções concluídas</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">RESULTADO</span>
+            <div class="stat-value" id="fin-resultado">R$ 0,00</div>
+            <span class="stat-desc">Faturamento − manutenção</span>
+          </div>
           <div class="stat-card">
             <span class="stat-label">TICKET MÉDIO</span>
-            <div class="stat-value" id="fin-ticket-medio">R$ 0,00</div>
-            <span class="stat-desc">Valor médio por contrato</span>
+            <div class="stat-value" id="fin-ticket">R$ 0,00</div>
+            <span class="stat-desc">Valor médio por aluguel</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">A RECEBER</span>
+            <div class="stat-value" id="fin-a-receber">R$ 0,00</div>
+            <span class="stat-desc">Aluguéis em andamento (previsto)</span>
           </div>
         </section>
 
-        <div class="financial-toolbar"
-          style="display: flex; gap: 15px; align-items: flex-end; background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
-          <div class="input-group" style="display: flex; flex-direction: column; gap: 5px">
-            <label style="font-size: 0.85rem; font-weight: 600; color: #64748b">Data Início:</label>
-            <input type="date" id="fin-data-inicio"
-              style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit;" />
+        <!-- Gráfico dos últimos 12 meses (não depende do período acima) -->
+        <section class="data-section grafico-card">
+          <div class="section-header">
+            <h3>Últimos 12 meses</h3>
+            <div class="grafico-legenda">
+              <span><i class="legenda-cor serie-faturamento"></i> Faturamento</span>
+              <span><i class="legenda-cor serie-manutencao"></i> Manutenção</span>
+            </div>
           </div>
+          <div id="grafico-meses" class="grafico-meses" role="img" aria-label="Faturamento e gasto com manutenção nos últimos 12 meses"></div>
+          <div id="grafico-dica" class="grafico-dica" hidden></div>
+          <details class="grafico-tabela">
+            <summary>Ver em tabela</summary>
+            <table class="custom-table">
+              <thead><tr><th>Mês</th><th>Aluguéis</th><th>Faturamento</th><th>Manutenção</th></tr></thead>
+              <tbody id="tabela-meses-body"></tbody>
+            </table>
+          </details>
+        </section>
 
-          <div class="input-group" style="display: flex; flex-direction: column; gap: 5px">
-            <label style="font-size: 0.85rem; font-weight: 600; color: #64748b">Data Fim:</label>
-            <input type="date" id="fin-data-fim"
-              style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit;" />
+        <section class="data-section">
+          <div class="section-header">
+            <h3>Entradas do período</h3>
           </div>
-
-          <button id="btn-limpar-filtro-fin"
-            style="padding: 9px 15px; background: #64748b; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; transition: background 0.2s;">
-            <i class="ri-refresh-line"></i> Limpar Filtro
-          </button>
-        </div>
-
-        <div class="view-header-row" style="margin-top: 40px; margin-bottom: 0">
-          <h3>Histórico de Entradas Liquidadas</h3>
-        </div>
-
-        <div class="table-container"
-          style="background: #fff; border-radius: 8px; border: 1px solid var(--border-color); padding: 15px; margin-top: 15px;">
-          <table class="custom-table" style="width: 100%">
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Veículo Alugado</th>
-                <th>Data Encerramento</th>
-                <th>Valor Recebido</th>
-                <th>Status Caixa</th>
-              </tr>
-            </thead>
-            <tbody id="tabela-financeiro-body"></tbody>
-          </table>
-        </div>
+          <div class="table-container">
+            <table class="custom-table" style="width: 100%">
+              <thead>
+                <tr>
+                  <th>Devolução</th>
+                  <th>Aluguel</th>
+                  <th>Cliente</th>
+                  <th>Veículo</th>
+                  <th>Valor recebido</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-financeiro-body"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <!-- COLABORADORES -->

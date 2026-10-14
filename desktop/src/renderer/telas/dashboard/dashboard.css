@@ -1,4 +1,7 @@
 :root {
+  /* Cores das séries do gráfico do Financeiro (conferidas para daltonismo) */
+  --serie-faturamento: #2a78d6;
+  --serie-manutencao: #eb6834;
   --bg-app: #f4f7f6;
   --bg-sidebar: #010d3d; 
   --bg-card: #ffffff;
@@ -1010,4 +1013,154 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 .custom-table td small {
   color: var(--text-muted);
 }
+
+/* ========================= DASHBOARD: ALERTAS ========================= */
+.data-section + .data-section { margin-top: 20px; }
+
+.lista-alertas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alerta-item {
+  display: grid;
+  grid-template-columns: 24px 130px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  border-left-width: 4px;
+  background: #fff;
+  font-size: 0.88rem;
+  text-align: left;
+  color: var(--text-main);
+  font-family: inherit;
+  width: 100%;
+}
+button.alerta-item { cursor: pointer; }
+button.alerta-item:hover { background: #f8fafc; }
+.alerta-item i { font-size: 1.1rem; }
+.alerta-rotulo { font-weight: 700; font-size: 0.78rem; text-transform: uppercase; }
+.alerta-titulo { font-weight: 600; }
+.alerta-detalhe { color: var(--text-muted); font-size: 0.82rem; }
+/* Cor + ícone + rótulo: o alerta nunca depende só da cor */
+.alerta-critico { border-left-color: #dc3545; }
+.alerta-critico i, .alerta-critico .alerta-rotulo { color: #dc3545; }
+.alerta-aviso { border-left-color: #d98e04; }
+.alerta-aviso i, .alerta-aviso .alerta-rotulo { color: #b07200; }
+
+.alertas-vazio { color: #198754; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+
+/* ========================= FINANCEIRO ========================= */
+.filtro-periodo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  background: #fff;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  margin: 20px 0;
+}
+.campo-periodo { display: flex; flex-direction: column; gap: 5px; }
+.campo-periodo label { font-size: 0.8rem; font-weight: 600; color: #64748b; }
+.campo-periodo input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit; }
+.btn-periodo {
+  padding: 9px 14px;
+  border: 1px solid var(--border-color);
+  background: #f8fafc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.btn-periodo:hover { border-color: var(--blue-dark); }
+
+.stats-row-financeiro { grid-template-columns: repeat(5, 1fr); }
+.valor-entrada { color: #198754; }
+
+/* Gráfico de colunas feito com HTML/CSS */
+.grafico-card { margin-bottom: 20px; position: relative; }
+.grafico-legenda { display: flex; gap: 16px; font-size: 0.82rem; color: var(--text-muted); }
+.legenda-cor { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.serie-faturamento { background: var(--serie-faturamento); }
+.serie-manutencao { background: var(--serie-manutencao); }
+
+.grafico-meses {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 220px;
+  margin: 10px 0 28px 70px; /* espaço à esquerda para os valores da grade */
+}
+.grafico-grade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #edf0f2; /* linha fina e discreta */
+}
+.grafico-grade span {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: -8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.grafico-grupo {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+}
+.grafico-grupo:hover { background: rgba(1, 13, 61, 0.03); }
+.grafico-barras {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;            /* o espaço branco entre as duas colunas */
+}
+.grafico-barra {
+  position: relative;
+  width: 14px;
+  border-radius: 4px 4px 0 0; /* ponta arredondada, base reta */
+}
+.grafico-rotulo {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+.grafico-mes {
+  position: absolute;
+  bottom: -22px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.grafico-dica {
+  position: absolute;
+  top: 60px;
+  transform: translateX(-50%);
+  margin-left: 70px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  pointer-events: none;
+  z-index: 2;
+}
+.grafico-tabela summary { cursor: pointer; font-size: 0.85rem; color: #3498db; font-weight: 600; }
+.grafico-tabela table { margin-top: 10px; }
 
