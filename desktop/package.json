@@ -14,7 +14,6 @@
     "electron": "^42.9.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.108.1",
-    "bcryptjs": "^3.0.3"
+    "@supabase/supabase-js": "^2.108.1"
   }
 }

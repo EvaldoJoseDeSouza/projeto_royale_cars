@@ -1,12 +1,12 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, clipboard } = require("electron");
 const path = require("path");
-const bcrypt = require("bcryptjs"); // ainda usado no cadastro de colaborador (sai no pacote 2.4)
 
 // Conexão com o banco, sessão e conversas (IPC) do login ficam em arquivos próprios
 const supabase = require("./supabase");
 const { sessao, temPermissao, limparSessao } = require("./sessao");
 const { registrarIpcSessao } = require("./ipc/sessao");
 const { registrarIpcModelos } = require("./ipc/modelos");
+const { registrarIpcColaboradores } = require("./ipc/colaboradores");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -30,7 +30,7 @@ let janelaModalConfirmacao;
 let resolverConfirmacao = null;
 let janelaModalGrupoPermissao;
 let janelaModalColaborador;
-let janelaModalRedefinirSenhaColaborador;
+let janelaModalSenhaTemporaria;
 
 // Sai nos pacotes 2.5 a 2.8: o banco unificado tem uma empresa só
 let idEmpresaLogada = null;
@@ -1156,114 +1156,6 @@ ipcMain.on('fechar-modal-grupo', () => {
   if (janelaModalGrupoPermissao) janelaModalGrupoPermissao.close();
 });
 
-ipcMain.handle('buscar-colaboradores', async () => {
-  try {
-    if (!temPermissao('administracao')) return [];
-
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('id, username, nome, email, telefone, ativo, id_grupo_permissao, grupos_permissao ( nome )')
-      .eq('id_empresa', String(idEmpresaLogada))
-      .eq('cargo', 'Colaborador')
-      .eq('ativo', true)
-      .order('nome', { ascending: true });
-
-    if (error) {
-      console.error('Erro ao buscar colaboradores:', error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error('Erro inesperado ao buscar colaboradores:', err);
-    return [];
-  }
-});
-
-ipcMain.handle('buscar-colaboradores-arquivados', async () => {
-  try {
-    if (!temPermissao('administracao')) return [];
-
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('id, username, nome, email, telefone, ativo, id_grupo_permissao, grupos_permissao ( nome )')
-      .eq('id_empresa', String(idEmpresaLogada))
-      .eq('cargo', 'Colaborador')
-      .eq('ativo', false)
-      .order('nome', { ascending: true });
-
-    if (error) {
-      console.error('Erro ao buscar colaboradores arquivados:', error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error('Erro inesperado ao buscar colaboradores arquivados:', err);
-    return [];
-  }
-});
-
-ipcMain.handle('arquivar-colaborador-banco', async (event, idColaborador) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "administracao")) return { sucesso: false };
-
-    const { error } = await supabase
-      .from('usuarios')
-      .update({ ativo: false })
-      .eq('id', idColaborador);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send('colaboradores-atualizados');
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: 'sucesso', titulo: 'Colaborador Arquivado',
-      mensagem: 'O colaborador foi arquivado e seu acesso ao sistema foi bloqueado.'
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro ao arquivar colaborador:', err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: 'erro', titulo: 'Erro ao Arquivar',
-      mensagem: 'Não foi possível arquivar o colaborador. Tente novamente.'
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
-
-ipcMain.handle('reativar-colaborador-banco', async (event, idColaborador) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "administracao")) return { sucesso: false };
-
-    const { error } = await supabase
-      .from('usuarios')
-      .update({ ativo: true })
-      .eq('id', idColaborador);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send('colaboradores-atualizados');
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: 'sucesso', titulo: 'Colaborador Reativado',
-      mensagem: 'O colaborador voltou a ter acesso ao sistema!'
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro ao reativar colaborador:', err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: 'erro', titulo: 'Erro ao Reativar',
-      mensagem: 'Não foi possível reativar o colaborador. Tente novamente.'
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
-
 // =========================== MODAL DE COLABORADOR (CRIAR / EDITAR) ======================
 ipcMain.on('abrir-modal-colaborador', (evento) => {
   if (janelaModalColaborador) {
@@ -1274,8 +1166,8 @@ ipcMain.on('abrir-modal-colaborador', (evento) => {
   const janelaMae = BrowserWindow.fromWebContents(evento.sender);
 
   janelaModalColaborador = new BrowserWindow({
-    width: 520,
-    height: 700,
+    width: 560,
+    height: 760,
     parent: janelaMae,
     modal: true,
     frame: false,
@@ -1297,278 +1189,63 @@ ipcMain.on('fechar-modal-colaborador', () => {
   if (janelaModalColaborador) janelaModalColaborador.close();
 });
 
-ipcMain.handle('salvar-colaborador-banco', async (event, dados) => {
-  try {
-    const editando = !!dados.id;
+// =========================== SENHA TEMPORÁRIA ======================
+// Janela que mostra a senha gerada ao cadastrar alguém ou redefinir a
+// senha. A senha fica guardada aqui só até a janela pedir; depois de
+// entregue, é apagada da memória (ela aparece uma única vez).
+let senhaTemporariaParaMostrar = null;
 
-    if (await negarSemPermissao(janelaModalColaborador, editando ? 'administracao' : 'administracao')) {
-      return { sucesso: false };
-    }
+function mostrarSenhaTemporaria(dados) {
+  senhaTemporariaParaMostrar = dados;
+  if (janelaModalSenhaTemporaria) janelaModalSenhaTemporaria.close();
 
-    const nome = (dados.nome || '').trim();
-    const username = (dados.username || '').trim();
-    const email = (dados.email || '').trim();
-    const telefone = (dados.telefone || '').trim();
-
-    if (!nome) {
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Nome Obrigatório',
-        mensagem: 'Por favor, informe o nome completo do colaborador.'
-      });
-      return { sucesso: false };
-    }
-
-    if (!username) {
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Usuário Obrigatório',
-        mensagem: 'Por favor, informe um nome de usuário para o colaborador.'
-      });
-      return { sucesso: false };
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (email && !emailRegex.test(email)) {
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'E-mail Inválido',
-        mensagem: 'Por favor, informe um e-mail válido (exemplo@empresa.com) ou deixe o campo em branco.'
-      });
-      return { sucesso: false };
-    }
-
-    if (!dados.id_grupo_permissao) {
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Grupo Obrigatório',
-        mensagem: 'Todo colaborador precisa pertencer a um grupo de permissão. Selecione um grupo existente ou crie um novo.'
-      });
-      return { sucesso: false };
-    }
-
-    if (!editando) {
-      if (!dados.senha || dados.senha.length < 6) {
-        await mostrarAviso(janelaModalColaborador, {
-          tipo: 'erro', titulo: 'Senha Inválida',
-          mensagem: 'A senha deve conter pelo menos 6 caracteres.'
-        });
-        return { sucesso: false };
-      }
-
-      if (dados.senha !== dados.confirmarSenha) {
-        await mostrarAviso(janelaModalColaborador, {
-          tipo: 'erro', titulo: 'Senhas Diferentes',
-          mensagem: 'As senhas não coincidem. Verifique e tente novamente.'
-        });
-        return { sucesso: false };
-      }
-    }
-
-    // O grupo escolhido precisa existir e pertencer a esta empresa
-    const { data: grupoValido, error: erroGrupo } = await supabase
-      .from('grupos_permissao')
-      .select('id')
-      .eq('id', dados.id_grupo_permissao)
-      .eq('id_empresa', String(idEmpresaLogada))
-      .limit(1);
-
-    if (erroGrupo || !grupoValido || grupoValido.length === 0) {
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Grupo Inválido',
-        mensagem: 'O grupo selecionado não foi encontrado. Atualize a lista e escolha outro grupo.'
-      });
-      return { sucesso: false };
-    }
-
-    // Usuário e e-mail precisam ser únicos em todo o sistema (o login procura em toda a tabela)
-    let consultaUsername = supabase.from('usuarios').select('id').eq('username', username);
-    if (editando) consultaUsername = consultaUsername.neq('id', dados.id);
-    const { data: usernameExistente, error: erroUsername } = await consultaUsername;
-
-    if (erroUsername) {
-      console.error('Erro ao verificar username:', erroUsername.message);
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Erro na Verificação',
-        mensagem: 'Não foi possível validar os dados. Tente novamente.'
-      });
-      return { sucesso: false };
-    }
-
-    if (usernameExistente && usernameExistente.length > 0) {
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Usuário já Existe',
-        mensagem: 'Este nome de usuário já está sendo utilizado. Escolha outro.'
-      });
-      return { sucesso: false };
-    }
-
-    if (email) {
-      let consultaEmail = supabase.from('usuarios').select('id').eq('email', email);
-      if (editando) consultaEmail = consultaEmail.neq('id', dados.id);
-      const { data: emailExistente, error: erroEmail } = await consultaEmail;
-
-      if (erroEmail) {
-        console.error('Erro ao verificar e-mail:', erroEmail.message);
-        await mostrarAviso(janelaModalColaborador, {
-          tipo: 'erro', titulo: 'Erro na Verificação',
-          mensagem: 'Não foi possível validar os dados. Tente novamente.'
-        });
-        return { sucesso: false };
-      }
-
-      if (emailExistente && emailExistente.length > 0) {
-        await mostrarAviso(janelaModalColaborador, {
-          tipo: 'erro', titulo: 'E-mail já Existe',
-          mensagem: 'Este e-mail já está sendo utilizado. Informe outro.'
-        });
-        return { sucesso: false };
-      }
-    }
-
-    let erroSalvar;
-
-    if (editando) {
-      const { error } = await supabase
-        .from('usuarios')
-        .update({
-          nome,
-          username,
-          email: email || null,
-          telefone: telefone || null,
-          id_grupo_permissao: Number(dados.id_grupo_permissao)
-        })
-        .eq('id', dados.id)
-        .eq('id_empresa', idEmpresaLogada)
-        .eq('cargo', 'Colaborador');
-      erroSalvar = error;
-    } else {
-      const senhaHash = await bcrypt.hash(dados.senha, 10);
-
-      const { error } = await supabase
-        .from('usuarios')
-        .insert([{
-          nome,
-          username,
-          email: email || null,
-          telefone: telefone || null,
-          senha: senhaHash,
-          id_empresa: idEmpresaLogada,
-          cargo: 'Colaborador',
-          id_grupo_permissao: Number(dados.id_grupo_permissao),
-          ativo: true
-        }]);
-      erroSalvar = error;
-    }
-
-    if (erroSalvar) {
-      console.error('Erro ao salvar colaborador:', erroSalvar.message);
-      await mostrarAviso(janelaModalColaborador, {
-        tipo: 'erro', titulo: 'Erro na Operação',
-        mensagem: `Não foi possível salvar os dados do colaborador. Motivo: ${erroSalvar.message}`
-      });
-      return { sucesso: false, mensagem: erroSalvar.message };
-    }
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send('colaboradores-atualizados');
-      janelaDashboard.webContents.send('grupos-atualizados');
-    }
-
-    await mostrarAviso(janelaModalColaborador, {
-      tipo: 'sucesso', titulo: 'Sucesso',
-      mensagem: editando
-        ? `O cadastro de ${nome} foi atualizado com sucesso!`
-        : `O colaborador ${nome} foi cadastrado com sucesso!`
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro interno ao salvar colaborador:', err);
-    return { sucesso: false, mensagem: 'Erro interno no servidor.' };
-  }
-});
-
-// =========================== REDEFINIR SENHA DE COLABORADOR ======================
-ipcMain.on('abrir-modal-redefinir-senha-colaborador', (evento) => {
-  if (janelaModalRedefinirSenhaColaborador) {
-    janelaModalRedefinirSenhaColaborador.focus();
-    return;
-  }
-
-  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
-
-  janelaModalRedefinirSenhaColaborador = new BrowserWindow({
-    width: 420,
-    height: 440,
-    parent: janelaMae,
+  janelaModalSenhaTemporaria = new BrowserWindow({
+    width: 440,
+    height: 390,
+    parent: janelaDashboard,
     modal: true,
     frame: false,
     resizable: false,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/preload.js'),
+      preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
-    }
+      nodeIntegration: false,
+    },
   });
 
-  janelaModalRedefinirSenhaColaborador.loadFile(path.join(__dirname, '../renderer/modais/redefinir-senha-colaborador/modalRedefinirSenhaColaborador.html'));
-  janelaModalRedefinirSenhaColaborador.once('ready-to-show', () => janelaModalRedefinirSenhaColaborador.show());
-  janelaModalRedefinirSenhaColaborador.on('closed', () => { janelaModalRedefinirSenhaColaborador = null; });
+  janelaModalSenhaTemporaria.loadFile(
+    path.join(__dirname, "../renderer/modais/senha-temporaria/modalSenhaTemporaria.html"),
+  );
+  janelaModalSenhaTemporaria.once("ready-to-show", () => janelaModalSenhaTemporaria.show());
+  janelaModalSenhaTemporaria.on("closed", () => {
+    janelaModalSenhaTemporaria = null;
+    senhaTemporariaParaMostrar = null;
+  });
+}
+
+ipcMain.handle("pedir-senha-temporaria", () => {
+  const dados = senhaTemporariaParaMostrar;
+  senhaTemporariaParaMostrar = null; // entregou, apagou
+  return dados;
 });
 
-ipcMain.on('fechar-modal-redefinir-senha-colaborador', () => {
-  if (janelaModalRedefinirSenhaColaborador) janelaModalRedefinirSenhaColaborador.close();
+ipcMain.on("fechar-modal-senha-temporaria", () => {
+  if (janelaModalSenhaTemporaria) janelaModalSenhaTemporaria.close();
 });
 
-ipcMain.handle('redefinir-senha-colaborador', async (event, { idColaborador, novaSenha, confirmarSenha }) => {
-  try {
-    if (await negarSemPermissao(janelaModalRedefinirSenhaColaborador, 'administracao')) {
-      return { sucesso: false };
-    }
-
-    if (!novaSenha || novaSenha.length < 6) {
-      await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
-        tipo: 'erro', titulo: 'Senha Inválida',
-        mensagem: 'A nova senha deve conter pelo menos 6 caracteres.'
-      });
-      return { sucesso: false };
-    }
-
-    if (novaSenha !== confirmarSenha) {
-      await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
-        tipo: 'erro', titulo: 'Senhas Diferentes',
-        mensagem: 'As senhas não coincidem. Verifique e tente novamente.'
-      });
-      return { sucesso: false };
-    }
-
-    const novaSenhaHash = await bcrypt.hash(novaSenha, 10);
-
-    const { data: atualizado, error } = await supabase
-      .from('usuarios')
-      .update({ senha: novaSenhaHash })
-      .eq('id', idColaborador)
-      .eq('id_empresa', idEmpresaLogada)
-      .eq('cargo', 'Colaborador')
-      .select('id');
-
-    if (error || !atualizado || atualizado.length === 0) {
-      console.error('Erro ao redefinir senha do colaborador:', error?.message);
-      await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
-        tipo: 'erro', titulo: 'Erro ao Redefinir',
-        mensagem: 'Não foi possível redefinir a senha deste colaborador. Tente novamente.'
-      });
-      return { sucesso: false };
-    }
-
-    await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
-      tipo: 'sucesso', titulo: 'Senha Redefinida',
-      mensagem: 'A senha do colaborador foi redefinida com sucesso! Ele já pode entrar com a nova senha.'
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error('Erro inesperado ao redefinir senha do colaborador:', err);
-    return { sucesso: false };
-  }
+// O botão "Copiar" da janela da senha. Quem mexe na área de transferência
+// do Windows é o processo principal (a tela não tem acesso direto a ela).
+ipcMain.on("copiar-texto", (evento, texto) => {
+  clipboard.writeText(String(texto || ""));
 });
 
-// =========================== VER COLABORADORES DO GRUPO (E MOVER) ======================
+// =========================== COLABORADORES ======================
+// Listar, cadastrar, editar, redefinir senha, desativar e ativar:
+// tudo em main/ipc/colaboradores.js.
+registrarIpcColaboradores({
+  mostrarAviso,
+  obterJanelaDashboard: () => janelaDashboard,
+  obterJanelaColaborador: () => janelaModalColaborador,
+  mostrarSenhaTemporaria,
+});

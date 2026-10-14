@@ -21,7 +21,13 @@ O Electron tem duas partes que rodam separadas:
 ```
 src/
 ├── main/                     processo principal
-│   └── index.js
+│   ├── index.js              abre as janelas e liga tudo
+│   ├── supabase.js           a conexão com o banco
+│   ├── sessao.js             quem está logado e o que pode fazer
+│   └── ipc/                  as "conversas" com as telas, por assunto
+│       ├── sessao.js         login, troca de senha, Minha conta
+│       ├── modelos.js        modelos de permissão
+│       └── colaboradores.js  a equipe (usa a Edge Function admin-usuarios)
 ├── preload/preload.js        a ponte entre as telas e o processo principal
 ├── imagens/                  ícone do sistema (bandeja e telas)
 └── renderer/                 as telas, organizadas por tela
@@ -36,7 +42,7 @@ src/
     │   ├── grupo-permissao/  (modelos de permissão)
     │   ├── confirmacao/
     │   ├── trocar-senha/
-    │   └── redefinir-senha-colaborador/
+    │   └── senha-temporaria/ (mostra a senha gerada para um colaborador)
     ├── estilos/              CSS usado por várias telas (modal.css)
     └── compartilhado/        JavaScript usado por várias telas
         └── permissoes.js     a lista das 13 permissões (um lugar só)

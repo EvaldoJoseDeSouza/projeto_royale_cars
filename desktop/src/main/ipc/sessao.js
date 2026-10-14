@@ -74,9 +74,17 @@ function registrarIpcSessao(deps) {
       const { error: erroLogin } = await supabase.auth.signInWithPassword({ email, password: senha });
 
       if (erroLogin) {
-        // 3. Registra o erro. A mensagem é a mesma para e-mail que não
-        //    existe e senha errada: assim ninguém descobre quais e-mails existem.
         await registrarTentativa(email, false, erroLogin.message);
+
+        // 3a. Conta desativada pelo chefe: a Edge Function bloqueia o login
+        //     no Supabase Auth, e ele responde com o código "user_banned".
+        if (erroLogin.code === "user_banned") {
+          await avisarNoLogin("Acesso negado", "Seu acesso está desativado. Fale com o responsável pela locadora.");
+          return { sucesso: false };
+        }
+
+        // 3b. A mensagem é a mesma para e-mail que não existe e senha
+        //     errada: assim ninguém descobre quais e-mails existem.
         await avisarNoLogin("Erro no login", "E-mail ou senha incorretos.");
         return { sucesso: false };
       }

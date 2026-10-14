@@ -64,18 +64,19 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     fecharModalGrupo: () => ipcRenderer.send('fechar-modal-grupo'),
     salvarGrupoPermissao: (dados) => ipcRenderer.invoke('salvar-grupo-permissao', dados),
 
-    // ==================== COLABORADORES ====================
+    // ==================== COLABORADORES (só o chefe) ====================
     pedirColaboradores: () => ipcRenderer.invoke('buscar-colaboradores'),
-    pedirColaboradoresArquivados: () => ipcRenderer.invoke('buscar-colaboradores-arquivados'),
-    arquivarColaborador: (id) => ipcRenderer.invoke('arquivar-colaborador-banco', id),
-    reativarColaborador: (id) => ipcRenderer.invoke('reativar-colaborador-banco', id),
+    pedirColaboradoresDesativados: () => ipcRenderer.invoke('buscar-colaboradores-desativados'),
+    desativarColaborador: (pessoa) => ipcRenderer.invoke('desativar-colaborador', pessoa),
+    ativarColaborador: (pessoa) => ipcRenderer.invoke('ativar-colaborador', pessoa),
+    redefinirSenhaColaborador: (pessoa) => ipcRenderer.invoke('redefinir-senha-colaborador', pessoa),
     aoAtualizarColaboradores: (funcao) => ipcRenderer.on('colaboradores-atualizados', (event, ...args) => funcao(...args)),
     abrirModalColaborador: () => ipcRenderer.send('abrir-modal-colaborador'),
     fecharModalColaborador: () => ipcRenderer.send('fechar-modal-colaborador'),
-    salvarColaborador: (dados) => ipcRenderer.invoke('salvar-colaborador-banco', dados),
+    salvarColaborador: (dados) => ipcRenderer.invoke('salvar-colaborador', dados),
 
-    // ==================== REDEFINIR SENHA DE COLABORADOR ====================
-    abrirModalRedefinirSenhaColaborador: () => ipcRenderer.send('abrir-modal-redefinir-senha-colaborador'),
-    fecharModalRedefinirSenhaColaborador: () => ipcRenderer.send('fechar-modal-redefinir-senha-colaborador'),
-    redefinirSenhaColaborador: (dados) => ipcRenderer.invoke('redefinir-senha-colaborador', dados),
+    // ==================== SENHA TEMPORÁRIA ====================
+    pedirSenhaTemporaria: () => ipcRenderer.invoke('pedir-senha-temporaria'),
+    fecharModalSenhaTemporaria: () => ipcRenderer.send('fechar-modal-senha-temporaria'),
+    copiarTexto: (texto) => ipcRenderer.send('copiar-texto', texto),
 });

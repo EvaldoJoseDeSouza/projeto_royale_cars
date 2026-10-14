@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Senha Temporária</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="../../estilos/modal.css" />
+    <style>
+        /* Estilos só desta janela */
+        .senha-caixa {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 16px 0;
+            padding: 14px 16px;
+            border: 2px dashed var(--blue-dark);
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .senha-texto {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--blue-dark);
+            user-select: all; /* um clique seleciona a senha inteira */
+        }
+
+        .btn-copiar {
+            border: 1px solid var(--border-color);
+            background: #fff;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-copiar.copiado {
+            border-color: var(--btn-success);
+            color: var(--btn-success);
+        }
+
+        .senha-aviso {
+            font-size: 0.85rem;
+            color: #555;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="modal-header">
+        <h3>Senha temporária</h3>
+    </div>
+
+    <div class="modal-content">
+        <p id="texto-pessoa" style="font-size:0.95rem; color:#333;"></p>
+
+        <div class="senha-caixa">
+            <span class="senha-texto" id="senha-texto">—</span>
+            <button type="button" class="btn-copiar" id="btn-copiar">
+                <i class="ri-file-copy-line"></i> Copiar
+            </button>
+        </div>
+
+        <p class="senha-aviso">
+            Passe esta senha para a pessoa. Ela aparece <strong>só agora</strong>: depois de fechar
+            esta janela não dá para ver de novo (só gerando outra). No primeiro acesso a pessoa
+            vai criar a própria senha.
+        </p>
+
+        <div class="modal-footer">
+            <button type="button" class="btn-save" id="btn-entendi">Entendi, já anotei</button>
+        </div>
+    </div>
+
+    <script src="./modalSenhaTemporaria.js"></script>
+</body>
+
+</html>

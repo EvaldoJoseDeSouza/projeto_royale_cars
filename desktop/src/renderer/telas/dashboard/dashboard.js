@@ -114,18 +114,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Botões "Arquivados"
     esconderSe(document.getElementById('btn-toggle-arquivados-frota'), !tem('veiculos_arquivar'));
     esconderSe(document.getElementById('btn-toggle-arquivados-clientes'), !tem('clientes_arquivar'));
-    esconderSe(btnToggleArquivadosColaboradores, !tem('administracao'));
+    esconderSe(btnToggleDesativadosColaboradores, !tem('administracao'));
   }
 
   let listaColaboradoresAtual = [];
-  let listaColaboradoresArquivadosAtual = [];
-  let modoArquivadoColaboradores = false;
+  let listaColaboradoresDesativadosAtual = [];
+  let modoDesativadosColaboradores = false;
 
   const containerColaboradores = document.getElementById('container-colaboradores');
   const inputBuscaColaboradores = document.getElementById('busca-colaboradores');
-  const btnToggleArquivadosColaboradores = document.getElementById('btn-toggle-arquivados-colaboradores');
-  const textoToggleArquivadosColaboradores = document.getElementById('texto-toggle-arquivados-colaboradores');
-  const iconeToggleArquivadosColaboradores = document.getElementById('icone-toggle-arquivados-colaboradores');
+  const btnToggleDesativadosColaboradores = document.getElementById('btn-toggle-desativados-colaboradores');
+  const textoToggleDesativadosColaboradores = document.getElementById('texto-toggle-desativados-colaboradores');
+  const iconeToggleDesativadosColaboradores = document.getElementById('icone-toggle-desativados-colaboradores');
   const btnAbrirCadastroColaborador = document.getElementById('btn-abrir-cadastro-colaborador');
 
   if (btnToggleArquivadosFrota) {
@@ -862,9 +862,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (targetId === 'view-colaboradores') {
-        modoArquivadoColaboradores = false;
-        if (textoToggleArquivadosColaboradores) textoToggleArquivadosColaboradores.textContent = 'Arquivados';
-        if (iconeToggleArquivadosColaboradores) iconeToggleArquivadosColaboradores.className = 'ri-archive-line';
+        modoDesativadosColaboradores = false;
+        if (textoToggleDesativadosColaboradores) textoToggleDesativadosColaboradores.textContent = 'Desativados';
+        if (iconeToggleDesativadosColaboradores) iconeToggleDesativadosColaboradores.className = 'ri-user-unfollow-line';
         carregarColaboradores();
       }
 
@@ -879,125 +879,153 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderizarColaboradores(listaColaboradores, modoArquivado = false) {
+  // ============================ COLABORADORES ============================
+  // Troca < > & " ' por códigos seguros antes de colocar um texto do banco
+  // dentro de innerHTML. Assim um nome como "<b>Ana</b>" aparece escrito,
+  // em vez de virar HTML de verdade.
+  function escaparHtml(texto) {
+    return String(texto ?? '').replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+
+  const CARGOS = { chefe: 'Chefe', gerente: 'Gerente', funcionario: 'Funcionário' };
+
+  function formatarUltimoAcesso(dataTexto) {
+    if (!dataTexto) return 'Nunca entrou';
+    return new Date(dataTexto).toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function renderizarColaboradores(lista, modoDesativados = false) {
     if (!containerColaboradores) return;
     containerColaboradores.innerHTML = '';
 
-    if (listaColaboradores.length === 0) {
-      containerColaboradores.innerHTML = `<p style="color: var(--text-muted); padding: 20px;">${modoArquivado ? 'Nenhum colaborador arquivado.' : 'Nenhum colaborador cadastrado ainda.'}</p>`;
+    if (lista.length === 0) {
+      containerColaboradores.innerHTML = `<p style="color: var(--text-muted); padding: 20px;">${modoDesativados ? 'Ninguém desativado.' : 'Nenhum colaborador encontrado.'}</p>`;
       return;
     }
 
-    listaColaboradores.forEach(colaborador => {
-      const nomeGrupo = colaborador.grupos_permissao?.nome || 'Sem grupo';
+    // O chefe aparece primeiro; depois os outros em ordem de nome
+    const ordenada = [...lista].sort((a, b) => (a.cargo === 'chefe' ? -1 : b.cargo === 'chefe' ? 1 : 0));
+
+    ordenada.forEach((pessoa) => {
+      const ehChefe = pessoa.cargo === 'chefe';
+      const textoPermissoes = ehChefe
+        ? 'Acesso total'
+        : `${pessoa.permissoes.length} de ${TOTAL_PERMISSOES}`; // TOTAL_PERMISSOES vem de compartilhado/permissoes.js
 
       const card = document.createElement('div');
-      card.className = modoArquivado ? 'customer-card card-arquivado' : 'customer-card';
+      card.className = modoDesativados ? 'customer-card card-colaborador card-desativado' : 'customer-card card-colaborador';
 
-      const dropdownHtml = modoArquivado
-        ? `<button class="card-dropdown-item reativar-btn" data-id="${colaborador.id}"><i class="ri-arrow-go-back-line"></i> Reativar</button>`
-        : `<button class="card-dropdown-item edit-btn" data-id="${colaborador.id}"><i class="ri-edit-line"></i> Editar</button>
-         <button class="card-dropdown-item redefinir-senha-btn" data-id="${colaborador.id}"><i class="ri-key-line"></i> Redefinir Senha</button>
-         <button class="card-dropdown-item delete-item archive-btn" data-id="${colaborador.id}"><i class="ri-archive-line"></i> Arquivar</button>`;
+      // O chefe não tem menu: ninguém mexe no acesso dele por aqui
+      const menuHtml = ehChefe ? '' : (modoDesativados
+        ? `<button class="card-dropdown-item ativar-btn"><i class="ri-user-follow-line"></i> Ativar</button>`
+        : `<button class="card-dropdown-item edit-btn"><i class="ri-edit-line"></i> Editar</button>
+           <button class="card-dropdown-item redefinir-senha-btn"><i class="ri-key-line"></i> Redefinir Senha</button>
+           <button class="card-dropdown-item delete-item desativar-btn"><i class="ri-user-unfollow-line"></i> Desativar</button>`);
 
       card.innerHTML = `
-      <button class="btn-card-options"><i class="ri-more-2-fill"></i></button>
-      <div class="card-dropdown">
-        ${dropdownHtml}
-      </div>
-      <span class="badge-contagem">${nomeGrupo}</span>
+      ${menuHtml ? `<button class="btn-card-options"><i class="ri-more-2-fill"></i></button>
+      <div class="card-dropdown">${menuHtml}</div>` : ''}
+      <span class="badge-cargo cargo-${pessoa.cargo}">${CARGOS[pessoa.cargo] || pessoa.cargo}</span>
       <div class="vehicle-info">
-        <h4>${colaborador.nome || colaborador.username}</h4>
-        <p>@${colaborador.username}</p>
+        <h4>${escaparHtml(pessoa.nome)}</h4>
+        <p>${escaparHtml(pessoa.email)}</p>
       </div>
       <div class="customer-details">
-        <div class="customer-data-entry"><span><strong>E-mail:</strong> ${colaborador.email || '-'}</span></div>
-        <div class="customer-data-entry"><span><strong>Telefone:</strong> ${colaborador.telefone || '-'}</span></div>
+        <div class="customer-data-entry"><span><strong>Permissões:</strong> ${textoPermissoes}</span></div>
+        <div class="customer-data-entry"><span><strong>Último acesso:</strong> ${formatarUltimoAcesso(pessoa.ultimo_acesso)}</span></div>
+        ${pessoa.trocar_senha && !modoDesativados ? '<div class="aviso-troca-senha"><i class="ri-time-line"></i> Aguardando troca de senha</div>' : ''}
       </div>
     `;
 
-      const btnOptions = card.querySelector('.btn-card-options');
-      const dropdown = card.querySelector('.card-dropdown');
-
-      btnOptions.addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.querySelectorAll('.card-dropdown').forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
-        dropdown.classList.toggle('show');
-      });
-
-      if (modoArquivado) {
-        card.querySelector('.reativar-btn').addEventListener('click', async (e) => {
-          e.stopPropagation();
-          dropdown.classList.remove('show');
-          await window.apiAcesso.reativarColaborador(colaborador.id);
-        });
-      } else {
-        card.querySelector('.edit-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          dropdown.classList.remove('show');
-          // Entrega os dados do colaborador ao modal (mesmo padrão de veiculoParaEditar)
-          localStorage.setItem('colaboradorParaEditar', JSON.stringify(colaborador));
-          window.apiAcesso.abrirModalColaborador();
-        });
-
-        card.querySelector('.redefinir-senha-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          dropdown.classList.remove('show');
-          localStorage.setItem('colaboradorParaRedefinirSenha', JSON.stringify({
-            id: colaborador.id,
-            nome: colaborador.nome,
-            username: colaborador.username
-          }));
-          window.apiAcesso.abrirModalRedefinirSenhaColaborador();
-        });
-
-        card.querySelector('.archive-btn').addEventListener('click', async (e) => {
-          e.stopPropagation();
-          dropdown.classList.remove('show');
-
-          const confirmou = await window.apiAcesso.confirmar({
-            titulo: "Arquivar Colaborador",
-            mensagem: "Tem certeza que deseja arquivar este colaborador? O acesso dele ao sistema será bloqueado imediatamente, mas o histórico será preservado.",
-            textoConfirmar: "Arquivar",
-            tipo: "perigo"
-          });
-
-          if (confirmou) {
-            await window.apiAcesso.arquivarColaborador(colaborador.id);
-          }
-        });
-      }
-
-      aplicarPermissoesNoCard(card, {
-        '.edit-btn': 'administracao',
-        '.redefinir-senha-btn': 'administracao',
-        '.archive-btn': 'administracao',
-        '.reativar-btn': 'administracao'
-      });
+      if (!ehChefe) ligarMenuDoColaborador(card, pessoa, modoDesativados);
       containerColaboradores.appendChild(card);
+    });
+  }
+
+  // Liga os botões do menu "⋮" de um cartão
+  function ligarMenuDoColaborador(card, pessoa, modoDesativados) {
+    const dropdown = card.querySelector('.card-dropdown');
+    const quem = { id: pessoa.id, nome: pessoa.nome };
+
+    card.querySelector('.btn-card-options').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.card-dropdown').forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+      dropdown.classList.toggle('show');
+    });
+
+    // Atalho: fecha o menu e roda a ação
+    function aoClicar(seletor, acao) {
+      card.querySelector(seletor).addEventListener('click', async (e) => {
+        e.stopPropagation();
+        dropdown.classList.remove('show');
+        await acao();
+      });
+    }
+
+    if (modoDesativados) {
+      aoClicar('.ativar-btn', async () => {
+        const confirmou = await window.apiAcesso.confirmar({
+          titulo: 'Ativar acesso',
+          mensagem: `Devolver o acesso de ${pessoa.nome} ao sistema?`,
+          textoConfirmar: 'Ativar',
+          tipo: 'sucesso'
+        });
+        if (confirmou) await window.apiAcesso.ativarColaborador(quem);
+      });
+      return;
+    }
+
+    aoClicar('.edit-btn', () => {
+      // Entrega os dados ao modal (mesmo padrão de veiculoParaEditar)
+      localStorage.setItem('colaboradorParaEditar', JSON.stringify(pessoa));
+      window.apiAcesso.abrirModalColaborador();
+    });
+
+    aoClicar('.redefinir-senha-btn', async () => {
+      const confirmou = await window.apiAcesso.confirmar({
+        titulo: 'Redefinir senha',
+        mensagem: `Gerar uma nova senha temporária para ${pessoa.nome}? A senha atual deixa de funcionar.`,
+        textoConfirmar: 'Gerar senha',
+        tipo: 'perigo'
+      });
+      if (confirmou) await window.apiAcesso.redefinirSenhaColaborador(quem);
+    });
+
+    aoClicar('.desativar-btn', async () => {
+      const confirmou = await window.apiAcesso.confirmar({
+        titulo: 'Desativar acesso',
+        mensagem: `Desativar o acesso de ${pessoa.nome}? Ele não consegue mais entrar no sistema, mas todo o histórico fica guardado.`,
+        textoConfirmar: 'Desativar',
+        tipo: 'perigo'
+      });
+      if (confirmou) await window.apiAcesso.desativarColaborador(quem);
     });
   }
 
   function aplicarFiltrosColaboradores() {
     const termo = (inputBuscaColaboradores?.value || '').trim().toLowerCase();
-    const listaBase = modoArquivadoColaboradores ? listaColaboradoresArquivadosAtual : listaColaboradoresAtual;
-    let listaFiltrada = listaBase;
+    const listaBase = modoDesativadosColaboradores ? listaColaboradoresDesativadosAtual : listaColaboradoresAtual;
 
-    if (termo) {
-      listaFiltrada = listaFiltrada.filter(colab =>
-        (colab.nome || '').toLowerCase().includes(termo) ||
-        (colab.username || '').toLowerCase().includes(termo) ||
-        (colab.email || '').toLowerCase().includes(termo)
-      );
-    }
+    const listaFiltrada = !termo ? listaBase : listaBase.filter(pessoa =>
+      (pessoa.nome || '').toLowerCase().includes(termo) ||
+      (pessoa.email || '').toLowerCase().includes(termo)
+    );
 
-    renderizarColaboradores(listaFiltrada, modoArquivadoColaboradores);
+    renderizarColaboradores(listaFiltrada, modoDesativadosColaboradores);
   }
 
+  // Busca a lista certa (ativos ou desativados) e redesenha
   async function carregarColaboradores() {
     try {
-      const colaboradores = await window.apiAcesso.pedirColaboradores();
-      listaColaboradoresAtual = colaboradores;
+      if (modoDesativadosColaboradores) {
+        listaColaboradoresDesativadosAtual = await window.apiAcesso.pedirColaboradoresDesativados();
+      } else {
+        listaColaboradoresAtual = await window.apiAcesso.pedirColaboradores();
+      }
       aplicarFiltrosColaboradores();
     } catch (erro) {
       console.error("Erro ao carregar colaboradores:", erro);
@@ -1008,26 +1036,14 @@ document.addEventListener('DOMContentLoaded', () => {
     inputBuscaColaboradores.addEventListener('input', aplicarFiltrosColaboradores);
   }
 
-  if (btnToggleArquivadosColaboradores) {
-    btnToggleArquivadosColaboradores.addEventListener('click', async () => {
-      modoArquivadoColaboradores = !modoArquivadoColaboradores;
+  if (btnToggleDesativadosColaboradores) {
+    btnToggleDesativadosColaboradores.addEventListener('click', () => {
+      modoDesativadosColaboradores = !modoDesativadosColaboradores;
 
-      if (textoToggleArquivadosColaboradores) {
-        textoToggleArquivadosColaboradores.textContent = modoArquivadoColaboradores ? 'Voltar para Ativos' : 'Arquivados';
-      }
-      if (iconeToggleArquivadosColaboradores) {
-        iconeToggleArquivadosColaboradores.className = modoArquivadoColaboradores ? 'ri-arrow-left-line' : 'ri-archive-line';
-      }
+      textoToggleDesativadosColaboradores.textContent = modoDesativadosColaboradores ? 'Voltar para Ativos' : 'Desativados';
+      iconeToggleDesativadosColaboradores.className = modoDesativadosColaboradores ? 'ri-arrow-left-line' : 'ri-user-unfollow-line';
 
-      if (modoArquivadoColaboradores) {
-        try {
-          listaColaboradoresArquivadosAtual = await window.apiAcesso.pedirColaboradoresArquivados();
-        } catch (erro) {
-          console.error("Erro ao carregar colaboradores arquivados:", erro);
-        }
-      }
-
-      aplicarFiltrosColaboradores();
+      carregarColaboradores();
     });
   }
 
@@ -1106,16 +1122,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (window.apiAcesso && window.apiAcesso.aoAtualizarColaboradores) {
     window.apiAcesso.aoAtualizarColaboradores(() => {
+      // Só recarrega se a tela de colaboradores estiver aberta
       const viewColaboradores = document.getElementById('view-colaboradores');
       if (viewColaboradores && viewColaboradores.classList.contains('active')) {
-        if (modoArquivadoColaboradores) {
-          window.apiAcesso.pedirColaboradoresArquivados().then(lista => {
-            listaColaboradoresArquivadosAtual = lista;
-            aplicarFiltrosColaboradores();
-          });
-        } else {
-          carregarColaboradores();
-        }
+        carregarColaboradores();
       }
     });
   }
