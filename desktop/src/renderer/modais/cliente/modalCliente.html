@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cadastrar Novo Cliente</title>
+    <title>Cliente</title>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
     <link rel="stylesheet" href="../../estilos/modal.css" />
   </head>
   <body>
     <div class="modal-header">
-      <h3>Cadastrar Cliente</h3>
+      <h3 id="titulo-modal-cliente">Cadastrar Cliente</h3>
       <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
         <i class="ri-close-line" style="font-size: 1.2rem; display: block;"></i>
       </button>
@@ -18,76 +18,52 @@
     <div class="modal-content">
       <form id="form-cadastro-cliente">
         <div class="form-group">
-          <label for="nome">Nome Completo *</label>
-          <input
-            type="text"
-            id="nome"
-            placeholder="Ex: Marcos Almeida"
-            required
-          />
+          <label for="nome">Nome completo *</label>
+          <input type="text" id="nome" maxlength="150" placeholder="Ex: Marcos Almeida" required />
         </div>
 
         <div class="row-inputs">
           <div class="form-group">
             <label for="cpf">CPF *</label>
-            <input
-              type="text"
-              id="cpf"
-              placeholder="Ex: 000.000.000-00"
-              required
-            />
+            <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" required />
           </div>
 
           <div class="form-group">
-            <label for="cnh">CNH *</label>
-            <input
-              type="text"
-              id="cnh"
-              placeholder="Ex: 00000000000"
-              required
-            />
+            <label for="telefone">Telefone *</label>
+            <input type="text" id="telefone" inputmode="numeric" placeholder="(19) 99999-9999" required />
           </div>
         </div>
 
         <div class="row-inputs">
           <div class="form-group">
-            <label for="telefone">Telefone *</label>
-            <input
-              type="text"
-              id="telefone"
-              placeholder="Ex: (11) 99999-9999"
-              required
-            />
+            <label for="cnh">CNH *</label>
+            <input type="text" id="cnh" inputmode="numeric" maxlength="11" placeholder="11 números" required />
           </div>
 
           <div class="form-group">
-            <label for="email">E-mail</label>
-            <input 
-              type="email" 
-              id="email" 
-              placeholder="Ex: cliente@email.com" 
-            />
+            <label for="cnh-validade">Validade da CNH *</label>
+            <input type="date" id="cnh-validade" required />
           </div>
         </div>
 
         <div class="form-group">
-          <label for="endereco">Endereço Residencial</label>
-          <input 
-            type="text" 
-            id="endereco" 
-            placeholder="Ex: Av. Paulista, 1200 - São Paulo" 
-          />
+          <label for="email">E-mail *</label>
+          <input type="email" id="email" maxlength="150" placeholder="cliente@email.com" required />
+        </div>
+
+        <div class="form-group">
+          <label for="endereco">Endereço (opcional)</label>
+          <input type="text" id="endereco" maxlength="200" placeholder="Ex: Av. Paulista, 1200 - São Paulo" />
         </div>
 
         <div class="modal-footer">
-          <button type="button" class="btn-cancel" id="btn-cancelar">
-            Cancelar
-          </button>
-          <button type="submit" class="btn-save">Salvar Cliente</button>
+          <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn-save" id="btn-salvar">Salvar Cliente</button>
         </div>
       </form>
     </div>
 
+    <script src="../../compartilhado/formatos.js"></script>
     <script src="./modalCliente.js"></script>
   </body>
 </html>

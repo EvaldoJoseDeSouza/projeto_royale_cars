@@ -1,115 +1,81 @@
-const form = document.getElementById('form-cadastro-cliente');
-const btnCancelar = document.getElementById('btn-cancelar');
-const btnFecharTopo = document.getElementById('btn-fechar-topo');
+// =====================================================================
+//  Modal de cliente: cadastrar ou editar
+// ---------------------------------------------------------------------
+//  As máscaras (CPF e telefone) só ajudam quem digita. Quem limpa os
+//  dados e confere é o processo principal (main/ipc/clientes.js) e, por
+//  último, o banco. Se algo estiver errado, o aviso já vem com o motivo.
+//
+//  formatarCpf, formatarTelefone, soDigitos e aplicarMascara vêm de
+//  ../../compartilhado/formatos.js (carregado antes deste arquivo).
+// =====================================================================
 
-const inputCpf = document.getElementById('cpf');
-const inputCnh = document.getElementById('cnh');
-const inputTelefone = document.getElementById('telefone');
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('form-cadastro-cliente');
+  const btnSalvar = document.getElementById('btn-salvar');
 
-let idClienteEdicao = null;
+  const campos = {
+    nome: document.getElementById('nome'),
+    cpf: document.getElementById('cpf'),
+    telefone: document.getElementById('telefone'),
+    cnh: document.getElementById('cnh'),
+    cnh_validade: document.getElementById('cnh-validade'),
+    email: document.getElementById('email'),
+    endereco: document.getElementById('endereco'),
+  };
 
-const clienteSessao = localStorage.getItem('clienteParaEditar');
-if (clienteSessao) {
-    try {
-        const cliente = JSON.parse(clienteSessao);
-        idClienteEdicao = cliente.id; 
+  // Máscaras: CPF e telefone formatados, CNH só números
+  aplicarMascara(campos.cpf, formatarCpf);
+  aplicarMascara(campos.telefone, formatarTelefone);
+  aplicarMascara(campos.cnh, (valor) => soDigitos(valor).slice(0, 11));
 
-        if (document.getElementById('nome')) document.getElementById('nome').value = cliente.nome || '';
-        if (inputCpf) inputCpf.value = cliente.cpf || '';
-        if (inputCnh) inputCnh.value = cliente.cnh || '';
-        if (inputTelefone) inputTelefone.value = cliente.telefone || '';
-        if (document.getElementById('email')) document.getElementById('email').value = cliente.email || '';
-        if (document.getElementById('endereco')) document.getElementById('endereco').value = cliente.endereco || '';
-
-        const tituloModal = document.querySelector('.modal-header h3') || document.querySelector('h2');
-        if (tituloModal) tituloModal.textContent = 'Editar Cliente';
-
-        const btnSalvarTexto = form ? form.querySelector('.btn-save') : null;
-        if (btnSalvarTexto) btnSalvarTexto.textContent = 'Salvar Alterações';
-
-    } catch (err) {
-        console.error('Erro ao mapear cliente para edição:', err);
-    }
-   
-}
-
-// Mascara de Digitação
-if (inputCpf) {
-    inputCpf.addEventListener('input', (e) => {
-        let value = e.target.value.replace(/\D/g, '');
-        if (value.length > 11) value = value.slice(0, 11); 
-
-        if (value.length > 9) {
-            value = value.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
-        } else if (value.length > 6) {
-            value = value.replace(/^(\d{3})(\d{3})(\d{1,3})$/, '$1.$2.$3');
-        } else if (value.length > 3) {
-            value = value.replace(/^(\d{3})(\d{1,3})$/, '$1.$2');
-        }
-        e.target.value = value;
-    });
-}
-
-if (inputCnh) {
-    inputCnh.addEventListener('input', (e) => {
-        let value = e.target.value.replace(/\D/g, ''); 
-        if (value.length > 11) value = value.slice(0, 11); 
-        e.target.value = value;
-    });
-}
-
-if (inputTelefone) {
-    inputTelefone.addEventListener('input', (e) => {
-        let value = e.target.value.replace(/\D/g, ''); 
-        if (value.length > 11) value = value.slice(0, 11); 
-
-        if (value.length > 10) {
-            value = value.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
-        } else if (value.length > 6) {
-            value = value.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
-        } else if (value.length > 2) {
-            value = value.replace(/^(\d{2})(\d{1,4})$/, '($1) $2');
-        } else if (value.length > 0) {
-            value = value.replace(/^(\d{1,2})$/, '($1');
-        }
-        e.target.value = value;
-    });
-}
-
-function fecharJanela() {
-    window.close();
-}
-
-btnCancelar.addEventListener('click', fecharJanela);
-btnFecharTopo.addEventListener('click', fecharJanela);
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const nome = document.getElementById('nome').value;
-  const cpf = document.getElementById('cpf').value;
-  const cnh = document.getElementById('cnh').value;
-  const telefone = document.getElementById('telefone').value;
-  const email = document.getElementById('email').value || null;
-  const endereco = document.getElementById('endereco').value || null;
-
-  const dadosCliente = { nome, cpf, cnh, telefone, email, endereco };
-
-  if (idClienteEdicao) {
-    dadosCliente.id = idClienteEdicao;
-  }
-
+  // Se o dashboard deixou um cliente no localStorage, estamos EDITANDO
+  let clienteEditando = null;
   try {
-    const resultado = await window.apiAcesso.salvarCliente(dadosCliente);
-
-    if (resultado.sucesso) {
-        localStorage.removeItem('clienteParaEditar');
-        fecharJanela();
-    }
-  } catch (error) {
-    console.error("Erro ao enviar submit do cliente:", error);
+    const salvo = localStorage.getItem('clienteParaEditar');
+    if (salvo) clienteEditando = JSON.parse(salvo);
+  } catch (e) {
+    clienteEditando = null;
   }
-});
+  localStorage.removeItem('clienteParaEditar'); // usou, apagou
 
-btnCancelar.addEventListener('click', () => window.apiAcesso.fecharModalCliente());
-btnFecharTopo.addEventListener('click', () => window.apiAcesso.fecharModalCliente());
+  if (clienteEditando) {
+    document.getElementById('titulo-modal-cliente').textContent = 'Editar Cliente';
+    btnSalvar.textContent = 'Salvar Alterações';
+
+    // O banco guarda só números: aqui eles ganham a máscara de novo
+    campos.nome.value = clienteEditando.nome || '';
+    campos.cpf.value = formatarCpf(clienteEditando.cpf);
+    campos.telefone.value = formatarTelefone(clienteEditando.telefone);
+    campos.cnh.value = clienteEditando.cnh || '';
+    campos.cnh_validade.value = clienteEditando.cnh_validade || '';
+    campos.email.value = clienteEditando.email || '';
+    campos.endereco.value = clienteEditando.endereco || '';
+  }
+
+  function fechar() {
+    window.apiAcesso.fecharModalCliente();
+  }
+  document.getElementById('btn-cancelar').addEventListener('click', fechar);
+  document.getElementById('btn-fechar-topo').addEventListener('click', fechar);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Junta todos os campos num objeto só. Na edição vai TUDO (antes o
+    // e-mail e o endereço ficavam de fora e não eram salvos).
+    const dados = { id: clienteEditando ? clienteEditando.id : null };
+    Object.keys(campos).forEach((chave) => {
+      dados[chave] = campos[chave].value;
+    });
+
+    btnSalvar.disabled = true;
+    try {
+      const resposta = await window.apiAcesso.salvarCliente(dados);
+      if (resposta && resposta.sucesso) fechar();
+    } catch (erro) {
+      console.error('Erro ao salvar cliente:', erro);
+    } finally {
+      btnSalvar.disabled = false;
+    }
+  });
+});

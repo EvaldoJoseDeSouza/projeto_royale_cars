@@ -924,11 +924,13 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
   cursor: default;
 }
 
-/* Colaboradores: etiqueta do cargo, aviso de senha e cartão desativado */
+/* Cartões de pessoas (clientes e colaboradores) */
+.card-cliente .vehicle-info p,
 .card-colaborador .vehicle-info p {
-  text-transform: none; /* e-mail em minúsculas (o padrão é maiúsculo, feito para placas) */
+  text-transform: none; /* e-mail e telefone sem caixa alta (o padrão é maiúsculo, feito para placas) */
 }
 
+.card-cliente .customer-details,
 .card-colaborador .customer-details {
   flex-direction: column; /* um dado embaixo do outro */
   align-items: flex-start;
@@ -957,7 +959,8 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
   color: #b8860b;
 }
 
+/* Cartão arquivado (cliente) ou desativado (colaborador): mais apagado */
+.card-arquivado,
 .card-desativado {
   opacity: 0.7;
 }
-

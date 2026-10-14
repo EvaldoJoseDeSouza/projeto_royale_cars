@@ -24,10 +24,12 @@ src/
 │   ├── index.js              abre as janelas e liga tudo
 │   ├── supabase.js           a conexão com o banco
 │   ├── sessao.js             quem está logado e o que pode fazer
+│   ├── erros-banco.js        traduz os erros do banco para português
 │   └── ipc/                  as "conversas" com as telas, por assunto
 │       ├── sessao.js         login, troca de senha, Minha conta
 │       ├── modelos.js        modelos de permissão
-│       └── colaboradores.js  a equipe (usa a Edge Function admin-usuarios)
+│       ├── colaboradores.js  a equipe (usa a Edge Function admin-usuarios)
+│       └── clientes.js       clientes
 ├── preload/preload.js        a ponte entre as telas e o processo principal
 ├── imagens/                  ícone do sistema (bandeja e telas)
 └── renderer/                 as telas, organizadas por tela
@@ -45,7 +47,8 @@ src/
     │   └── senha-temporaria/ (mostra a senha gerada para um colaborador)
     ├── estilos/              CSS usado por várias telas (modal.css)
     └── compartilhado/        JavaScript usado por várias telas
-        └── permissoes.js     a lista das 13 permissões (um lugar só)
+        ├── permissoes.js     a lista das 13 permissões (um lugar só)
+        └── formatos.js       máscaras e formatos (CPF, telefone, data)
 ```
 
 A regra é simples: **tudo de uma tela fica na pasta dela** (HTML, JavaScript e o CSS só

@@ -418,13 +418,25 @@ document.addEventListener('DOMContentLoaded', () => {
     let listaFiltrada = listaBase;
 
     if (termo) {
+      // O CPF está guardado só com números: tiramos pontos e traço do
+      // que foi digitado na busca para comparar igual com igual.
+      const termoNumeros = soDigitos(termo);
       listaFiltrada = listaFiltrada.filter(cliente =>
         (cliente.nome || '').toLowerCase().includes(termo) ||
-        (cliente.cpf || '').toLowerCase().includes(termo)
+        (cliente.email || '').toLowerCase().includes(termo) ||
+        (termoNumeros && (cliente.cpf || '').includes(termoNumeros))
       );
     }
 
     renderizarClientes(listaFiltrada, modoArquivadoClientes);
+  }
+
+  // Etiqueta da CNH no cartão: em dia (verde), vencendo (amarelo), vencida (vermelho)
+  function etiquetaCnh(validade) {
+    const dias = diasAte(validade); // diasAte vem de compartilhado/formatos.js
+    if (dias < 0) return '<span class="status-badge status-alugado"><i class="ri-error-warning-line"></i> CNH vencida</span>';
+    if (dias <= 30) return `<span class="status-badge status-manutencao"><i class="ri-time-line"></i> CNH vence em ${dias} dia(s)</span>`;
+    return '<span class="status-badge status-disponivel"><i class="ri-checkbox-circle-line"></i> CNH em dia</span>';
   }
 
   function renderizarClientes(listaClientes, modoArquivado = false) {
@@ -438,26 +450,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     listaClientes.forEach(cliente => {
       const card = document.createElement('div');
-      card.className = modoArquivado ? 'customer-card card-arquivado' : 'customer-card';
+      card.className = modoArquivado ? 'customer-card card-cliente card-arquivado' : 'customer-card card-cliente';
 
       const dropdownHtml = modoArquivado
-        ? `<button class="card-dropdown-item reativar-btn" data-id="${cliente.id}"><i class="ri-arrow-go-back-line"></i> Reativar</button>`
-        : `<button class="card-dropdown-item edit-btn" data-id="${cliente.id}"><i class="ri-edit-line"></i> Editar</button>
-         <button class="card-dropdown-item delete-item archive-btn" data-id="${cliente.id}"><i class="ri-archive-line"></i> Arquivar</button>`;
+        ? `<button class="card-dropdown-item reativar-btn"><i class="ri-arrow-go-back-line"></i> Reativar</button>`
+        : `<button class="card-dropdown-item edit-btn"><i class="ri-edit-line"></i> Editar</button>
+         <button class="card-dropdown-item delete-item archive-btn"><i class="ri-archive-line"></i> Arquivar</button>`;
 
+      // O banco guarda só números; formatarCpf/formatarTelefone/formatarData
+      // (de compartilhado/formatos.js) colocam a máscara só para mostrar.
       card.innerHTML = `
       <button class="btn-card-options"><i class="ri-more-2-fill"></i></button>
       <div class="card-dropdown">
         ${dropdownHtml}
       </div>
-      <span class="status-badge status-disponivel"><i class="ri-checkbox-circle-line"></i> Cadastrado</span>
+      ${etiquetaCnh(cliente.cnh_validade)}
       <div class="vehicle-info">
-        <h4>${cliente.nome}</h4>
-        <p><i class="ri-phone-line"></i> ${cliente.telefone}</p>
+        <h4>${escaparHtml(cliente.nome)}</h4>
+        <p><i class="ri-phone-line"></i> ${formatarTelefone(cliente.telefone)}</p>
       </div>
       <div class="customer-details">
-        <div class="customer-data-entry"><span><strong>CPF:</strong> ${cliente.cpf}</span></div>
-        <div class="customer-data-entry"><span><strong>CNH:</strong> ${cliente.cnh}</span></div>
+        <div class="customer-data-entry"><span><strong>CPF:</strong> ${formatarCpf(cliente.cpf)}</span></div>
+        <div class="customer-data-entry"><span><strong>CNH:</strong> ${escaparHtml(cliente.cnh)} (vale até ${formatarData(cliente.cnh_validade)})</span></div>
+        <div class="customer-data-entry"><span><strong>E-mail:</strong> ${escaparHtml(cliente.email)}</span></div>
+        ${cliente.endereco ? `<div class="customer-data-entry"><span><strong>Endereço:</strong> ${escaparHtml(cliente.endereco)}</span></div>` : ''}
       </div>
     `;
 
@@ -490,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const confirmou = await window.apiAcesso.confirmar({
             titulo: "Arquivar Cliente",
-            mensagem: "Quer mesmo arquivar este cliente? Ele será movido para os arquivados e não aparecerá mais nas listagens ativas. O histórico de locações será mantido, e você pode reativá-lo quando quiser.",
+            mensagem: `Arquivar ${cliente.nome}? Ele sai da lista de clientes, mas o histórico de locações fica guardado e dá para reativar quando quiser.`,
             textoConfirmar: "Arquivar",
             tipo: "perigo"
           });
@@ -880,14 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================ COLABORADORES ============================
-  // Troca < > & " ' por códigos seguros antes de colocar um texto do banco
-  // dentro de innerHTML. Assim um nome como "<b>Ana</b>" aparece escrito,
-  // em vez de virar HTML de verdade.
-  function escaparHtml(texto) {
-    return String(texto ?? '').replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    })[c]);
-  }
+  // escaparHtml vem de compartilhado/formatos.js
 
   const CARGOS = { chefe: 'Chefe', gerente: 'Gerente', funcionario: 'Funcionário' };
 

@@ -7,6 +7,7 @@ const { sessao, temPermissao, limparSessao } = require("./sessao");
 const { registrarIpcSessao } = require("./ipc/sessao");
 const { registrarIpcModelos } = require("./ipc/modelos");
 const { registrarIpcColaboradores } = require("./ipc/colaboradores");
+const { registrarIpcClientes } = require("./ipc/clientes");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -568,50 +569,8 @@ ipcMain.handle("reativar-veiculo-banco", async (event, idVeiculo) => {
 });
 
 // =============== CLIENTES ===================
-ipcMain.handle("buscar-clientes", async () => {
-  try {
-    console.log(
-      "Buscando clientes filtrandos para a empresa: ${idEmpresaLogada}",
-    );
-
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("*")
-      .eq("id_empresa", idEmpresaLogada)
-      .eq("ativo", true)
-      .order("nome", { ascending: true });
-
-    if (error) {
-      console.error("Erro ao buscar clientes:", error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error("Erro inesperado ao buscar clientes:", err);
-    return [];
-  }
-});
-
-ipcMain.handle("buscar-clientes-arquivados", async () => {
-  try {
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("*")
-      .eq("id_empresa", idEmpresaLogada)
-      .eq("ativo", false)
-      .order("nome", { ascending: true });
-
-    if (error) {
-      console.error("Erro ao buscar clientes arquivados:", error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error("Erro inesperado ao buscar clientes arquivados:", err);
-    return [];
-  }
-});
-
+// Listar, salvar, arquivar e reativar ficam em main/ipc/clientes.js.
+// Aqui ficam só a abertura e o fechamento do modal.
 ipcMain.on("abrir-modal-cliente", (evento) => {
   if (janelaModalCliente) {
     janelaModalCliente.focus();
@@ -621,8 +580,8 @@ ipcMain.on("abrir-modal-cliente", (evento) => {
   const janelaMae = BrowserWindow.fromWebContents(evento.sender);
 
   janelaModalCliente = new BrowserWindow({
-    width: 480,
-    height: 580,
+    width: 520,
+    height: 560,
     parent: janelaMae,
     modal: true,
     frame: false,
@@ -648,159 +607,12 @@ ipcMain.on("fechar-modal-cliente", () => {
   if (janelaModalCliente) janelaModalCliente.close();
 });
 
-ipcMain.handle("salvar-cliente-banco", async (event, dadosCliente) => {
-  try {
-    if (await negarSemPermissao(janelaModalCliente, "clientes_gerenciar")) return { sucesso: false };
-
-    let query;
-
-    if (dadosCliente.id) {
-      query = supabase
-        .from("clientes")
-        .update({
-          nome: dadosCliente.nome,
-          telefone: dadosCliente.telefone,
-          cpf: dadosCliente.cpf,
-          cnh: dadosCliente.cnh,
-        })
-        .eq("id", dadosCliente.id);
-    } else {
-      const novoCliente = {
-        ...dadosCliente,
-        id_empresa: idEmpresaLogada,
-      };
-
-      query = supabase.from("clientes").insert([novoCliente]);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      console.error("Erro ao salvar cliente no Supabase:", error.message);
-
-      await mostrarAviso(janelaModalCliente, {
-        tipo: "erro",
-        titulo: "Erro na Operação",
-        mensagem: `Não foi possível salvar os dados do cliente. Motivo: ${error.message}`,
-      });
-
-      return { sucesso: false, mensagem: error.message };
-    }
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("clientes-atualizados");
-    }
-
-    await mostrarAviso(janelaModalCliente, {
-      tipo: "sucesso",
-      titulo: "Sucesso",
-      mensagem: dadosCliente.id
-        ? `O cadastro de ${dadosCliente.nome} foi atualizado com sucesso!`
-        : `O cadastro de ${dadosCliente.nome} foi processado com sucesso!`,
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro interno ao salvar cliente:", err);
-    return { sucesso: false, message: "Erro interno no servidor." };
-  }
+registrarIpcClientes({
+  mostrarAviso,
+  obterJanelaDashboard: () => janelaDashboard,
+  obterJanelaCliente: () => janelaModalCliente,
 });
 
-ipcMain.handle("arquivar-cliente-banco", async (event, idCliente) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "clientes_arquivar")) return { sucesso: false };
-
-    const { data: locacoesAtivas, error: erroLocacoes } = await supabase
-      .from("locacoes")
-      .select("id")
-      .eq("id_cliente", idCliente)
-      .eq("status", "Ativo");
-
-    if (erroLocacoes) {
-      console.error(
-        "Erro ao verificar locações do cliente:",
-        erroLocacoes.message,
-      );
-      await mostrarAviso(janelaDashboard, {
-        tipo: "erro",
-        titulo: "Erro na Verificação",
-        mensagem:
-          "Não foi possível verificar as locações deste cliente. Tente novamente.",
-      });
-      return { sucesso: false };
-    }
-
-    if (locacoesAtivas && locacoesAtivas.length > 0) {
-      await mostrarAviso(janelaDashboard, {
-        tipo: "erro",
-        titulo: "Não é Possível Arquivar",
-        mensagem:
-          "Este cliente possui uma locação ativa no momento. Finalize a locação antes de arquivá-lo.",
-      });
-      return { sucesso: false };
-    }
-
-    const { error } = await supabase
-      .from("clientes")
-      .update({ ativo: false })
-      .eq("id", idCliente);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("clientes-atualizados");
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: "sucesso",
-      titulo: "Cliente Arquivado",
-      mensagem: "O cliente foi movido para os arquivados com sucesso!",
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro ao arquivar cliente:", err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: "erro",
-      titulo: "Erro ao Arquivar",
-      mensagem: "Não foi possível arquivar o cliente. Tente novamente.",
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
-
-ipcMain.handle("reativar-cliente-banco", async (event, idCliente) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "clientes_arquivar")) return { sucesso: false };
-
-    const { error } = await supabase
-      .from("clientes")
-      .update({ ativo: true })
-      .eq("id", idCliente);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("clientes-atualizados");
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: "sucesso",
-      titulo: "Cliente Reativo",
-      mensagem: "O cliente voltou a aparecer nas listagens ativas!",
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro ao reativar clientes:", err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: "erro",
-      titulo: "Erro ao Reativar",
-      mensagem: "Não foi possível reativar o cliente. Tente novamente.",
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
 
 // ============================= LOCAÇÕES =======================
 ipcMain.handle("buscar-locacoes-ativas", async () => {

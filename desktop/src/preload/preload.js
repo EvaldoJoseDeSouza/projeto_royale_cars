@@ -23,9 +23,9 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     pedirClientesArquivados: () => ipcRenderer.invoke('buscar-clientes-arquivados'),
     abrirModalCliente: () => ipcRenderer.send('abrir-modal-cliente'),
     fecharModalCliente: () => ipcRenderer.send('fechar-modal-cliente'),
-    salvarCliente: (dados) => ipcRenderer.invoke('salvar-cliente-banco', dados),
-    arquivarCliente: (idCliente) => ipcRenderer.invoke('arquivar-cliente-banco', idCliente),
-    reativarCliente: (idCliente) => ipcRenderer.invoke('reativar-cliente-banco', idCliente),
+    salvarCliente: (dados) => ipcRenderer.invoke('salvar-cliente', dados),
+    arquivarCliente: (idCliente) => ipcRenderer.invoke('arquivar-cliente', idCliente),
+    reativarCliente: (idCliente) => ipcRenderer.invoke('reativar-cliente', idCliente),
     aoAtualizarClientes: (funcao) => ipcRenderer.on('clientes-atualizados', (event, ...args) => funcao(...args)),
 
     // =========================== LOCAÇÃO =============================
