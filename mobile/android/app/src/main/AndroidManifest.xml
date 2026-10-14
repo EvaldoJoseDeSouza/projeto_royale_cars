@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sem esta linha, o APK final (release) não consegue acessar a internet,
+         então o app não fala com o Supabase. No modo debug ela já vinha ligada. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="royale_cars_location"
         android:name="${applicationName}"
