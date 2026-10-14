@@ -4,7 +4,6 @@ contextBridge.exposeInMainWorld('apiAcesso', {
 
     // ============================ LOGIN ============================
     enviarLogin: (login, senha) => ipcRenderer.invoke('realizar-login', { login, senha }),
-    criarNovaConta: (dados) => ipcRenderer.invoke('criar-nova-conta', dados),
     mudarDeTela: () => ipcRenderer.send('login-sucesso'),
     fecharApp: () => ipcRenderer.send('fechar'),
     pedirUsuarioLogado: () => ipcRenderer.invoke('pedir-usuario-logado'),
@@ -46,9 +45,7 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     aoReceberDadosConfirmacao: (funcao) => ipcRenderer.on('dados-confirmacao', (evento, dados) => funcao(dados)),
     responderConfirmacao: (resposta) => ipcRenderer.send('responder-confirmacao', resposta),
 
-    // ============================  RECUPERAÇÃO E TROCA DE SENHA ======================
-    verificarEmailExiste: (email) => ipcRenderer.invoke('verificar-email-existe', email),
-    redefinirSenhaEsqueci: (dados) => ipcRenderer.invoke('redefinir-senha-esqueci', dados),
+    // ============================  TROCA DE SENHA ======================
     abrirModalTrocarSenha: () => ipcRenderer.send('abrir-modal-trocar-senha'),
     fecharModalTrocarSenha: () => ipcRenderer.send('fechar-modal-trocar-senha'),
     trocarSenhaLogado: (dados) => ipcRenderer.invoke('trocar-senha-logado', dados),

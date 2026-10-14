@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const iconeToggleArquivadosClientes = document.getElementById('icone-toggle-arquivados-clientes');
 
   // ---------- PERMISSÕES DO USUÁRIO LOGADO (Etapa 4) ----------
-  // Preenchidas em carregarUsuarioLogado(). O Administrador tem acesso total.
+  // Preenchidas em carregarUsuarioLogado(). O chefe tem acesso total.
   let ehAdministrador = false;
   let permissoesUsuario = [];
 
@@ -259,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const usuario = await window.apiAcesso.pedirUsuarioLogado();
       if (!usuario) return;
 
-      ehAdministrador = usuario.cargo === 'Administrador';
+      ehAdministrador = usuario.cargo === 'chefe';
       permissoesUsuario = Array.isArray(usuario.permissoes) ? usuario.permissoes : [];
       aplicarPermissoesNaInterface();
 

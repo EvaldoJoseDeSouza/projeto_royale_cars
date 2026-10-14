@@ -37,8 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const novaSenha = document.getElementById('nova-senha').value;
     const confirmarNovaSenha = document.getElementById('confirmar-nova-senha').value;
 
-    if (novaSenha.length < 6) {
-      alert('Sua nova senha deve conter pelo menos 6 caracteres por motivos de segurança.');
+    // Mesma regra das 3 plataformas: 8 ou mais caracteres, com letra e número.
+    // (O processo principal confere de novo antes de trocar.)
+    const temLetra = /[A-Za-z]/.test(novaSenha);
+    const temNumero = /\d/.test(novaSenha);
+    if (novaSenha.length < 8 || !temLetra || !temNumero) {
+      alert('Sua nova senha precisa ter pelo menos 8 caracteres, com letras e números.');
       return;
     }
 
