@@ -37,8 +37,10 @@ src/
     │   ├── confirmacao/
     │   ├── trocar-senha/
     │   └── redefinir-senha-colaborador/
-    └── estilos/              CSS usado por várias telas (modal.css)
+    ├── estilos/              CSS usado por várias telas (modal.css)
+    └── compartilhado/        JavaScript usado por várias telas
+        └── permissoes.js     a lista das 13 permissões (um lugar só)
 ```
 
 A regra é simples: **tudo de uma tela fica na pasta dela** (HTML, JavaScript e o CSS só
-dela). O que é usado por várias telas fica em `estilos/`.
+dela). O que é usado por várias telas fica em `estilos/` (CSS) ou `compartilhado/` (JavaScript).

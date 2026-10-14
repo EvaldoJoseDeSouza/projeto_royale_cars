@@ -692,24 +692,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================ MINHA CONTA ============================
-  // Nomes "de gente" para as 13 permissões do banco (mesmos títulos do
-  // modal de modelos). Assim a pessoa lê "Ver clientes" e não "clientes_ver".
-  const NOMES_PERMISSOES = {
-    clientes_ver: 'Ver Clientes',
-    clientes_gerenciar: 'Cadastrar e Editar Clientes',
-    clientes_arquivar: 'Arquivar Clientes',
-    veiculos_ver: 'Ver Frota',
-    veiculos_gerenciar: 'Cadastrar e Editar Veículos',
-    veiculos_arquivar: 'Arquivar Veículos',
-    locacoes_ver: 'Ver Locações',
-    locacoes_gerenciar: 'Registrar Retirada e Devolução',
-    locacoes_cancelar: 'Cancelar Locações',
-    manutencoes: 'Manutenção',
-    financeiro: 'Ver Financeiro',
-    relatorios: 'Relatórios',
-    relatorios_financeiros: 'Valores nos Relatórios',
-  };
-
   const NOMES_CARGOS = { chefe: 'Chefe', gerente: 'Gerente', funcionario: 'Funcionário' };
 
   // Mostra o nome no topo e no menu (usado ao entrar e depois de salvar)
@@ -734,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // O chefe não tem lista: ele pode tudo
     const lista = usuario.cargo === 'chefe'
       ? ['Acesso total (chefe)']
-      : (usuario.permissoes || []).map((chave) => NOMES_PERMISSOES[chave] || chave);
+      : (usuario.permissoes || []).map(tituloDaPermissao); // vem de compartilhado/permissoes.js
 
     if (lista.length === 0) lista.push('Nenhuma permissão liberada ainda');
 

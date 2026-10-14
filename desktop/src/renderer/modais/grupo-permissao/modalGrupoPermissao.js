@@ -1,48 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
 
-  // As 13 permissões do banco unificado: as MESMAS chaves na web, no
-  // desktop e no celular. "dependeDe" lista o que é ligado junto: não
-  // adianta poder cadastrar cliente sem poder ver a lista de clientes.
-  const CATEGORIAS_PERMISSOES = [
-    {
-      categoria: 'Clientes',
-      permissoes: [
-        { chave: 'clientes_ver', titulo: 'Ver Clientes', descricao: 'Vê a lista e a ficha dos clientes.' },
-        { chave: 'clientes_gerenciar', titulo: 'Cadastrar e Editar Clientes', descricao: 'Cadastra novos clientes e edita os existentes.', dependeDe: ['clientes_ver'] },
-        { chave: 'clientes_arquivar', titulo: 'Arquivar Clientes', descricao: 'Arquiva e reativa cadastros de clientes.', dependeDe: ['clientes_ver'] }
-      ]
-    },
-    {
-      categoria: 'Frota',
-      permissoes: [
-        { chave: 'veiculos_ver', titulo: 'Ver Frota', descricao: 'Vê a lista de veículos.' },
-        { chave: 'veiculos_gerenciar', titulo: 'Cadastrar e Editar Veículos', descricao: 'Cadastra veículos e edita os dados, inclusive o preço da diária.', dependeDe: ['veiculos_ver'] },
-        { chave: 'veiculos_arquivar', titulo: 'Arquivar Veículos', descricao: 'Arquiva e reativa veículos da frota.', dependeDe: ['veiculos_ver'] }
-      ]
-    },
-    {
-      categoria: 'Locações',
-      permissoes: [
-        { chave: 'locacoes_ver', titulo: 'Ver Locações', descricao: 'Vê as locações em andamento e o histórico.' },
-        { chave: 'locacoes_gerenciar', titulo: 'Registrar Retirada e Devolução', descricao: 'Registra novas locações e a devolução dos carros.', dependeDe: ['locacoes_ver', 'clientes_ver', 'veiculos_ver'] },
-        { chave: 'locacoes_cancelar', titulo: 'Cancelar Locações', descricao: 'Cancela uma locação em andamento, informando o motivo.', dependeDe: ['locacoes_ver'] }
-      ]
-    },
-    {
-      categoria: 'Manutenção',
-      permissoes: [
-        { chave: 'manutencoes', titulo: 'Manutenção', descricao: 'Envia veículos para a oficina e libera informando o custo.', dependeDe: ['veiculos_ver'] }
-      ]
-    },
-    {
-      categoria: 'Financeiro e Relatórios',
-      permissoes: [
-        { chave: 'financeiro', titulo: 'Ver Financeiro', descricao: 'Vê faturamento, custos e resultado do mês.' },
-        { chave: 'relatorios', titulo: 'Relatórios', descricao: 'Gera relatórios de clientes, frota, locações e manutenções.' },
-        { chave: 'relatorios_financeiros', titulo: 'Valores nos Relatórios', descricao: 'Vê o relatório de faturamento e as colunas de valores.', dependeDe: ['relatorios'] }
-      ]
-    }
-  ];
+  // A lista das 13 permissões e o desenho das caixinhas vêm do arquivo
+  // compartilhado ../../compartilhado/permissoes.js (carregado no HTML).
 
   const telaTemplates = document.getElementById('tela-templates');
   const telaFormulario = document.getElementById('tela-formulario');
@@ -95,92 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnVoltarTemplates.addEventListener('click', voltarParaTemplates);
 
   function renderizarCategorias() {
-    // Guarda quais categorias estavam abertas antes de redesenhar
-    const categoriasAbertas = new Set();
-    listaCategorias.querySelectorAll('.categoria-permissao.aberta').forEach(div => {
-      const nomeCategoria = div.querySelector('strong').textContent;
-      categoriasAbertas.add(nomeCategoria);
-    });
+    desenharListaPermissoes(listaCategorias, permissoesSelecionadas, atualizarContador);
+    atualizarContador();
+  }
 
-    listaCategorias.innerHTML = '';
-
-    CATEGORIAS_PERMISSOES.forEach(cat => {
-      const totalCategoria = cat.permissoes.length;
-      const marcadasCategoria = cat.permissoes.filter(p => permissoesSelecionadas.has(p.chave)).length;
-
-      const divCategoria = document.createElement('div');
-      divCategoria.className = 'categoria-permissao';
-      if (categoriasAbertas.has(cat.categoria)) {
-        divCategoria.classList.add('aberta');
-      }
-
-      divCategoria.innerHTML = `
-      <div class="categoria-header">
-        <div class="categoria-info">
-          <i class="ri-arrow-right-s-line categoria-seta"></i>
-          <strong>${cat.categoria}</strong>
-        </div>
-        <span class="categoria-contagem">${marcadasCategoria} de ${totalCategoria}</span>
-      </div>
-      <div class="categoria-lista"></div>
-    `;
-
-      const header = divCategoria.querySelector('.categoria-header');
-      header.addEventListener('click', () => {
-        const estavaAberta = divCategoria.classList.contains('aberta');
-
-        // Fecha todas as categorias antes de decidir o que fazer com a clicada
-        listaCategorias.querySelectorAll('.categoria-permissao.aberta').forEach(d => {
-          d.classList.remove('aberta');
-        });
-
-        if (!estavaAberta) {
-          divCategoria.classList.add('aberta');
-        }
-      });
-
-      const listaInterna = divCategoria.querySelector('.categoria-lista');
-
-      cat.permissoes.forEach(perm => {
-        const label = document.createElement('label');
-        label.className = 'permissao-item';
-        label.innerHTML = `
-        <div>
-          <strong>${perm.titulo}</strong>
-          <p>${perm.descricao}</p>
-        </div>
-        <input type="checkbox" data-chave="${perm.chave}" ${permissoesSelecionadas.has(perm.chave) ? 'checked' : ''}>
-      `;
-
-        const checkbox = label.querySelector('input');
-        checkbox.addEventListener('change', () => {
-          if (checkbox.checked) {
-            permissoesSelecionadas.add(perm.chave);
-            (perm.dependeDe || []).forEach(chave => permissoesSelecionadas.add(chave));
-          } else {
-            permissoesSelecionadas.delete(perm.chave);
-          }
-          renderizarCategorias();
-        });
-
-        listaInterna.appendChild(label);
-      });
-
-      listaCategorias.appendChild(divCategoria);
-    });
-
-    CATEGORIAS_PERMISSOES.forEach(cat => {
-      cat.permissoes.forEach(perm => {
-        if (!perm.dependeDe || !permissoesSelecionadas.has(perm.chave)) return;
-        // Trava as caixas de que esta permissão precisa (não dá para desmarcar)
-        perm.dependeDe.forEach(chave => {
-          const checkboxPai = listaCategorias.querySelector(`input[data-chave="${chave}"]`);
-          if (checkboxPai) checkboxPai.disabled = true;
-        });
-      });
-    });
-
-    contadorPermissoes.textContent = `${permissoesSelecionadas.size} selecionada${permissoesSelecionadas.size !== 1 ? 's' : ''}`;
+  function atualizarContador() {
+    const total = permissoesSelecionadas.size;
+    contadorPermissoes.textContent = `${total} selecionada${total !== 1 ? 's' : ''}`;
   }
 
   async function montarPasso1() {
