@@ -1,0 +1,2203 @@
+const { app, BrowserWindow, ipcMain, Menu, Tray, dialog } = require("electron");
+const path = require("path");
+const { createClient } = require("@supabase/supabase-js");
+const bcrypt = require("bcryptjs");
+
+// Conexão com o Banco (Supabase)
+const SUPABASE_URL = "https://rhdmiqcfksekmrtgnjgo.supabase.co";
+const SUPABASE_KEY = "sb_publishable_CJtd4q_aCbOMKkxQ45w5mg_mZ_Rf1ys";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Permissões
+const PERMISSOES_GERENTE = [
+  "ver_frota",
+  "editar_frota",
+  "arquivar_frota",
+  "ver_clientes",
+  "editar_clientes",
+  "arquivar_clientes",
+  "ver_locacoes",
+  "criar_locacoes",
+  "finalizar_locacoes",
+  "ver_financeiro",
+  "ver_colaboradores",
+  "criar_colaboradores",
+  "editar_colaboradores",
+];
+
+const PERMISSOES_VENDEDOR = [
+  "ver_clientes",
+  "editar_clientes",
+  "ver_locacoes",
+  "criar_locacoes",
+  "finalizar_locacoes",
+];
+
+const PERMISSOES_FINANCEIRO = ["ver_financeiro"];
+
+// Verifica se o usuário logado possui determinada permissão.
+// O Administrador (dono da empresa) sempre tem acesso total.
+function temPermissao(chave) {
+  if (!usuarioLogado) return false;
+  if (usuarioLogado.cargo === "Administrador") return true;
+  return (
+    Array.isArray(usuarioLogado.permissoes) &&
+    usuarioLogado.permissoes.includes(chave)
+  );
+}
+
+// Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
+async function negarSemPermissao(janelaAlvo, chave) {
+  if (temPermissao(chave)) return false;
+  await mostrarAviso(janelaAlvo, {
+    tipo: "erro",
+    titulo: "Permissão Negada",
+    mensagem: "Você não tem permissão para realizar esta ação.",
+  });
+  return true;
+}
+
+// Telas
+let janelaPrincipal;
+let janelaDashboard;
+let janelaModalVeiculo;
+let janelaModalCliente;
+let janelaModalLocacao;
+let janelaModalTrocarSenha;
+let janelaModalConfirmacao;
+let resolverConfirmacao = null;
+let janelaModalGrupoPermissao;
+let janelaModalColaborador;
+let janelaModalRedefinirSenhaColaborador;
+let janelaModalVerColaboradores;
+
+let idEmpresaLogada = null;
+let usuarioLogado = null;
+
+let tray = null;
+
+function criarJanela() {
+  janelaPrincipal = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    autoHideMenuBar: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  janelaPrincipal.maximize();
+  janelaPrincipal.show();
+  janelaPrincipal.loadFile(path.join(__dirname, "../renderer/index.html"));
+
+  janelaPrincipal.on("close", () => {
+    app.isQuitting = true;
+    app.quit();
+  });
+}
+
+app.whenReady().then(() => {
+  criarJanela();
+
+  const templateDoMenu = [
+    {
+      label: "Gerenciamento",
+      submenu: [
+        {
+          label: "Esconder Janela",
+          accelerator: "CmdOrCtrl+H",
+          click: () => {
+            if (janelaDashboard && !janelaDashboard.isDestroyed())
+              janelaDashboard.hide();
+            else if (janelaPrincipal && !janelaPrincipal.isDestroyed())
+              janelaPrincipal.hide();
+          },
+        },
+        { type: "separator" },
+        {
+          label: "Sair do Sistema",
+          role: "quit",
+          accelerator: "CmdOrCtrl+Q",
+        },
+      ],
+    },
+    {
+      label: "Sobre",
+      submenu: [
+        {
+          label: "Informações do App",
+          click: () => {
+            dialog.showMessageBox({
+              type: "info",
+              title: "Royale Cars",
+              message: "Sistema de Locação de Veículos v1.0",
+              detail: "Desenvolvido com Electron e integração nativa ao SO.",
+              buttons: ["Fechar"],
+            });
+          },
+        },
+      ],
+    },
+  ];
+
+  const menuReal = Menu.buildFromTemplate(templateDoMenu);
+  Menu.setApplicationMenu(menuReal);
+
+  const iconeCaminho = path.join(__dirname, "icone.png");
+  tray = new Tray(iconeCaminho);
+  tray.setToolTip("Royale Cars - Rodando em segundo plano");
+
+  const menuDoTray = Menu.buildFromTemplate([
+    {
+      label: "Abrir Painel",
+      click: () => {
+        if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+          janelaDashboard.show();
+        } else if (janelaPrincipal && !janelaPrincipal.isDestroyed()) {
+          janelaPrincipal.show();
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Encerrar",
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(menuDoTray);
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) criarJanela();
+  });
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
+
+ipcMain.handle("realizar-login", async (event, { login, senha }) => {
+  try {
+    console.log("Solicitando login para o usuário:", login);
+
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .or(`email.eq.${login},username.eq.${login}`);
+
+    if (error) {
+      console.error("Erro ao consultar Supabase:", error.message);
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro no login",
+        mensagem: "Erro na base de dados. Tente novamente em instantes.",
+      });
+      return { sucesso: false, mensagem: "Erro na base de dados." };
+    }
+
+    if (!data || data.length === 0) {
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro no login",
+        mensagem: "Usuario ou senha incorretos",
+      });
+      return { sucesso: false, mensagem: "Usuário ou senha incorretos." };
+    }
+
+    const usuarioEncontrado = data[0];
+    const senhaSalva = usuarioEncontrado.senha;
+
+    const senhaJaEstaEmHash =
+      senhaSalva.startsWith("$2a$") ||
+      senhaSalva.startsWith("$2b$") ||
+      senhaSalva.startsWith("$2y$");
+
+    let senhaCorreta = false;
+
+    if (senhaJaEstaEmHash) {
+      senhaCorreta = await bcrypt.compare(senha, senhaSalva);
+    } else {
+      senhaCorreta = senha === senhaSalva;
+
+      if (senhaCorreta) {
+        const novoHash = await bcrypt.hash(senha, 10);
+        await supabase
+          .from("usuarios")
+          .update({ senha: novoHash })
+          .eq("id", usuarioEncontrado.id);
+
+        usuarioEncontrado.senha = novoHash;
+        console.log("Senha do usuário migrada para hash com sucesso.");
+      }
+    }
+
+    if (senhaCorreta) {
+
+      if (usuarioEncontrado.ativo === false) {
+        await mostrarAviso(janelaPrincipal, {
+          tipo: 'erro', titulo: 'Conta Desativada',
+          mensagem: 'Sua conta foi desativada. Fale com o administrador do sistema.'
+        });
+        return { sucesso: false, mensagem: 'Conta desativada.' };
+      }
+
+      // Resolve as permissões efetivas deste usuário
+      let permissoesResolvidas = [];
+
+      if (usuarioEncontrado.cargo === 'Administrador') {
+        permissoesResolvidas = ['*'];
+      } else if (usuarioEncontrado.id_grupo_permissao) {
+        const { data: grupoDoUsuario, error: erroGrupoLogin } = await supabase
+          .from('grupos_permissao')
+          .select('permissoes')
+          .eq('id', usuarioEncontrado.id_grupo_permissao)
+          .single();
+
+        if (erroGrupoLogin) {
+          console.error('Erro ao carregar permissões do grupo:', erroGrupoLogin.message);
+        } else if (grupoDoUsuario && Array.isArray(grupoDoUsuario.permissoes)) {
+          permissoesResolvidas = grupoDoUsuario.permissoes;
+        }
+      }
+
+      usuarioEncontrado.permissoes = permissoesResolvidas;
+
+      idEmpresaLogada = usuarioEncontrado.id_empresa;
+      usuarioLogado = usuarioEncontrado;
+      console.log("Empresa logada com sucesso! ID_EMPRESA:", idEmpresaLogada);
+      return { sucesso: true, usuario: usuarioEncontrado };
+    } else {
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro no login",
+        mensagem: "Usuario ou senha incorretos",
+      });
+      return { sucesso: false, mensagem: "Usuário ou senha incorretos." };
+    }
+  } catch (err) {
+    console.error("Erro inesperado no processo de login:", err);
+    await mostrarAviso(janelaPrincipal, {
+      tipo: "erro",
+      titulo: "Erro no login",
+      mensagem: "Erro interno no sistema.",
+    });
+    return { sucesso: false, mensagem: "Erro interno no sistema." };
+  }
+});
+
+ipcMain.handle("pedir-usuario-logado", async () => {
+  if (!usuarioLogado) return usuarioLogado;
+  // Nunca entregamos o hash da senha para a tela
+  const { senha, ...usuarioSemSenha } = usuarioLogado;
+  return usuarioSemSenha;
+});
+
+ipcMain.handle("criar-nova-conta", async (event, dados) => {
+  try {
+    const username = dados.empresa || dados.username;
+    const email = dados.email;
+    const senha = dados.senha;
+
+    console.log(
+      "Solicitando criação de nova conta para:",
+      email,
+      "Username:",
+      username,
+    );
+
+    const { data: usuarioExistente, error: erroBusca } = await supabase
+      .from("usuarios")
+      .select("id")
+      .or(`email.eq.${email},username.eq.${username}`);
+
+    if (erroBusca) {
+      console.error("Erro ao verificar e-mail existente:", erroBusca.message);
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro no Cadastro",
+        mensagem: "Erro de comunicacao ao validar cadastro.",
+      });
+      return {
+        sucesso: false,
+        mensagem: "Erro de comunicação ao validar cadastro.",
+      };
+    }
+
+    if (usuarioExistente && usuarioExistente.length > 0) {
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro no Cadastro",
+        mensagem: "Este e-mail ou nome de usuário já está sendo utilizado.",
+      });
+      return {
+        sucesso: false,
+        mensagem: "Este e-mail ou nome de usuário já está sendo utilizado.",
+      };
+    }
+
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    const { data: usuarioCriado, error: erroInsercao } = await supabase
+      .from('usuarios')
+      .insert([{
+        username,
+        email,
+        senha: senhaHash
+      }])
+      .select('id')
+      .single();
+
+    if (erroInsercao || !usuarioCriado) {
+      console.error('Erro ao inserir novo usuário:', erroInsercao?.message);
+      await mostrarAviso(janelaPrincipal, {
+        tipo: 'erro',
+        titulo: 'Erro no Cadastro',
+        mensagem: 'Erro ao salvar os dados da conta.'
+      });
+      return { sucesso: false, mensagem: 'Erro ao salvar os dados da conta.' };
+    }
+
+    const idGerado = usuarioCriado.id;
+
+    const { error: erroUpdate } = await supabase
+      .from("usuarios")
+      .update({ id_empresa: idGerado })
+      .eq("id", idGerado);
+
+    if (erroUpdate) {
+      console.error("Erro ao associar ID da empresa:", erroUpdate.message);
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro no Cadastro",
+        mensagem: "Usuário cadastrado, mas com erro ao gerar chave de empresa",
+      });
+      return {
+        sucesso: false,
+        mensagem: "Usuário cadastrado, mas com erro ao gerar chave de empresa.",
+      };
+    }
+
+    const { error: erroGrupos } = await supabase
+      .from("grupos_permissao")
+      .insert([
+        {
+          id_empresa: idGerado,
+          nome: "Gerente",
+          permissoes: PERMISSOES_GERENTE,
+        },
+        {
+          id_empresa: idGerado,
+          nome: "Vendedor",
+          permissoes: PERMISSOES_VENDEDOR,
+        },
+        {
+          id_empresa: idGerado,
+          nome: "Financeiro",
+          permissoes: PERMISSOES_FINANCEIRO,
+        },
+      ]);
+
+    if (erroGrupos) {
+      console.error(
+        "Erro ao criar grupos de permissão padrão:",
+        erroGrupos.message,
+      );
+    }
+
+    await mostrarAviso(janelaPrincipal, {
+      tipo: "sucesso",
+      titulo: "Conta Criada",
+      mensagem:
+        "Conta criada com sucesso! Faça o login para acessar o sistema.",
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro inesperado na criação de conta:", err);
+    await mostrarAviso(janelaPrincipal, {
+      tipo: "erro",
+      titulo: "Erro no Cadastro",
+      mensagem: "Erro interno no motor do sistema.",
+    });
+    return { sucesso: false, mensagem: "Erro interno no motor do sistema." };
+  }
+});
+
+ipcMain.handle("verificar-email-existe", async (event, email) => {
+  try {
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("email", email)
+      .limit(1);
+
+    if (error) {
+      console.error("Erro ao verificar e-mail:", error.message);
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "Erro na Verificação",
+        mensagem: "Erro ao consultar a base de dados. Tente novamente.",
+      });
+      return { sucesso: false, existe: false };
+    }
+
+    if (!data || data.length === 0) {
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "erro",
+        titulo: "E-mail não encontrado",
+        mensagem: "Não encontramos uma conta com este e-mail.",
+      });
+      return { sucesso: true, existe: false };
+    }
+
+    return { sucesso: true, existe: true };
+  } catch (err) {
+    console.error("Erro inesperado ao verificar e-mail:", err);
+    return { sucesso: false, existe: false };
+  }
+});
+
+ipcMain.handle(
+  "redefinir-senha-esqueci",
+  async (event, { email, novaSenha }) => {
+    try {
+      const novaSenhaHash = await bcrypt.hash(novaSenha, 10);
+
+      const { error } = await supabase
+        .from("usuarios")
+        .update({ senha: novaSenhaHash })
+        .eq("email", email);
+
+      if (error) {
+        console.error("Erro ao redefinir senha:", error.message);
+        await mostrarAviso(janelaPrincipal, {
+          tipo: "erro",
+          titulo: "Erro ao redefinir",
+          mensagem: "Não foi possível redefinir sua senha. Tente novamente.",
+        });
+        return { sucesso: false };
+      }
+
+      await mostrarAviso(janelaPrincipal, {
+        tipo: "sucesso",
+        titulo: "Senha Redefinida",
+        mensagem:
+          "Sua senha foi redefinida com sucesso! Faça o login com a nova senha.",
+      });
+
+      return { sucesso: true };
+    } catch (err) {
+      console.error("Erro inesperado ao redefinir senha:", err);
+      return { sucesso: false };
+    }
+  },
+);
+
+ipcMain.on("abrir-modal-trocar-senha", (evento) => {
+  if (janelaModalTrocarSenha) {
+    janelaModalTrocarSenha.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalTrocarSenha = new BrowserWindow({
+    width: 420,
+    height: 480,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  janelaModalTrocarSenha.loadFile(
+    path.join(__dirname, "../renderer/modalTrocarSenha.html"),
+  );
+  janelaModalTrocarSenha.once("ready-to-show", () =>
+    janelaModalTrocarSenha.show(),
+  );
+  janelaModalTrocarSenha.on("closed", () => {
+    janelaModalTrocarSenha = null;
+  });
+});
+
+ipcMain.on("fechar-modal-trocar-senha", () => {
+  if (janelaModalTrocarSenha) janelaModalTrocarSenha.close();
+});
+
+ipcMain.handle(
+  "trocar-senha-logado",
+  async (event, { senhaAtual, novaSenha }) => {
+    try {
+      if (!usuarioLogado) {
+        return { sucesso: false, mensagem: "Sessão expirada." };
+      }
+
+      const senhaSalva = usuarioLogado.senha;
+      const senhaJaEstaEmHash =
+        senhaSalva.startsWith("$2a$") ||
+        senhaSalva.startsWith("$2b$") ||
+        senhaSalva.startsWith("$2y$");
+
+      const senhaAtualCorreta = senhaJaEstaEmHash
+        ? await bcrypt.compare(senhaAtual, senhaSalva)
+        : senhaAtual === senhaSalva;
+
+      if (!senhaAtualCorreta) {
+        await mostrarAviso(janelaModalTrocarSenha, {
+          tipo: "erro",
+          titulo: "Senha Incorreta",
+          mensagem: "A senha atual informada está incorreta.",
+        });
+        return { sucesso: false };
+      }
+
+      const novaSenhaHash = await bcrypt.hash(novaSenha, 10);
+
+      const { error } = await supabase
+        .from("usuarios")
+        .update({ senha: novaSenhaHash })
+        .eq("id", usuarioLogado.id);
+
+      if (error) {
+        console.error("Erro ao trocar senha:", error.message);
+        await mostrarAviso(janelaModalTrocarSenha, {
+          tipo: "erro",
+          titulo: "Erro ao Trocar Senha",
+          mensagem: "Não foi possível trocar sua senha. Tente novamente.",
+        });
+        return { sucesso: false };
+      }
+
+      usuarioLogado.senha = novaSenhaHash;
+
+      await mostrarAviso(janelaModalTrocarSenha, {
+        tipo: "sucesso",
+        titulo: "Senha Alterada",
+        mensagem: "Sua senha foi alterada com sucesso!",
+      });
+
+      return { sucesso: true };
+    } catch (err) {
+      console.error("Erro inesperado ao trocar senha:", err);
+      return { sucesso: false };
+    }
+  },
+);
+
+ipcMain.on("login-sucesso", () => {
+  janelaDashboard = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    autoHideMenuBar: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "../preload/preload.js"),
+    },
+  });
+
+  janelaDashboard.maximize();
+  janelaDashboard.loadFile(path.join(__dirname, "../renderer/dashboard.html"));
+
+  janelaDashboard.on("close", (evento) => {
+    if (!app.isQuitting) {
+      evento.preventDefault();
+      janelaDashboard.hide();
+    }
+  });
+
+  janelaPrincipal.removeAllListeners("close");
+  if (janelaPrincipal) janelaPrincipal.close();
+});
+
+ipcMain.on("fechar", () => {
+  app.quit();
+});
+
+// ===================== MODAL DE CONFIRMAÇÃO ====================
+function abrirJanelaConfirmacao(janelaMae, dadosConfimacao) {
+  return new Promise((resolve) => {
+    resolverConfirmacao = resolve;
+
+    janelaModalConfirmacao = new BrowserWindow({
+      width: 420,
+      height: 320,
+      parent: janelaMae,
+      modal: true,
+      frame: false,
+      resizable: false,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, "../preload/preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    janelaModalConfirmacao.loadFile(
+      path.join(__dirname, "../renderer/modalConfirmacao.html"),
+    );
+
+    janelaModalConfirmacao.webContents.once("did-finish-load", () => {
+      janelaModalConfirmacao.webContents.send(
+        "dados-confirmacao",
+        dadosConfimacao,
+      );
+    });
+
+    janelaModalConfirmacao.once("ready-to-show", () =>
+      janelaModalConfirmacao.show(),
+    );
+
+    janelaModalConfirmacao.on("closed", () => {
+      janelaModalConfirmacao = null;
+      if (resolverConfirmacao) {
+        resolverConfirmacao(false);
+        resolverConfirmacao = null;
+      }
+    });
+  });
+}
+
+ipcMain.handle("abrir-modal-confirmacao", (evento, dadosConfimacao) => {
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+  return abrirJanelaConfirmacao(janelaMae, {
+    modo: "confirmar",
+    ...dadosConfimacao,
+  });
+});
+
+ipcMain.on("responder-confirmacao", (evento, resposta) => {
+  if (resolverConfirmacao) {
+    resolverConfirmacao(resposta);
+    resolverConfirmacao = null;
+  }
+  if (janelaModalConfirmacao) janelaModalConfirmacao.close();
+});
+
+function mostrarAviso(janelaMae, { tipo, titulo, mensagem, textoConfirmar }) {
+  return abrirJanelaConfirmacao(janelaMae, {
+    modo: "aviso",
+    titulo,
+    mensagem,
+    textoConfirmar: textoConfirmar || "Ok",
+    tipo,
+  });
+}
+
+// =========================== FROTAS ======================
+ipcMain.handle("buscar-frota", async () => {
+  try {
+    console.log("Buscando frota filtrada para a empresa: ${idEmpresaLogada}");
+
+    const { data, error } = await supabase
+      .from("veiculos")
+      .select("*")
+      .eq("id_empresa", idEmpresaLogada)
+      .eq("ativo", true)
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao buscar frota:", error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error("Erro inesperado ao buscar frota:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("buscar-frota-arquivada", async () => {
+  try {
+    const { data, error } = await supabase
+      .from("veiculos")
+      .select("*")
+      .eq("id_empresa", idEmpresaLogada)
+      .eq("ativo", false)
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao buscar frota arquivada:", error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error("Erro inesperado ao buscar frota arquivada:", err);
+    return [];
+  }
+});
+
+ipcMain.on("abrir-modal-veiculo", (evento) => {
+  if (janelaModalVeiculo) {
+    janelaModalVeiculo.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalVeiculo = new BrowserWindow({
+    width: 480,
+    height: 540,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  janelaModalVeiculo.loadFile(
+    path.join(__dirname, "../renderer/modalVeiculo.html"),
+  );
+  janelaModalVeiculo.once("ready-to-show", () => janelaModalVeiculo.show());
+  janelaModalVeiculo.on("closed", () => {
+    janelaModalVeiculo = null;
+  });
+});
+
+ipcMain.on("fechar-modal-veiculo", () => {
+  if (janelaModalVeiculo) janelaModalVeiculo.close();
+});
+
+ipcMain.handle("salvar-veiculo-banco", async (event, dadosVeiculo) => {
+  try {
+    if (await negarSemPermissao(janelaModalVeiculo, "editar_frota")) return { sucesso: false };
+
+    let query;
+
+    if (dadosVeiculo.id) {
+      query = supabase
+        .from("veiculos")
+        .update({
+          modelo: dadosVeiculo.modelo,
+          marca: dadosVeiculo.marca,
+          placa: dadosVeiculo.placa,
+          diaria: dadosVeiculo.diaria,
+          status: dadosVeiculo.status,
+        })
+        .eq("id", dadosVeiculo.id);
+    } else {
+      const novoVeiculo = {
+        ...dadosVeiculo,
+        id_empresa: idEmpresaLogada,
+      };
+
+      query = supabase.from("veiculos").insert([novoVeiculo]);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error("Erro ao salvar veículo no Supabase:", error.message);
+      await mostrarAviso(janelaModalVeiculo, {
+        tipo: "erro",
+        titulo: "Erro na Operação",
+        mensagem:
+          `Não foi possível salvar os dados do veículo. Motivo: ${error.message}`,
+      });
+      return { sucesso: false, mensagem: error.message };
+    }
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("frota-atualizada");
+    }
+
+    await mostrarAviso(janelaModalVeiculo, {
+      tipo: "sucesso",
+      titulo: "Sucesso",
+      mensagem: dadosVeiculo.id
+        ? `O modelo ${dadosVeiculo.modelo} foi atualizado com sucesso!`
+        : `O modelo ${dadosVeiculo.modelo} foi cadastrado com sucesso!`,
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro interno ao salvar veículo:", err);
+    return { sucesso: false, mensagem: "Erro interno no servidor." };
+  }
+});
+
+ipcMain.handle("arquivar-veiculo-banco", async (event, idVeiculo) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "arquivar_frota")) return { sucesso: false };
+
+    const { data: locacoesAtivas, error: erroLocacoes } = await supabase
+      .from("locacoes")
+      .select("id")
+      .eq("id_veiculo", idVeiculo)
+      .eq("status", "Ativo");
+
+    if (erroLocacoes) {
+      console.error(
+        "Erro ao verificar locações do veículo:",
+        erroLocacoes.message,
+      );
+      await mostrarAviso(janelaDashboard, {
+        tipo: "erro",
+        titulo: "Erro na Verificação",
+        mensagem:
+          "Não foi possivel verificar as locações deste veículo. Tente novamente.",
+      });
+      return { sucesso: false };
+    }
+
+    if (locacoesAtivas && locacoesAtivas.length > 0) {
+      await mostrarAviso(janelaDashboard, {
+        tipo: "erro",
+        titulo: "Não é Possível Arquivar",
+        mensagem:
+          "Este veículo está com uma locação ativa no momento. Finalize a locação antes de arquivá-lo.",
+      });
+      return { sucesso: false };
+    }
+
+    const { error } = await supabase
+      .from("veiculos")
+      .update({ ativo: false })
+      .eq("id", idVeiculo);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("frota-atualizada");
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: "sucesso",
+      titulo: "Veículo Arquivado",
+      mensagem: "O veículo foi movido para os arquivos com sucesso!",
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro ao arquivar veículo:", err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: "erro",
+      titulo: "Erro ao Arquivar",
+      mensagem: "Não foi possivel arquivar o veículo. Tente novamente.",
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+ipcMain.handle("reativar-veiculo-banco", async (event, idVeiculo) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "arquivar_frota")) return { sucesso: false };
+
+    const { error } = await supabase
+      .from("veiculos")
+      .update({ ativo: true })
+      .eq("id", idVeiculo);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("frota-atualizada");
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: "sucesso",
+      titulo: "Veículo Reativado",
+      mensagem: "O veículo voltou a aparecer nas listagens ativas!",
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro ao reativar veículo:", err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: "erro",
+      titulo: "Erro ao Reativar",
+      mensagem: "Não foi possível reativar o veículo. Tente novamente.",
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+// =============== CLIENTES ===================
+ipcMain.handle("buscar-clientes", async () => {
+  try {
+    console.log(
+      "Buscando clientes filtrandos para a empresa: ${idEmpresaLogada}",
+    );
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id_empresa", idEmpresaLogada)
+      .eq("ativo", true)
+      .order("nome", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao buscar clientes:", error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error("Erro inesperado ao buscar clientes:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("buscar-clientes-arquivados", async () => {
+  try {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .eq("id_empresa", idEmpresaLogada)
+      .eq("ativo", false)
+      .order("nome", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao buscar clientes arquivados:", error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error("Erro inesperado ao buscar clientes arquivados:", err);
+    return [];
+  }
+});
+
+ipcMain.on("abrir-modal-cliente", (evento) => {
+  if (janelaModalCliente) {
+    janelaModalCliente.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalCliente = new BrowserWindow({
+    width: 480,
+    height: 580,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  janelaModalCliente.loadFile(
+    path.join(__dirname, "../renderer/modalCliente.html"),
+  );
+  janelaModalCliente.once("ready-to-show", () => janelaModalCliente.show());
+  janelaModalCliente.on("closed", () => {
+    janelaModalCliente = null;
+  });
+});
+
+ipcMain.on("fechar-modal-cliente", () => {
+  if (janelaModalCliente) janelaModalCliente.close();
+});
+
+ipcMain.handle("salvar-cliente-banco", async (event, dadosCliente) => {
+  try {
+    if (await negarSemPermissao(janelaModalCliente, "editar_clientes")) return { sucesso: false };
+
+    let query;
+
+    if (dadosCliente.id) {
+      query = supabase
+        .from("clientes")
+        .update({
+          nome: dadosCliente.nome,
+          telefone: dadosCliente.telefone,
+          cpf: dadosCliente.cpf,
+          cnh: dadosCliente.cnh,
+        })
+        .eq("id", dadosCliente.id);
+    } else {
+      const novoCliente = {
+        ...dadosCliente,
+        id_empresa: idEmpresaLogada,
+      };
+
+      query = supabase.from("clientes").insert([novoCliente]);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error("Erro ao salvar cliente no Supabase:", error.message);
+
+      await mostrarAviso(janelaModalCliente, {
+        tipo: "erro",
+        titulo: "Erro na Operação",
+        mensagem: `Não foi possível salvar os dados do cliente. Motivo: ${error.message}`,
+      });
+
+      return { sucesso: false, mensagem: error.message };
+    }
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("clientes-atualizados");
+    }
+
+    await mostrarAviso(janelaModalCliente, {
+      tipo: "sucesso",
+      titulo: "Sucesso",
+      mensagem: dadosCliente.id
+        ? `O cadastro de ${dadosCliente.nome} foi atualizado com sucesso!`
+        : `O cadastro de ${dadosCliente.nome} foi processado com sucesso!`,
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro interno ao salvar cliente:", err);
+    return { sucesso: false, message: "Erro interno no servidor." };
+  }
+});
+
+ipcMain.handle("arquivar-cliente-banco", async (event, idCliente) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "arquivar_clientes")) return { sucesso: false };
+
+    const { data: locacoesAtivas, error: erroLocacoes } = await supabase
+      .from("locacoes")
+      .select("id")
+      .eq("id_cliente", idCliente)
+      .eq("status", "Ativo");
+
+    if (erroLocacoes) {
+      console.error(
+        "Erro ao verificar locações do cliente:",
+        erroLocacoes.message,
+      );
+      await mostrarAviso(janelaDashboard, {
+        tipo: "erro",
+        titulo: "Erro na Verificação",
+        mensagem:
+          "Não foi possível verificar as locações deste cliente. Tente novamente.",
+      });
+      return { sucesso: false };
+    }
+
+    if (locacoesAtivas && locacoesAtivas.length > 0) {
+      await mostrarAviso(janelaDashboard, {
+        tipo: "erro",
+        titulo: "Não é Possível Arquivar",
+        mensagem:
+          "Este cliente possui uma locação ativa no momento. Finalize a locação antes de arquivá-lo.",
+      });
+      return { sucesso: false };
+    }
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({ ativo: false })
+      .eq("id", idCliente);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("clientes-atualizados");
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: "sucesso",
+      titulo: "Cliente Arquivado",
+      mensagem: "O cliente foi movido para os arquivados com sucesso!",
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro ao arquivar cliente:", err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: "erro",
+      titulo: "Erro ao Arquivar",
+      mensagem: "Não foi possível arquivar o cliente. Tente novamente.",
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+ipcMain.handle("reativar-cliente-banco", async (event, idCliente) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "arquivar_clientes")) return { sucesso: false };
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({ ativo: true })
+      .eq("id", idCliente);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("clientes-atualizados");
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: "sucesso",
+      titulo: "Cliente Reativo",
+      mensagem: "O cliente voltou a aparecer nas listagens ativas!",
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro ao reativar clientes:", err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: "erro",
+      titulo: "Erro ao Reativar",
+      mensagem: "Não foi possível reativar o cliente. Tente novamente.",
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+// ============================= LOCAÇÕES =======================
+ipcMain.handle("buscar-locacoes-ativas", async () => {
+  try {
+    console.log("Buscando locações ativas para a empresa: ${idEmpresaLogada}");
+
+    const { data, error } = await supabase
+      .from("locacoes")
+      .select(
+        `
+        id, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status,
+        clientes ( nome ), veiculos ( modelo, placa )
+      `,
+      )
+      .eq("status", "Ativo")
+      .eq("id_empresa", idEmpresaLogada)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao buscar locações ativas do banco:", error.message);
+      throw error;
+    }
+    return data;
+  } catch (err) {
+    console.error("Erro fatal ao buscar locações ativas:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("buscar-locacoes-historico", async () => {
+  try {
+    console.log(
+      "Buscando histórico de locações para a empresa: ${idEmpresaLogada}",
+    );
+
+    const { data, error } = await supabase
+      .from("locacoes")
+      .select(
+        `
+        id, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status,
+        clientes ( nome ), veiculos ( modelo, placa )
+      `,
+      )
+      .eq("status", "Concluído")
+      .eq("id_empresa", idEmpresaLogada)
+      .order("data_fim", { ascending: false });
+
+    if (error) {
+      console.error(
+        "Erro ao buscar histórico de locações do banco:",
+        error.message,
+      );
+      throw error;
+    }
+    return data;
+  } catch (err) {
+    console.error("Erro fatal ao buscar histórico de locações:", err);
+    return [];
+  }
+});
+
+ipcMain.on("abrir-modal-locacao", (evento) => {
+  if (janelaModalLocacao) {
+    janelaModalLocacao.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalLocacao = new BrowserWindow({
+    width: 480,
+    height: 560,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  janelaModalLocacao.loadFile(
+    path.join(__dirname, "../renderer/modalLocacao.html"),
+  );
+  janelaModalLocacao.once("ready-to-show", () => janelaModalLocacao.show());
+  janelaModalLocacao.on("closed", () => {
+    janelaModalLocacao = null;
+  });
+});
+
+ipcMain.on("fechar-modal-locacao", () => {
+  if (janelaModalLocacao) janelaModalLocacao.close();
+});
+
+ipcMain.handle("salvar-locacao-banco", async (event, novaLocacao) => {
+  try {
+    if (await negarSemPermissao(janelaModalLocacao, "criar_locacoes")) return { sucesso: false };
+
+    const { data: veiculoAtual, error: erroConsultaVeiculo } = await supabase
+      .from("veiculos")
+      .select("status")
+      .eq("id", novaLocacao.id_veiculo)
+      .single();
+
+    if (erroConsultaVeiculo || !veiculoAtual) {
+      await mostrarAviso(janelaModalLocacao, {
+        tipo: "erro",
+        titulo: "Veículo Não Encontrado",
+        mensagem:
+          "Não foi possível confirmar a disponibilidade deste veículo. Atualize a lista e tente novamente.",
+      });
+      return { sucesso: false };
+    }
+
+    if (veiculoAtual.status !== "Disponível") {
+      await mostrarAviso(janelaModalLocacao, {
+        tipo: "erro",
+        titulo: "Veículo Indisponível",
+        mensagem: `Este veículo não está mais disponível (status atual: ${veiculoAtual.status}). Atualize a lista e escolha outro veículo.`,
+      });
+      return { sucesso: false };
+    }
+
+    const locacaoComEmpresa = {
+      ...novaLocacao,
+      id_empresa: idEmpresaLogada,
+    };
+
+    const { error: erroLocacao } = await supabase
+      .from("locacoes")
+      .insert([locacaoComEmpresa]);
+
+    if (erroLocacao) {
+      console.error(
+        "Erro ao inserir locação no Supabase:",
+        erroLocacao.message,
+      );
+      await mostrarAviso(janelaModalLocacao, {
+        tipo: "erro",
+        titulo: "Erro na Operação",
+        mensagem: `Não foi possível registrar a locação. Motivo: ${erroLocacao.message}`,
+      });
+      return { sucesso: false, mensagem: erroLocacao.message };
+    }
+
+    const { error: erroVeiculo } = await supabase
+      .from("veiculos")
+      .update({ status: "Alugado" })
+      .eq("id", novaLocacao.id_veiculo);
+
+    if (erroVeiculo) {
+      console.error(
+        "Erro ao mudar status do veículo para Alugado:",
+        erroVeiculo.message,
+      );
+    }
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send("locacoes-atualizadas");
+      janelaDashboard.webContents.send("frota-atualizada");
+    }
+
+    await mostrarAviso(janelaModalLocacao, {
+      tipo: "sucesso",
+      titulo: "Sucesso",
+      mensagem: "Locação registrada com sucesso! Veículo alugado.",
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error("Erro interno ao salvar locação:", err);
+    return { sucesso: false, mensagem: "Erro interno no servidor." };
+  }
+});
+
+ipcMain.handle(
+  "finalizar-locacao-manual",
+  async (event, { idLocacao, idVeiculo }) => {
+    try {
+      if (await negarSemPermissao(janelaDashboard, "finalizar_locacoes")) return { sucesso: false };
+
+      const { error: erroLocacao } = await supabase
+        .from("locacoes")
+        .update({ status: "Concluído" })
+        .eq("id", idLocacao);
+
+      if (erroLocacao) throw erroLocacao;
+
+      const { error: erroVeiculo } = await supabase
+        .from("veiculos")
+        .update({ status: "Disponível" })
+        .eq("id", idVeiculo);
+
+      if (erroVeiculo) throw erroVeiculo;
+
+      if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+        janelaDashboard.webContents.send("locacoes-atualizadas");
+        janelaDashboard.webContents.send("frota-atualizada");
+      }
+
+      await mostrarAviso(janelaDashboard, {
+        tipo: "sucesso",
+        titulo: "Sucesso",
+        mensagem: "Locação finalizada e veículo liberado com sucesso!",
+      });
+
+      return { sucesso: true };
+    } catch (err) {
+      console.error("Erro ao finalizar locação manualmente:", err.message);
+      return { sucesso: false, mensagem: err.message };
+    }
+  },
+);
+
+// ============================== FINANÇAS =======================
+ipcMain.handle("buscar-dados-financeiros", async () => {
+  try {
+    console.log(
+      "Calculando balanço financeiro inteligente para a empresa: ",
+      idEmpresaLogada,
+    );
+
+    const { data: todasLocacoes, error } = await supabase
+      .from("locacoes")
+      .select(
+        `
+        id, data_fim, valor_total, status,
+        clientes ( nome ), veiculos ( modelo, placa )
+      `,
+      )
+      .eq("id_empresa", idEmpresaLogada)
+      .order("data_fim", { ascending: false });
+
+    if (error) {
+      console.error(
+        "Erro ao consultar dados para o financeiro:",
+        error.message,
+      );
+      throw error;
+    }
+
+    const agora = new Date();
+    const mesAtual = agora.getMonth();
+    const anoAtual = agora.getFullYear();
+
+    // Data do mês passado
+    const dataMesPassado = new Date(anoAtual, mesAtual - 1, 1);
+    const mesPassado = dataMesPassado.getMonth();
+    const anoMesPassado = dataMesPassado.getFullYear();
+
+    let faturamentoTotalMesAtual = 0;
+    let faturamentoTotalMesAnterior = 0;
+    let recebimentoProjetado = 0;
+    let totalContratosConcluidos = 0;
+    let fluxoCaixaEntradas = [];
+
+    if (todasLocacoes && todasLocacoes.length > 0) {
+      todasLocacoes.forEach((loc) => {
+        const valor = parseFloat(loc.valor_total) || 0;
+
+        if (loc.status === "Concluído") {
+          totalContratosConcluidos++;
+          fluxoCaixaEntradas.push(loc);
+
+          if (loc.data_fim) {
+            const dataFimContrato = new Date(loc.data_fim);
+            const mContrato = dataFimContrato.getMonth();
+            const aContrato = dataFimContrato.getFullYear();
+
+            if (mContrato === mesAtual && aContrato === anoAtual) {
+              faturamentoTotalMesAtual += valor;
+            } else if (
+              mContrato === mesPassado &&
+              aContrato === anoMesPassado
+            ) {
+              faturamentoTotalMesAnterior += valor;
+            }
+          }
+        } else if (loc.status === "Ativo") {
+          recebimentoProjetado += valor;
+        }
+      });
+    }
+
+    let variacaoPercentual = 0;
+    if (faturamentoTotalMesAnterior > 0) {
+      variacaoPercentual =
+        ((faturamentoTotalMesAtual - faturamentoTotalMesAnterior) /
+          faturamentoTotalMesAnterior) *
+        100;
+    } else if (
+      faturamentoTotalMesAnterior === 0 &&
+      faturamentoTotalMesAtual > 0
+    ) {
+      variacaoPercentual = 100;
+    }
+
+    const ticketMedio =
+      totalContratosConcluidos > 0
+        ? faturamentoTotalMesAtual / totalContratosConcluidos
+        : 0;
+
+    return {
+      sucesso: true,
+      indicadores: {
+        faturamentoTotal: faturamentoTotalMesAtual,
+        recebimentoProjetado,
+        ticketMedio,
+        variacaoPercentual: parseFloat(variacaoPercentual.toFixed(1)),
+      },
+      fluxoCaixa: fluxoCaixaEntradas,
+    };
+  } catch (err) {
+    console.error("Erro fatal no motor financeiro:", err.message);
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+
+// =========================== GRUPOS DE PERMISSÃO ======================
+ipcMain.handle('buscar-grupos-permissao', async () => {
+  try {
+    const { data: grupos, error } = await supabase
+      .from('grupos_permissao')
+      .select('*')
+      .eq('id_empresa', idEmpresaLogada)
+      .order('nome', { ascending: true });
+
+    if (error) {
+      console.error('Erro ao buscar grupos de permissão:', error.message);
+      return [];
+    }
+
+    const { data: usuarios, error: erroUsuarios } = await supabase
+      .from('usuarios')
+      .select('id_grupo_permissao')
+      .eq('id_empresa', idEmpresaLogada);
+
+    if (erroUsuarios) {
+      console.error('Erro ao contar colaboradores por grupo:', erroUsuarios.message);
+      return grupos.map(grupo => ({ ...grupo, totalColaboradores: 0 }));
+    }
+
+    const gruposComContagem = grupos.map(grupo => {
+      const total = usuarios.filter(u => u.id_grupo_permissao === grupo.id).length;
+      return { ...grupo, totalColaboradores: total };
+    });
+
+    return gruposComContagem;
+  } catch (err) {
+    console.error('Erro inesperado ao bucar grupos de permissão:', err);
+    return [];
+  }
+});
+
+ipcMain.handle('excluir-grupo-permissao', async (event, idGrupo) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "excluir_colaboradores")) return { sucesso: false };
+
+    const { data: colaboradoresVinculados, error: erroConsulta } = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('id_grupo_permissao', idGrupo);
+
+    if (erroConsulta) {
+      console.error('Erro ao verificar colaboradores do grupo:', erroConsulta.message);
+      await mostrarAviso(janelaDashboard, {
+        tipo: 'erro', titulo: 'Erro na Verificação',
+        mensagem: 'Não foi possível verificar os colaboradores deste grupo. Tente novamente.'
+      });
+      return { sucesso: false };
+    }
+
+    if (colaboradoresVinculados && colaboradoresVinculados.length > 0) {
+      await mostrarAviso(janelaDashboard, {
+        tipo: 'erro', titulo: 'Não é Possível Excluir',
+        mensagem: 'Este grupo ainda possui colaboradores vinculados. Mova todos os colaboradores para outro grupo antes de excluí-lo.'
+      });
+      return { sucesso: false };
+    }
+
+    const { error } = await supabase
+      .from('grupos_permissao')
+      .delete()
+      .eq('id', idGrupo);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send('grupos-atualizados');
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: 'sucesso', titulo: 'Grupo Excluído',
+      mensagem: 'O grupo de permissão foi excluído com sucesso!'
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro ao excluir grupo de permissão:', err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: 'erro', titulo: 'Erro ao Excluir',
+      mensagem: 'Não foi possível excluir o grupo. Tente novamente.'
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+ipcMain.on('abrir-modal-grupo', (evento) => {
+  if (janelaModalGrupoPermissao) {
+    janelaModalGrupoPermissao.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalGrupoPermissao = new BrowserWindow({
+    width: 560,
+    height: 660,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  janelaModalGrupoPermissao.loadFile(path.join(__dirname, '../renderer/modalGrupoPermissao.html'));
+  janelaModalGrupoPermissao.once('ready-to-show', () => janelaModalGrupoPermissao.show());
+  janelaModalGrupoPermissao.on('closed', () => { janelaModalGrupoPermissao = null; });
+});
+
+ipcMain.on('fechar-modal-grupo', () => {
+  if (janelaModalGrupoPermissao) janelaModalGrupoPermissao.close();
+});
+
+ipcMain.handle('salvar-grupo-permissao', async (event, dadosGrupo) => {
+  try {
+    if (await negarSemPermissao(janelaModalGrupoPermissao, dadosGrupo.id ? "editar_colaboradores" : "criar_colaboradores")) return { sucesso: false };
+
+    if (!dadosGrupo.nome || !dadosGrupo.nome.trim()) {
+      await mostrarAviso(janelaModalGrupoPermissao, {
+        tipo: 'erro', titulo: 'Nome Obrigatório',
+        mensagem: 'Por favor, informe um nome para o grupo.'
+      });
+      return { sucesso: false };
+    }
+
+    let query;
+
+    if (dadosGrupo.id) {
+      query = supabase
+        .from('grupos_permissao')
+        .update({
+          nome: dadosGrupo.nome,
+          descricao: dadosGrupo.descricao || null,
+          permissoes: dadosGrupo.permissoes
+        })
+        .eq('id', dadosGrupo.id);
+    } else {
+      query = supabase
+        .from('grupos_permissao')
+        .insert([{
+          id_empresa: String(idEmpresaLogada),
+          nome: dadosGrupo.nome,
+          descricao: dadosGrupo.descricao || null,
+          permissoes: dadosGrupo.permissoes
+        }])
+        .select('id')
+        .single();
+    }
+
+    const { data: grupoSalvo, error } = await query;
+
+    if (error) {
+      console.error('Erro ao salvar grupo de permissão:', error.message);
+      await mostrarAviso(janelaModalGrupoPermissao, {
+        tipo: 'erro', titulo: 'Erro ao Salvar',
+        mensagem: `Não foi possível salvar o grupo. Motivo: ${error.message}`
+      });
+      return { sucesso: false, mensagem: error.message };
+    }
+
+    // Avisa TODAS as janelas abertas (dashboard e, se existir, o modal de colaborador)
+    const idGrupoSalvo = dadosGrupo.id || (grupoSalvo ? grupoSalvo.id : null);
+    BrowserWindow.getAllWindows().forEach(janela => {
+      if (!janela.isDestroyed()) {
+        janela.webContents.send('grupos-atualizados', { id: idGrupoSalvo, nome: dadosGrupo.nome });
+      }
+    });
+
+    await mostrarAviso(janelaModalGrupoPermissao, {
+      tipo: 'sucesso', titulo: 'Sucesso',
+      mensagem: dadosGrupo.id
+        ? `O grupo "${dadosGrupo.nome}" foi atualizado com sucesso!`
+        : `O grupo "${dadosGrupo.nome}" foi criado com sucesso!`
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro interno ao salvar grupo:', err);
+    return { sucesso: false, mensagem: 'Erro interno no servidor.' };
+  }
+});
+
+// =========================== COLABORADORES ======================
+ipcMain.handle('buscar-colaboradores', async () => {
+  try {
+    if (!temPermissao('ver_colaboradores')) return [];
+
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id, username, nome, email, telefone, ativo, id_grupo_permissao, grupos_permissao ( nome )')
+      .eq('id_empresa', String(idEmpresaLogada))
+      .eq('cargo', 'Colaborador')
+      .eq('ativo', true)
+      .order('nome', { ascending: true });
+
+    if (error) {
+      console.error('Erro ao buscar colaboradores:', error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error('Erro inesperado ao buscar colaboradores:', err);
+    return [];
+  }
+});
+
+ipcMain.handle('buscar-colaboradores-arquivados', async () => {
+  try {
+    if (!temPermissao('ver_colaboradores')) return [];
+
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id, username, nome, email, telefone, ativo, id_grupo_permissao, grupos_permissao ( nome )')
+      .eq('id_empresa', String(idEmpresaLogada))
+      .eq('cargo', 'Colaborador')
+      .eq('ativo', false)
+      .order('nome', { ascending: true });
+
+    if (error) {
+      console.error('Erro ao buscar colaboradores arquivados:', error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error('Erro inesperado ao buscar colaboradores arquivados:', err);
+    return [];
+  }
+});
+
+ipcMain.handle('arquivar-colaborador-banco', async (event, idColaborador) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "excluir_colaboradores")) return { sucesso: false };
+
+    const { error } = await supabase
+      .from('usuarios')
+      .update({ ativo: false })
+      .eq('id', idColaborador);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send('colaboradores-atualizados');
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: 'sucesso', titulo: 'Colaborador Arquivado',
+      mensagem: 'O colaborador foi arquivado e seu acesso ao sistema foi bloqueado.'
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro ao arquivar colaborador:', err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: 'erro', titulo: 'Erro ao Arquivar',
+      mensagem: 'Não foi possível arquivar o colaborador. Tente novamente.'
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+ipcMain.handle('reativar-colaborador-banco', async (event, idColaborador) => {
+  try {
+    if (await negarSemPermissao(janelaDashboard, "excluir_colaboradores")) return { sucesso: false };
+
+    const { error } = await supabase
+      .from('usuarios')
+      .update({ ativo: true })
+      .eq('id', idColaborador);
+
+    if (error) throw error;
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send('colaboradores-atualizados');
+    }
+
+    await mostrarAviso(janelaDashboard, {
+      tipo: 'sucesso', titulo: 'Colaborador Reativado',
+      mensagem: 'O colaborador voltou a ter acesso ao sistema!'
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro ao reativar colaborador:', err.message);
+    await mostrarAviso(janelaDashboard, {
+      tipo: 'erro', titulo: 'Erro ao Reativar',
+      mensagem: 'Não foi possível reativar o colaborador. Tente novamente.'
+    });
+    return { sucesso: false, mensagem: err.message };
+  }
+});
+
+// =========================== MODAL DE COLABORADOR (CRIAR / EDITAR) ======================
+ipcMain.on('abrir-modal-colaborador', (evento) => {
+  if (janelaModalColaborador) {
+    janelaModalColaborador.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalColaborador = new BrowserWindow({
+    width: 520,
+    height: 700,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  janelaModalColaborador.loadFile(path.join(__dirname, '../renderer/modalColaborador.html'));
+  janelaModalColaborador.once('ready-to-show', () => janelaModalColaborador.show());
+  janelaModalColaborador.on('closed', () => { janelaModalColaborador = null; });
+});
+
+ipcMain.on('fechar-modal-colaborador', () => {
+  if (janelaModalColaborador) janelaModalColaborador.close();
+});
+
+ipcMain.handle('salvar-colaborador-banco', async (event, dados) => {
+  try {
+    const editando = !!dados.id;
+
+    if (await negarSemPermissao(janelaModalColaborador, editando ? 'editar_colaboradores' : 'criar_colaboradores')) {
+      return { sucesso: false };
+    }
+
+    const nome = (dados.nome || '').trim();
+    const username = (dados.username || '').trim();
+    const email = (dados.email || '').trim();
+    const telefone = (dados.telefone || '').trim();
+
+    if (!nome) {
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Nome Obrigatório',
+        mensagem: 'Por favor, informe o nome completo do colaborador.'
+      });
+      return { sucesso: false };
+    }
+
+    if (!username) {
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Usuário Obrigatório',
+        mensagem: 'Por favor, informe um nome de usuário para o colaborador.'
+      });
+      return { sucesso: false };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'E-mail Inválido',
+        mensagem: 'Por favor, informe um e-mail válido (exemplo@empresa.com) ou deixe o campo em branco.'
+      });
+      return { sucesso: false };
+    }
+
+    if (!dados.id_grupo_permissao) {
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Grupo Obrigatório',
+        mensagem: 'Todo colaborador precisa pertencer a um grupo de permissão. Selecione um grupo existente ou crie um novo.'
+      });
+      return { sucesso: false };
+    }
+
+    if (!editando) {
+      if (!dados.senha || dados.senha.length < 6) {
+        await mostrarAviso(janelaModalColaborador, {
+          tipo: 'erro', titulo: 'Senha Inválida',
+          mensagem: 'A senha deve conter pelo menos 6 caracteres.'
+        });
+        return { sucesso: false };
+      }
+
+      if (dados.senha !== dados.confirmarSenha) {
+        await mostrarAviso(janelaModalColaborador, {
+          tipo: 'erro', titulo: 'Senhas Diferentes',
+          mensagem: 'As senhas não coincidem. Verifique e tente novamente.'
+        });
+        return { sucesso: false };
+      }
+    }
+
+    // O grupo escolhido precisa existir e pertencer a esta empresa
+    const { data: grupoValido, error: erroGrupo } = await supabase
+      .from('grupos_permissao')
+      .select('id')
+      .eq('id', dados.id_grupo_permissao)
+      .eq('id_empresa', String(idEmpresaLogada))
+      .limit(1);
+
+    if (erroGrupo || !grupoValido || grupoValido.length === 0) {
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Grupo Inválido',
+        mensagem: 'O grupo selecionado não foi encontrado. Atualize a lista e escolha outro grupo.'
+      });
+      return { sucesso: false };
+    }
+
+    // Usuário e e-mail precisam ser únicos em todo o sistema (o login procura em toda a tabela)
+    let consultaUsername = supabase.from('usuarios').select('id').eq('username', username);
+    if (editando) consultaUsername = consultaUsername.neq('id', dados.id);
+    const { data: usernameExistente, error: erroUsername } = await consultaUsername;
+
+    if (erroUsername) {
+      console.error('Erro ao verificar username:', erroUsername.message);
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Erro na Verificação',
+        mensagem: 'Não foi possível validar os dados. Tente novamente.'
+      });
+      return { sucesso: false };
+    }
+
+    if (usernameExistente && usernameExistente.length > 0) {
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Usuário já Existe',
+        mensagem: 'Este nome de usuário já está sendo utilizado. Escolha outro.'
+      });
+      return { sucesso: false };
+    }
+
+    if (email) {
+      let consultaEmail = supabase.from('usuarios').select('id').eq('email', email);
+      if (editando) consultaEmail = consultaEmail.neq('id', dados.id);
+      const { data: emailExistente, error: erroEmail } = await consultaEmail;
+
+      if (erroEmail) {
+        console.error('Erro ao verificar e-mail:', erroEmail.message);
+        await mostrarAviso(janelaModalColaborador, {
+          tipo: 'erro', titulo: 'Erro na Verificação',
+          mensagem: 'Não foi possível validar os dados. Tente novamente.'
+        });
+        return { sucesso: false };
+      }
+
+      if (emailExistente && emailExistente.length > 0) {
+        await mostrarAviso(janelaModalColaborador, {
+          tipo: 'erro', titulo: 'E-mail já Existe',
+          mensagem: 'Este e-mail já está sendo utilizado. Informe outro.'
+        });
+        return { sucesso: false };
+      }
+    }
+
+    let erroSalvar;
+
+    if (editando) {
+      const { error } = await supabase
+        .from('usuarios')
+        .update({
+          nome,
+          username,
+          email: email || null,
+          telefone: telefone || null,
+          id_grupo_permissao: Number(dados.id_grupo_permissao)
+        })
+        .eq('id', dados.id)
+        .eq('id_empresa', idEmpresaLogada)
+        .eq('cargo', 'Colaborador');
+      erroSalvar = error;
+    } else {
+      const senhaHash = await bcrypt.hash(dados.senha, 10);
+
+      const { error } = await supabase
+        .from('usuarios')
+        .insert([{
+          nome,
+          username,
+          email: email || null,
+          telefone: telefone || null,
+          senha: senhaHash,
+          id_empresa: idEmpresaLogada,
+          cargo: 'Colaborador',
+          id_grupo_permissao: Number(dados.id_grupo_permissao),
+          ativo: true
+        }]);
+      erroSalvar = error;
+    }
+
+    if (erroSalvar) {
+      console.error('Erro ao salvar colaborador:', erroSalvar.message);
+      await mostrarAviso(janelaModalColaborador, {
+        tipo: 'erro', titulo: 'Erro na Operação',
+        mensagem: `Não foi possível salvar os dados do colaborador. Motivo: ${erroSalvar.message}`
+      });
+      return { sucesso: false, mensagem: erroSalvar.message };
+    }
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send('colaboradores-atualizados');
+      janelaDashboard.webContents.send('grupos-atualizados');
+    }
+
+    await mostrarAviso(janelaModalColaborador, {
+      tipo: 'sucesso', titulo: 'Sucesso',
+      mensagem: editando
+        ? `O cadastro de ${nome} foi atualizado com sucesso!`
+        : `O colaborador ${nome} foi cadastrado com sucesso!`
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro interno ao salvar colaborador:', err);
+    return { sucesso: false, mensagem: 'Erro interno no servidor.' };
+  }
+});
+
+// =========================== REDEFINIR SENHA DE COLABORADOR ======================
+ipcMain.on('abrir-modal-redefinir-senha-colaborador', (evento) => {
+  if (janelaModalRedefinirSenhaColaborador) {
+    janelaModalRedefinirSenhaColaborador.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalRedefinirSenhaColaborador = new BrowserWindow({
+    width: 420,
+    height: 440,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  janelaModalRedefinirSenhaColaborador.loadFile(path.join(__dirname, '../renderer/modalRedefinirSenhaColaborador.html'));
+  janelaModalRedefinirSenhaColaborador.once('ready-to-show', () => janelaModalRedefinirSenhaColaborador.show());
+  janelaModalRedefinirSenhaColaborador.on('closed', () => { janelaModalRedefinirSenhaColaborador = null; });
+});
+
+ipcMain.on('fechar-modal-redefinir-senha-colaborador', () => {
+  if (janelaModalRedefinirSenhaColaborador) janelaModalRedefinirSenhaColaborador.close();
+});
+
+ipcMain.handle('redefinir-senha-colaborador', async (event, { idColaborador, novaSenha, confirmarSenha }) => {
+  try {
+    if (await negarSemPermissao(janelaModalRedefinirSenhaColaborador, 'editar_colaboradores')) {
+      return { sucesso: false };
+    }
+
+    if (!novaSenha || novaSenha.length < 6) {
+      await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
+        tipo: 'erro', titulo: 'Senha Inválida',
+        mensagem: 'A nova senha deve conter pelo menos 6 caracteres.'
+      });
+      return { sucesso: false };
+    }
+
+    if (novaSenha !== confirmarSenha) {
+      await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
+        tipo: 'erro', titulo: 'Senhas Diferentes',
+        mensagem: 'As senhas não coincidem. Verifique e tente novamente.'
+      });
+      return { sucesso: false };
+    }
+
+    const novaSenhaHash = await bcrypt.hash(novaSenha, 10);
+
+    const { data: atualizado, error } = await supabase
+      .from('usuarios')
+      .update({ senha: novaSenhaHash })
+      .eq('id', idColaborador)
+      .eq('id_empresa', idEmpresaLogada)
+      .eq('cargo', 'Colaborador')
+      .select('id');
+
+    if (error || !atualizado || atualizado.length === 0) {
+      console.error('Erro ao redefinir senha do colaborador:', error?.message);
+      await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
+        tipo: 'erro', titulo: 'Erro ao Redefinir',
+        mensagem: 'Não foi possível redefinir a senha deste colaborador. Tente novamente.'
+      });
+      return { sucesso: false };
+    }
+
+    await mostrarAviso(janelaModalRedefinirSenhaColaborador, {
+      tipo: 'sucesso', titulo: 'Senha Redefinida',
+      mensagem: 'A senha do colaborador foi redefinida com sucesso! Ele já pode entrar com a nova senha.'
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro inesperado ao redefinir senha do colaborador:', err);
+    return { sucesso: false };
+  }
+});
+
+// =========================== VER COLABORADORES DO GRUPO (E MOVER) ======================
+ipcMain.on('abrir-modal-ver-colaboradores', (evento) => {
+  if (janelaModalVerColaboradores) {
+    janelaModalVerColaboradores.focus();
+    return;
+  }
+
+  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
+
+  janelaModalVerColaboradores = new BrowserWindow({
+    width: 600,
+    height: 620,
+    parent: janelaMae,
+    modal: true,
+    frame: false,
+    resizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  janelaModalVerColaboradores.loadFile(path.join(__dirname, '../renderer/modalVerColaboradores.html'));
+  janelaModalVerColaboradores.once('ready-to-show', () => janelaModalVerColaboradores.show());
+  janelaModalVerColaboradores.on('closed', () => { janelaModalVerColaboradores = null; });
+});
+
+ipcMain.on('fechar-modal-ver-colaboradores', () => {
+  if (janelaModalVerColaboradores) janelaModalVerColaboradores.close();
+});
+
+ipcMain.handle('buscar-colaboradores-do-grupo', async (event, idGrupo) => {
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('id, nome, username, ativo')
+      .eq('id_empresa', idEmpresaLogada)
+      .eq('cargo', 'Colaborador')
+      .eq('id_grupo_permissao', idGrupo)
+      .order('nome', { ascending: true });
+
+    if (error) {
+      console.error('Erro ao buscar colaboradores do grupo:', error.message);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error('Erro inesperado ao buscar colaboradores do grupo:', err);
+    return [];
+  }
+});
+
+ipcMain.handle('mover-colaborador-de-grupo', async (event, { idColaborador, idNovoGrupo }) => {
+  try {
+    if (await negarSemPermissao(janelaModalVerColaboradores, 'editar_colaboradores')) {
+      return { sucesso: false };
+    }
+
+    const { data: novoGrupo, error: erroGrupo } = await supabase
+      .from('grupos_permissao')
+      .select('id, nome')
+      .eq('id', idNovoGrupo)
+      .eq('id_empresa', String(idEmpresaLogada))
+      .single();
+
+    if (erroGrupo || !novoGrupo) {
+      await mostrarAviso(janelaModalVerColaboradores, {
+        tipo: 'erro', titulo: 'Grupo Inválido',
+        mensagem: 'O grupo de destino não foi encontrado. Atualize a lista e tente novamente.'
+      });
+      return { sucesso: false };
+    }
+
+    const { data: atualizado, error } = await supabase
+      .from('usuarios')
+      .update({ id_grupo_permissao: novoGrupo.id })
+      .eq('id', idColaborador)
+      .eq('id_empresa', idEmpresaLogada)
+      .eq('cargo', 'Colaborador')
+      .select('id');
+
+    if (error || !atualizado || atualizado.length === 0) {
+      console.error('Erro ao mover colaborador:', error?.message);
+      await mostrarAviso(janelaModalVerColaboradores, {
+        tipo: 'erro', titulo: 'Erro ao Mover',
+        mensagem: 'Não foi possível mover o colaborador. Tente novamente.'
+      });
+      return { sucesso: false };
+    }
+
+    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+      janelaDashboard.webContents.send('grupos-atualizados');
+      janelaDashboard.webContents.send('colaboradores-atualizados');
+    }
+
+    await mostrarAviso(janelaModalVerColaboradores, {
+      tipo: 'sucesso', titulo: 'Colaborador Movido',
+      mensagem: `O colaborador foi movido para o grupo "${novoGrupo.nome}" com sucesso!`
+    });
+
+    return { sucesso: true };
+  } catch (err) {
+    console.error('Erro inesperado ao mover colaborador:', err);
+    return { sucesso: false };
+  }
+});

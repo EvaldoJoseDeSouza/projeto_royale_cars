@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Redefinir Senha</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="./modal.css" />
+</head>
+
+<body>
+    <div class="modal-header">
+        <h3>Redefinir Senha</h3>
+        <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+            <i class="ri-close-line" style="font-size: 1.2rem; display: block;"></i>
+        </button>
+    </div>
+
+    <div class="modal-content">
+        <p id="texto-colaborador" style="font-size:0.9rem; color:#555; margin-bottom:14px;"></p>
+
+        <form id="form-redefinir-senha">
+            <div class="form-group">
+                <label for="nova-senha">Nova Senha *</label>
+                <div class="senha-input-wrapper">
+                    <input type="password" id="nova-senha" placeholder="••••••••" style="padding-right: 40px;"
+                        autocomplete="new-password" />
+                    <button type="button" class="btn-olho-senha" id="btn-olho-nova-senha">
+                        <i id="ic-olho-nova-senha" class="ri-eye-line"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="confirmar-senha">Confirmar Senha *</label>
+                <div class="senha-input-wrapper">
+                    <input type="password" id="confirmar-senha" placeholder="••••••••" style="padding-right: 40px;"
+                        autocomplete="new-password" />
+                    <button type="button" class="btn-olho-senha" id="btn-olho-confirmar-senha">
+                        <i id="ic-olho-confirmar-senha" class="ri-eye-line"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+                <button type="submit" class="btn-save" id="btn-salvar">Salvar Nova Senha</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="./modalRedefinirSenhaColaborador.js"></script>
+</body>
+
+</html>

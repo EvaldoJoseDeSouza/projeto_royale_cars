@@ -1,0 +1,20 @@
+{
+  "name": "royale-cars-desktop",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^42.9.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
+    "bcryptjs": "^3.0.3"
+  }
+}

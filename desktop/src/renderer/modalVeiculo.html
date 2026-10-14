@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cadastrar Novo Veículo</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="./modal.css" />
+  </head>
+  <body>
+    <div class="modal-header">
+      <h3>Cadastrar Veículo</h3>
+      <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+        <i class="ri-close-line" style="font-size: 1.2rem; display: block;"></i>
+      </button>
+    </div>
+
+    <div class="modal-content">
+      <form id="form-cadastro-veiculo">
+        <div class="form-group">
+          <label for="modelo">Modelo de Carro *</label>
+          <input
+            type="text"
+            id="modelo"
+            placeholder="Ex: Mustang GT"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="marca">Marca / Fabricante *</label>
+          <input type="text" id="marca" placeholder="Ex: Ford" required />
+        </div>
+
+        <div class="row-inputs">
+          <div class="form-group">
+            <label for="placa">Placa *</label>
+            <input
+              type="text"
+              id="placa"
+              placeholder="Ex: ABC-1234"
+              required
+              style="text-transform: uppercase"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="diaria">Valor da Diária (R$) *</label>
+            <input
+              type="text"
+              id="diaria"
+              step="0.01"
+              placeholder="Ex: 590.00"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="status">Status Inicial *</label>
+          <select id="status" required>
+            <option value="Disponível" selected>Disponível</option>
+            <option value="Alugado">Alugado</option>
+            <option value="Em Manutenção">Em Manutenção</option>
+          </select>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" id="btn-cancelar">
+            Cancelar
+          </button>
+          <button type="submit" class="btn-save">Salvar Veículo</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="./modalVeiculo.js"></script>
+  </body>
+</html>

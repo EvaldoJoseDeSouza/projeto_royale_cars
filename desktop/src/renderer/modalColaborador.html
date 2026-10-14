@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Colaborador</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="./modal.css" />
+</head>
+
+<body>
+    <div class="modal-scroll-wrapper">
+        <div class="modal-header">
+            <h3 id="titulo-modal-colaborador">Novo Colaborador</h3>
+            <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+                <i class="ri-close-line" style="font-size: 1.2rem; display: block;"></i>
+            </button>
+        </div>
+
+        <form id="form-colaborador" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+            <div class="modal-scroll-body">
+                <div class="form-group">
+                    <label for="colab-nome">Nome completo *</label>
+                    <input type="text" id="colab-nome" placeholder="Ex: João da Silva" />
+                </div>
+
+                <div class="form-group">
+                    <label for="colab-username">Usuário *</label>
+                    <input type="text" id="colab-username" placeholder="Ex: joao.silva" autocomplete="off" />
+                </div>
+
+                <div id="bloco-senha">
+                    <div class="form-group">
+                        <label for="colab-senha">Senha *</label>
+                        <div class="senha-input-wrapper">
+                            <input type="password" id="colab-senha" placeholder="••••••••" style="padding-right: 40px;"
+                                autocomplete="new-password" />
+                            <button type="button" class="btn-olho-senha" id="btn-olho-colab-senha">
+                                <i id="ic-olho-colab-senha" class="ri-eye-line"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="colab-confirmar-senha">Confirmar senha *</label>
+                        <div class="senha-input-wrapper">
+                            <input type="password" id="colab-confirmar-senha" placeholder="••••••••"
+                                style="padding-right: 40px;" autocomplete="new-password" />
+                            <button type="button" class="btn-olho-senha" id="btn-olho-colab-confirmar">
+                                <i id="ic-olho-colab-confirmar" class="ri-eye-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row-inputs">
+                    <div class="form-group">
+                        <label for="colab-email">E-mail</label>
+                        <input type="email" id="colab-email" placeholder="Opcional" />
+                    </div>
+                    <div class="form-group">
+                        <label for="colab-telefone">Telefone</label>
+                        <input type="text" id="colab-telefone" placeholder="Opcional" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="colab-grupo">Grupo de permissão *</label>
+                    <select id="colab-grupo">
+                        <option value="">Selecione um grupo...</option>
+                    </select>
+                    <button type="button" id="btn-criar-grupo"
+                        style="background:none; border:none; color:#6c757d; font-size:0.85rem; cursor:pointer; margin-top:6px; padding:0; font-weight:600;">
+                        <i class="ri-add-line"></i> Criar novo grupo
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+                <button type="submit" class="btn-save" id="btn-salvar">Salvar</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="./modalColaborador.js"></script>
+</body>
+
+</html>

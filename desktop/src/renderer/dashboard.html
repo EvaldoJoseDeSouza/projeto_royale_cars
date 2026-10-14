@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Royale Cars - ERP Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <img src="../main/icone.png" class="sidebar-logo-img" alt="Royale Cars Logo">
+      </div>
+
+      <nav class="menu">
+        <a href="#" class="menu-item active" data-target="view-resumo">
+          <i class="ri-dashboard-3-line"></i> Dashboard
+        </a>
+        <a href="#" class="menu-item" data-target="view-frota">
+          <i class="ri-car-line"></i> Frota de Veículos
+        </a>
+        <a href="#" class="menu-item" data-target="view-clientes">
+          <i class="ri-team-line"></i> Clientes
+        </a>
+
+        <div class="menu-dropdown-wrapper" style="width: 100%">
+          <a href="#" class="menu-item dropdown-toggle" id="btn-locacoes-master" style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                width: 100%;
+              ">
+            <span style="display: flex; align-items: center; gap: 10px">
+              <i class="ri-booklet-line"></i> Locações
+            </span>
+            <i class="ri-arrow-down-s-line arrow-icon" style="transition: transform 0.3s"></i>
+          </a>
+
+          <div class="submenu-container" id="submenu-locacoes" style="
+                display: none;
+                flex-direction: column;
+                padding-left: 20px;
+                background: rgba(0, 0, 0, 0.02);
+                border-radius: 4px;
+              ">
+            <a href="#" class="menu-item sub-item" data-target="view-locacoes-ativas"
+              style="font-size: 0.9rem; padding: 8px 12px">
+              <i class="ri-play-list-add-line" style="font-size: 1rem"></i> Em Andamento
+            </a>
+
+            <a href="#" class="menu-item sub-item" data-target="view-locacoes-historico"
+              style="font-size: 0.9rem; padding: 8px 12px">
+              <i class="ri-history-line" style="font-size: 1rem"></i> Histórico
+            </a>
+          </div>
+        </div>
+
+        <a href="#" class="menu-item" data-target="view-financeiro">
+          <i class="ri-coins-line"></i> Financeiro
+        </a>
+
+        <div class="menu-dropdown-wrapper" style="width: 100%">
+          <a href="#" class="menu-item dropdown-toggle" id="btn-administracao-master" style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      ">
+            <span style="display: flex; align-items: center; gap: 10px">
+              <i class="ri-building-line"></i> Administração
+            </span>
+            <i class="ri-arrow-down-s-line arrow-icon-admin" style="transition: transform 0.3s"></i>
+          </a>
+
+          <div class="submenu-container" id="submenu-administracao" style="
+        display: none;
+        flex-direction: column;
+        padding-left: 20px;
+        background: rgba(0, 0, 0, 0.02);
+        border-radius: 4px;
+      ">
+            <a href="#" class="menu-item sub-item" data-target="view-colaboradores"
+              style="font-size: 0.9rem; padding: 8px 12px">
+              <i class="ri-team-line" style="font-size: 1rem"></i> Colaboradores
+            </a>
+
+            <a href="#" class="menu-item sub-item" data-target="view-grupos-permissao"
+              style="font-size: 0.9rem; padding: 8px 12px">
+              <i class="ri-key-2-line" style="font-size: 1rem"></i> Grupos de Permissão
+            </a>
+          </div>
+        </div>
+      </nav>
+
+      <div class="sidebar-user-container">
+        <!-- PERFIL -->
+        <div class="profile-dropdown" id="user-dropdown">
+          <button class="dropdown-item" id="btn-abrir-configuracoes" data-target="view-configuracoes">
+            <i class="ri-settings-3-line"></i> Configurações
+          </button>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item text-danger" id="btn-sair">
+            <i class="ri-logout-box-r-line"></i> Sair do Sistema
+          </button>
+        </div>
+
+        <div class="sidebar-user" id="btn-perfil">
+          <div class="user-avatar" id="header-avatar-inicial">AD</div>
+          <div class="user-info">
+            <strong id="header-usuario-nome">Administrador</strong>
+            <span id="header-usuario-email">admin@royale.com</span>
+          </div>
+          <i class="ri-arrow-up-s-line arrow-up"></i>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="top-bar">
+        <div class="page-title" id="current-page-title">Dashboard</div>
+        <div class="top-actions">
+          <span>Olá, <strong id="top-bar-usuario-nome">Administrador</strong></span>
+        </div>
+      </header>
+
+      <!-- DASHBOARD -->
+      <div id="view-resumo" class="content-view active">
+        <section class="stats-row">
+          <div class="stat-card clickable" data-target="view-financeiro">
+            <span class="stat-label">FATURAMENTO DO MÊS</span>
+            <div class="stat-value" id="dash-faturamento">R$ 0,00</div>
+            <span id="dash-faturamento-sublegenda" class="legenda-dinamica">↑ 12% em relação ao mês anterior</span>
+          </div>
+          <div class="stat-card clickable" data-target="view-locacoes-ativas">
+            <span class="stat-label">LOCAÇÕES ATIVAS</span>
+            <div class="stat-value" id="dash-locacoes-ativas">0</div>
+            <span class="stat-desc">Contratos em andamento</span>
+          </div>
+          <div class="stat-card clickable" data-target="view-clientes">
+            <span class="stat-label">CLIENTES ATIVOS</span>
+            <div class="stat-value" id="dash-clientes-ativos">0</div>
+            <span class="stat-desc">Clientes na base</span>
+          </div>
+          <div class="stat-card clickable" data-target="view-frota">
+            <span class="stat-label">STATUS DA FROTA</span>
+            <div class="stat-value" id="dash-status-frota">0</div>
+            <span class="stat-desc">Total de veículos</span>
+          </div>
+        </section>
+
+        <section class="data-section">
+          <div class="section-header">
+            <h3>Últimas locações realizadas</h3>
+            <button class="text-link" id="link-ver-todas">Ver todas →</button>
+          </div>
+          <div class="table-container">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Veículo</th>
+                  <th>Cliente</th>
+                  <th>Data Saída</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-ultimas-locacoes-body">
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- FROTA -->
+      <div id="view-frota" class="content-view">
+        <div class="view-header-row">
+          <div class="busca-filtro-container">
+            <div class="busca-input-wrapper">
+              <i class="ri-search-line busca-icone"></i>
+              <input type="text" id="busca-frota" class="busca-input"
+                placeholder="Buscar por placa, modelo ou marca...">
+            </div>
+
+            <div class="filtro-dropdown-wrapper" id="filtro-status-wrapper">
+              <button type="button" class="filtro-btn" id="btn-filtro-status">
+                <i class="ri-filter-3-line"></i>
+                Status: <span id="filtro-status-label">Todos</span>
+                <i class="ri-arrow-down-s-line"></i>
+              </button>
+              <div class="filtro-dropdown-menu" id="filtro-status-menu">
+                <button type="button" class="filtro-dropdown-item active" data-status="Todos">Todos os Status</button>
+                <button type="button" class="filtro-dropdown-item" data-status="Disponível">Disponível</button>
+                <button type="button" class="filtro-dropdown-item" data-status="Alugado">Alugado</button>
+                <button type="button" class="filtro-dropdown-item" data-status="Em Manutenção">Em Manutenção</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <button type="button" class="filtro-btn" id="btn-toggle-arquivados-frota">
+              <i class="ri-archive-line" id="icone-toggle-arquivados-frota"></i>
+              <span id="texto-toggle-arquivados-frota">Arquivados</span>
+            </button>
+
+            <button class="btn-primary-blue" id="btn-abrir-cadastro-carro"
+              style="display: flex; align-items: center; gap: 8px">
+              <i class="ri-add-line" style="font-size: 1.1rem"></i> Cadastrar Veículo
+            </button>
+          </div>
+        </div>
+        <div class="vehicles-grid" id="container-frota"></div>
+      </div>
+
+      <!-- CLIENTES -->
+      <div id="view-clientes" class="content-view">
+        <div class="view-header-row">
+          <div class="busca-filtro-container busca-filtro-container-compacta">
+            <div class="busca-input-wrapper">
+              <i class="ri-search-line busca-icone"></i>
+              <input type="text" id="busca-clientes" class="busca-input" placeholder="Buscar por nome ou CPF...">
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <button type="button" class="filtro-btn" id="btn-toggle-arquivados-clientes">
+              <i class="ri-archive-line" id="icone-toggle-arquivados-clientes"></i>
+              <span id="texto-toggle-arquivados-clientes">Arquivados</span>
+            </button>
+
+            <button class="btn-primary-blue" id="btn-abrir-cadastro-cliente"
+              style="display: flex; align-items: center; gap: 8px">
+              <i class="ri-add-line" style="font-size: 1.1rem"></i> Cadastrar Cliente
+            </button>
+          </div>
+        </div>
+        <div class="vehicles-grid" id="container-clientes"></div>
+      </div>
+
+      <!-- LOCAÇÕES ATIVAS -->
+      <div id="view-locacoes-ativas" class="content-view">
+        <div class="view-header-row">
+          <h2>Locações em Andamento</h2>
+          <button class="btn-primary-blue" id="btn-abrir-cadastro-locacao"
+            style="display: flex; align-items: center; gap: 8px">
+            <i class="ri-add-line" style="font-size: 1.1rem"></i> Nova Locação
+          </button>
+        </div>
+        <div class="table-container"
+          style="background: #fff; border-radius: 8px; border: 1px solid var(--border-color); padding: 15px; margin-top: 20px;">
+          <table class="custom-table" style="width: 100%">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Veículo</th>
+                <th>Retirada</th>
+                <th>Devolução</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th style="text-align: center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-locacoes-ativas-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LOCAÇÕES HISTÓRICO -->
+      <div id="view-locacoes-historico" class="content-view">
+        <div class="view-header-row">
+          <h2>Histórico de Locações</h2>
+        </div>
+        <div class="table-container"
+          style="background: #fff; border-radius: 8px; border: 1px solid var(--border-color); padding: 15px; margin-top: 20px;">
+          <table class="custom-table" style="width: 100%">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Veículo</th>
+                <th>Retirada</th>
+                <th>Devolução</th>
+                <th>Total</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-locacoes-historico-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- FINANCEIRO -->
+      <div id="view-financeiro" class="content-view">
+        <div class="view-header-row">
+          <h2>Painel Financeiro & Fluxo de Caixa</h2>
+        </div>
+
+        <section class="stats-row" style="margin-top: 20px">
+          <div class="stat-card">
+            <span class="stat-label">FATURAMENTO TOTAL (CAIXA)</span>
+            <div class="stat-value" id="fin-faturamento-total" style="color: #2ecc71">R$ 0,00</div>
+            <span class="stat-desc">Locações finalizadas e pagas</span>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-label">RECEBIMENTO PROJETADO</span>
+            <div class="stat-value" id="fin-recebimento-projetado" style="color: #3498db">R$ 0,00</div>
+            <span class="stat-desc">Contratos em andamento na rua</span>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-label">TICKET MÉDIO</span>
+            <div class="stat-value" id="fin-ticket-medio">R$ 0,00</div>
+            <span class="stat-desc">Valor médio por contrato</span>
+          </div>
+        </section>
+
+        <div class="financial-toolbar"
+          style="display: flex; gap: 15px; align-items: flex-end; background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);">
+          <div class="input-group" style="display: flex; flex-direction: column; gap: 5px">
+            <label style="font-size: 0.85rem; font-weight: 600; color: #64748b">Data Início:</label>
+            <input type="date" id="fin-data-inicio"
+              style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit;" />
+          </div>
+
+          <div class="input-group" style="display: flex; flex-direction: column; gap: 5px">
+            <label style="font-size: 0.85rem; font-weight: 600; color: #64748b">Data Fim:</label>
+            <input type="date" id="fin-data-fim"
+              style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit;" />
+          </div>
+
+          <button id="btn-limpar-filtro-fin"
+            style="padding: 9px 15px; background: #64748b; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; transition: background 0.2s;">
+            <i class="ri-refresh-line"></i> Limpar Filtro
+          </button>
+        </div>
+
+        <div class="view-header-row" style="margin-top: 40px; margin-bottom: 0">
+          <h3>Histórico de Entradas Liquidadas</h3>
+        </div>
+
+        <div class="table-container"
+          style="background: #fff; border-radius: 8px; border: 1px solid var(--border-color); padding: 15px; margin-top: 15px;">
+          <table class="custom-table" style="width: 100%">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Veículo Alugado</th>
+                <th>Data Encerramento</th>
+                <th>Valor Recebido</th>
+                <th>Status Caixa</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-financeiro-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- COLABORADORES -->
+      <div id="view-colaboradores" class="content-view">
+        <div class="view-header-row">
+          <div class="busca-filtro-container busca-filtro-container-compacta">
+            <div class="busca-input-wrapper">
+              <i class="ri-search-line busca-icone"></i>
+              <input type="text" id="busca-colaboradores" class="busca-input"
+                placeholder="Buscar por nome, usuário ou e-mail...">
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <button type="button" class="filtro-btn" id="btn-toggle-arquivados-colaboradores">
+              <i class="ri-archive-line" id="icone-toggle-arquivados-colaboradores"></i>
+              <span id="texto-toggle-arquivados-colaboradores">Arquivados</span>
+            </button>
+
+            <button class="btn-primary-blue" id="btn-abrir-cadastro-colaborador"
+              style="display: flex; align-items: center; gap: 8px">
+              <i class="ri-add-line" style="font-size: 1.1rem"></i> Adicionar Colaborador
+            </button>
+          </div>
+        </div>
+        <div class="vehicles-grid" id="container-colaboradores"></div>
+      </div>
+
+      <!-- GRUPOS DE PERMISSÃO -->
+      <div id="view-grupos-permissao" class="content-view">
+        <div class="view-header-row">
+          <div></div>
+          <button class="btn-primary-blue" id="btn-abrir-cadastro-grupo"
+            style="display: flex; align-items: center; gap: 8px">
+            <i class="ri-add-line" style="font-size: 1.1rem"></i> Criar Novo Grupo
+          </button>
+        </div>
+        <div class="vehicles-grid" id="container-grupos-permissao"></div>
+      </div>
+
+      <!-- CONFIGURAÇÕES -->
+      <div id="view-configuracoes" class="content-view">
+        <div class="view-header-row">
+          <h2>Configurações da Conta</h2>
+        </div>
+
+        <div class="config-container">
+          <!-- PERFIL -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <h3>Perfil</h3>
+              <p>Mantenha seus dados sempre atualizados.</p>
+            </div>
+
+            <form id="form-config-perfil">
+              <div class="avatar-section">
+                <label>Avatar</label>
+                <div class="avatar-wrapper">
+                  <div id="avatar-preview" class="avatar-circle">
+                    <span id="avatar-inicial">U</span>
+                    <img id="avatar-img" src="" alt="Avatar" style="display: none;">
+                  </div>
+                  <label for="input-upload-avatar" class="btn-upload-avatar" title="Alterar Foto">
+                    <i class="ri-pencil-line"></i>
+                  </label>
+                  <input type="file" id="input-upload-avatar" accept="image/*" style="display: none;">
+                </div>
+              </div>
+
+              <div class="config-grid">
+                <div class="form-group">
+                  <label for="cfg-nome">Nome *</label>
+                  <input type="text" id="cfg-nome" class="form-control" required placeholder="Seu nome completo">
+                </div>
+
+                <div class="form-group">
+                  <label for="cfg-cpf-cnpj">CPF / CNPJ *</label>
+                  <input type="text" id="cfg-cpf-cnpj" class="form-control" required
+                    placeholder="000.000.000-00 ou 00.000.000/0001-00" maxlength="18">
+                </div>
+
+                <div class="form-group">
+                  <label for="cfg-telefone">WhatsApp / Telefone *</label>
+                  <div class="input-with-prefix">
+                    <span class="prefix-ddi"><i class="ri-whatsapp-line"></i> +55</span>
+                    <input type="text" id="cfg-telefone" required placeholder="(00) 00000-0000" maxlength="15">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="cfg-email">E-mail *</label>
+                  <div class="input-with-button">
+                    <input type="email" id="cfg-email" class="form-control" readonly placeholder="seuemail@exemplo.com">
+                    <button type="button" class="btn-inline-action" id="btn-alterar-email">
+                      <i class="ri-edit-line"></i> Alterar
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="cfg-username">Nome de usuário *</label>
+                  <input type="text" id="cfg-username" class="form-control" required placeholder="nomeusuario">
+                </div>
+
+                <div class="form-group">
+                  <label for="cfg-tema">Tema</label>
+                  <select id="cfg-tema" class="form-control">
+                    <option value="Claro">Claro</option>
+                    <option value="Escuro">Escuro</option>
+                    <option value="Automático">Automático (Sistema)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="config-card-footer">
+                <button type="submit" class="btn-save-green" id="btn-salvar-perfil">
+                  <i class="ri-save-line"></i> Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- SEGURANÇA -->
+          <div class="config-card" style="margin-top: 24px;">
+            <div class="config-card-header">
+              <h3>Segurança</h3>
+              <p>Proteja o acesso à sua conta.</p>
+            </div>
+
+            <div class="security-item">
+              <div class="security-info">
+                <h4>Senha</h4>
+                <p>Para alterar sua senha, clique no botão abaixo.</p>
+              </div>
+              <div class="security-actions">
+                <button type="button" class="btn-outline" id="btn-modal-nova-senha">
+                  <i class="ri-key-line"></i> Trocar Senha
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+
+</html>

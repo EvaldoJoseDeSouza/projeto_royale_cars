@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cadastrar Nova Locação</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./modal.css" />
+
+    <style>
+      .resumo-valores {
+        background-color: #f8f9fa;
+        border-left: 4px solid var(--blue-dark);
+        padding: 10px 15px;
+        border-radius: 6px;
+        margin-top: 5px;
+        margin-bottom: 5px;
+      }
+      .resumo-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        margin-bottom: 3px;
+        color: #555;
+      }
+      .resumo-row.total {
+        border-top: 1px dashed var(--border-color);
+        padding-top: 4px;
+        margin-top: 4px;
+        font-weight: bold;
+        font-size: 0.95rem;
+        color: var(--blue-dark);
+      }
+    </style>
+    
+  </head>
+  <body>
+    <div class="modal-header">
+      <h3>Cadastrar Locação</h3>
+      <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+        <i class="ri-close-line" style="font-size: 1.2rem; display: block"></i>
+      </button>
+    </div>
+
+    <div class="modal-content">
+      <form id="form-nova-locacao">
+        <div class="form-group">
+          <label for="select-cliente">Cliente *</label>
+          <select id="select-cliente" required>
+            <option value="">Carregando clientes...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="select-veiculo">Veículo Disponível *</label>
+          <select id="select-veiculo" required>
+            <option value="">Carregando veículos disponíveis...</option>
+          </select>
+        </div>
+
+        <div class="row-inputs">
+          <div class="form-group">
+            <label for="data-inicio">Data de Retirada *</label>
+            <input type="date" id="data-inicio" required />
+          </div>
+
+          <div class="form-group">
+            <label for="data-fim">Data de Devolução *</label>
+            <input type="date" id="data-fim" required />
+          </div>
+        </div>
+
+        <div class="resumo-valores">
+          <div class="resumo-row">
+            <span>Valor da Diária:</span>
+            <span id="resumo-diaria">R$ 0,00</span>
+          </div>
+          <div class="resumo-row">
+            <span>Total de Dias:</span>
+            <span id="resumo-dias">0 dias</span>
+          </div>
+          <div class="resumo-row total">
+            <span>Valor Total:</span>
+            <span id="resumo-total">R$ 0,00</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" id="btn-cancelar">
+            Cancelar
+          </button>
+          <button type="submit" class="btn-save">Confirmar Locação</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="./modalLocacao.js"></script>
+  </body>
+</html>

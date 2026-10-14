@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Royale Cars</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+
+<body>
+
+  <div class="login-container">
+
+    <div class="login-banner">
+      <div class="banner-content">
+        <h1>Gestão completa</h1>
+        <h2>para sua locadora.</h2>
+        <p>Controle frotas, contratos, clientes e finanças em uma única plataforma.</p>
+      </div>
+      <div class="banner-footer">
+        © 2026 Royale Cars. Todos os direitos reservados.
+      </div>
+    </div>
+
+    <div class="login-form-side">
+      <div class="form-wrapper">
+
+        <div class="form-header">
+          <div class="logo-wrapper">
+            <img src="../main/icone.png" class="login-logo-img" alt="Royale Cars Logo">
+          </div>
+          <h2 class="logo-text">
+            <span class="brand-royale">ROYALE</span><span class="brand-cars"> CARS</span>
+          </h2>
+        </div>
+
+        <div id="wrapper-login">
+          <form id="form-login">
+            <div class="input-group">
+              <label for="email">E-mail ou Usuário *</label>
+              <input type="text" id="email" name="email" placeholder="E-mail ou Usuário" required
+                autocomplete="username">
+            </div>
+
+            <div class="input-group">
+              <div class="label-row"
+                style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <label for="senha">Senha *</label>
+                <a href="#" id="link-esqueci"
+                  style="font-size: 0.85rem; color: #010d3d; text-decoration: none; font-weight: 600;">Esqueci a
+                  senha?</a>
+              </div>
+              <div class="password-wrapper"
+                style="position: relative; display: flex; align-items: center; width: 100%;">
+                <input type="password" id="senha" name="senha" placeholder="••••••••" required
+                  autocomplete="current-password" style="width: 100%; padding-right: 45px;">
+                <button type="button" id="btn-olho-login"
+                  style="position: absolute; right: 12px; background: none; border: none; color: #adb5bd; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">
+                  <i id="ic-olho-login" class="ri-eye-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-entrar" id="btn-login">
+              <span id="btn-texto">Entrar no Sistema</span>
+
+              <span id="btn-spinner" class="btn-status-container" style="display: none;">
+                <svg class="spinner-icon" viewBox="0 0 50 50">
+                  <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                </svg>
+                Autenticando...
+              </span>
+
+              <span id="btn-check" class="btn-status-container" style="display: none;">
+                <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12\"></polyline>
+                </svg>
+                Login Autorizado!
+              </span>
+            </button>
+          </form>
+
+          <div class="divider"><span>ou</span></div>
+          <div class="signup-footer">
+            <p>Não tem uma conta? <a href="#" id="link-ir-cadastro">Criar Conta</a></p>
+          </div>
+        </div>
+
+        <div id="wrapper-cadastro" style="display: none;">
+          <form id="form-criar-conta">
+            <div class="input-group">
+              <label for="reg-empresa">Nome de Usuário *</label>
+              <input type="text" id="reg-empresa" placeholder="Ex: joao_silva" required autocomplete="username">
+            </div>
+
+            <div class="input-group">
+              <label for="reg-email">E-mail Corporativo *</label>
+              <input type="email" id="reg-email" placeholder="seuemail@empresa.com" required>
+            </div>
+
+            <div class="input-group">
+              <label for="reg-senha">Criar Senha *</label>
+              <div class="password-wrapper"
+                style="position: relative; display: flex; align-items: center; width: 100%;">
+                <input type="password" id="reg-senha" placeholder="••••••••" required
+                  style="width: 100%; padding-right: 45px;">
+                <button type="button" id="btn-olho-cadastro"
+                  style="position: absolute; right: 12px; background: none; border: none; color: #adb5bd; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">
+                  <i id="ic-olho-cadastro" class="ri-eye-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-entrar" id="btn-registrar">
+              <span>Criar Minha Conta</span>
+            </button>
+          </form>
+
+          <div class="signup-footer">
+            <p>Já tem uma conta? <a href="#" id="link-ir-login">Fazer Login</a></p>
+          </div>
+        </div>
+        <div id="wrapper-esqueci-senha" style="display: none;">
+          <div id="esqueci-passo-email">
+            <div class="input-group">
+              <label for="esqueci-email">E-mail cadastrado *</label>
+              <input type="email" id="esqueci-email" placeholder="seuemail@empresa.com" required>
+            </div>
+            <button type="button" class="btn-entrar" id="btn-verificar-email">
+              <span id="btn-verificar-texto">Continuar</span>
+
+              <span id="btn-verificar-spinner" class="btn-status-container" style="display: none;">
+                <svg class="spinner-icon" viewBox="0 0 50 50">
+                  <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                </svg>
+                Verificando...
+              </span>
+
+              <span id="btn-verificar-check" class="btn-status-container" style="display: none;">
+                <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                E-mail encontrado!
+              </span>
+            </button>
+          </div>
+
+          <div id="esqueci-passo-senha" style="display: none;">
+            <div class="input-group">
+              <label for="esqueci-nova-senha">Nova Senha *</label>
+              <div class="password-wrapper"
+                style="position: relative; display: flex; align-items: center; width: 100%;">
+                <input type="password" id="esqueci-nova-senha" placeholder="••••••••" required
+                  style="width: 100%; padding-right: 45px;">
+                <button type="button" id="btn-olho-esqueci-nova"
+                  style="position: absolute; right: 12px; background: none; border: none; color: #adb5bd; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">
+                  <i id="ic-olho-esqueci-nova" class="ri-eye-line"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="esqueci-confirmar-senha">Confirmar Nova Senha *</label>
+              <div class="password-wrapper"
+                style="position: relative; display: flex; align-items: center; width: 100%;">
+                <input type="password" id="esqueci-confirmar-senha" placeholder="••••••••" required
+                  style="width: 100%; padding-right: 45px;">
+                <button type="button" id="btn-olho-esqueci-confirmar"
+                  style="position: absolute; right: 12px; background: none; border: none; color: #adb5bd; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;">
+                  <i id="ic-olho-esqueci-confirmar" class="ri-eye-line"></i>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="btn-entrar" id="btn-redefinir-senha">Redefinir Senha</button>
+
+            <div class="signup-footer">
+              <p>Lembrou a senha? <a href="#" id="link-voltar-login-esqueci">Fazer Login</a></p>
+            </div>
+          </div>
+
+        </div>
+        <script src="renderer.js"></script>
+</body>
+
+</html>
