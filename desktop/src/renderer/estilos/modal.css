@@ -385,3 +385,12 @@ body {
   flex-shrink: 0;
   border-top: 1px solid #f1f5f9;
 }
+
+/* Campo travado (ex.: quilometragem de carro alugado): cinza, para ficar
+   claro que não dá para editar */
+input[readonly] {
+  background: #eef1f5;
+  color: #777;
+  cursor: not-allowed;
+}
+

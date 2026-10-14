@@ -29,7 +29,8 @@ src/
 │       ├── sessao.js         login, troca de senha, Minha conta
 │       ├── modelos.js        modelos de permissão
 │       ├── colaboradores.js  a equipe (usa a Edge Function admin-usuarios)
-│       └── clientes.js       clientes
+│       ├── clientes.js       clientes
+│       └── frota.js          veículos
 ├── preload/preload.js        a ponte entre as telas e o processo principal
 ├── imagens/                  ícone do sistema (bandeja e telas)
 └── renderer/                 as telas, organizadas por tela
@@ -48,7 +49,7 @@ src/
     ├── estilos/              CSS usado por várias telas (modal.css)
     └── compartilhado/        JavaScript usado por várias telas
         ├── permissoes.js     a lista das 13 permissões (um lugar só)
-        └── formatos.js       máscaras e formatos (CPF, telefone, data)
+        └── formatos.js       máscaras e formatos (CPF, telefone, placa, dinheiro, data)
 ```
 
 A regra é simples: **tudo de uma tela fica na pasta dela** (HTML, JavaScript e o CSS só

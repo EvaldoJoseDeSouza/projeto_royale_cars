@@ -964,3 +964,13 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 .card-desativado {
   opacity: 0.7;
 }
+
+/* Frota: quilometragem no cartão do veículo */
+.vehicle-km {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+

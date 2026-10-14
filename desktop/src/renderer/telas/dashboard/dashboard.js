@@ -313,33 +313,40 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    listaCarros.forEach(carro => {
-      let classeStatus = "status-disponivel";
-      if (carro.status === "Alugado") classeStatus = "status-alugado";
-      if (carro.status === "Em Manutenção") classeStatus = "status-manutencao";
+    // Cor da etiqueta de cada status. Os textos são EXATAMENTE os do banco
+    // (tipo status_veiculo): "Em manutenção" com m minúsculo.
+    const CLASSE_POR_STATUS = {
+      'Disponível': 'status-disponivel',
+      'Alugado': 'status-alugado',
+      'Em manutenção': 'status-manutencao',
+    };
 
-      const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(carro.diaria);
+    listaCarros.forEach(carro => {
+      const classeStatus = CLASSE_POR_STATUS[carro.status] || 'status-disponivel';
       const card = document.createElement('div');
       card.className = modoArquivado ? 'vehicle-card card-arquivado' : 'vehicle-card';
 
       const dropdownHtml = modoArquivado
-        ? `<button class="card-dropdown-item reativar-btn" data-id="${carro.id}"><i class="ri-arrow-go-back-line"></i> Reativar</button>`
-        : `<button class="card-dropdown-item edit-btn" data-id="${carro.id}"><i class="ri-edit-line"></i> Editar</button>
-         <button class="card-dropdown-item delete-item archive-btn" data-id="${carro.id}"><i class="ri-archive-line"></i> Arquivar</button>`;
+        ? `<button class="card-dropdown-item reativar-btn"><i class="ri-arrow-go-back-line"></i> Reativar</button>`
+        : `<button class="card-dropdown-item edit-btn"><i class="ri-edit-line"></i> Editar</button>
+         <button class="card-dropdown-item delete-item archive-btn"><i class="ri-archive-line"></i> Arquivar</button>`;
 
+      // formatarPlaca, formatarDinheiro, formatarKm e escaparHtml vêm de
+      // compartilhado/formatos.js
       card.innerHTML = `
       <button class="btn-card-options"><i class="ri-more-2-fill"></i></button>
       <div class="card-dropdown">
         ${dropdownHtml}
       </div>
-      <span class="status-badge ${classeStatus}">${carro.status}</span>
+      <span class="status-badge ${classeStatus}">${escaparHtml(carro.status)}</span>
       <div class="vehicle-info">
-        <h4>${carro.modelo}</h4>
-        <p>${carro.marca}</p>
+        <h4>${escaparHtml(carro.modelo)}</h4>
+        <p>${escaparHtml(carro.marca)} · ${carro.ano}</p>
       </div>
+      <div class="vehicle-km"><i class="ri-dashboard-3-line"></i> ${formatarKm(carro.quilometragem)}</div>
       <div class="vehicle-details">
-        <span class="vehicle-plate">${carro.placa}</span>
-        <span class="vehicle-price">${precoFormatado}/dia</span>
+        <span class="vehicle-plate">${formatarPlaca(carro.placa)}</span>
+        <span class="vehicle-price">${formatarDinheiro(carro.valor_diaria)}/dia</span>
       </div>
     `;
 
@@ -372,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const confirmou = await window.apiAcesso.confirmar({
             titulo: "Arquivar Veículo",
-            mensagem: "Quer mesmo arquivar este veículo? Ele será movido para os arquivados e não aparecerá mais nas listagens ativas. O histórico de locações será mantido, e você pode reativá-lo quando quiser.",
+            mensagem: `Arquivar o ${carro.marca} ${carro.modelo} (${formatarPlaca(carro.placa)})? Ele sai da frota, mas o histórico de locações fica guardado e dá para reativar quando quiser.`,
             textoConfirmar: "Arquivar",
             tipo: "perigo"
           });
@@ -398,8 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let listaFiltrada = listaBase;
 
     if (termo) {
+      // A placa está guardada sem hífen: tiramos o hífen do que foi digitado
+      const termoPlaca = termo.toUpperCase().replace(/[^A-Z0-9]/g, '');
       listaFiltrada = listaFiltrada.filter(carro =>
-        (carro.placa || '').toLowerCase().includes(termo) ||
+        (termoPlaca && (carro.placa || '').includes(termoPlaca)) ||
         (carro.modelo || '').toLowerCase().includes(termo) ||
         (carro.marca || '').toLowerCase().includes(termo)
       );

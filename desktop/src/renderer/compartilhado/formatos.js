@@ -33,6 +33,31 @@ function formatarTelefone(valor) {
   return '';
 }
 
+// Placa: o banco guarda "ABC1234" ou "ABC1D23" (sem hífen).
+// Na tela, o padrão antigo ganha o hífen: "ABC-1234". O Mercosul fica igual.
+// Também serve enquanto a pessoa digita (tira o que não é letra/número).
+function formatarPlaca(valor) {
+  const p = String(valor ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  return /^[A-Z]{3}\d{4}$/.test(p) ? `${p.slice(0, 3)}-${p.slice(3)}` : p;
+}
+
+// 1234.5 → "R$ 1.234,50"
+function formatarDinheiro(valor) {
+  return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Máscara de dinheiro para digitar: cada número entra pela direita,
+// como numa máquina de cartão. "59000" → "R$ 590,00"
+function mascaraDinheiro(valor) {
+  const centavos = soDigitos(valor);
+  return centavos ? formatarDinheiro(Number(centavos) / 100) : '';
+}
+
+// 24260 → "24.260 km"
+function formatarKm(valor) {
+  return `${Number(valor || 0).toLocaleString('pt-BR')} km`;
+}
+
 // "2027-03-15" → "15/03/2027" (sem passar por Date: não sofre com fuso horário)
 function formatarData(dataTexto) {
   if (!dataTexto) return '-';

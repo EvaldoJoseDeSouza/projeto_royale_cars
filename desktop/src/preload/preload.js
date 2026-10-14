@@ -13,9 +13,9 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     pedirFrotaArquivada: () => ipcRenderer.invoke('buscar-frota-arquivada'),
     abrirModalCadastro: () => ipcRenderer.send('abrir-modal-veiculo'),
     fecharModalCadastro: () => ipcRenderer.send('fechar-modal-veiculo'),
-    salvarVeiculo: (dados) => ipcRenderer.invoke('salvar-veiculo-banco', dados),
-    arquivarVeiculo: (idVeiculo) => ipcRenderer.invoke('arquivar-veiculo-banco', idVeiculo),
-    reativarVeiculo: (idVeiculo) => ipcRenderer.invoke('reativar-veiculo-banco', idVeiculo),
+    salvarVeiculo: (dados) => ipcRenderer.invoke('salvar-veiculo', dados),
+    arquivarVeiculo: (idVeiculo) => ipcRenderer.invoke('arquivar-veiculo', idVeiculo),
+    reativarVeiculo: (idVeiculo) => ipcRenderer.invoke('reativar-veiculo', idVeiculo),
     aoAtualizarFrota: (funcao) => ipcRenderer.on('frota-atualizada', (event, ...args) => funcao(...args)),
 
     // ======================== CLIENTE ===============================

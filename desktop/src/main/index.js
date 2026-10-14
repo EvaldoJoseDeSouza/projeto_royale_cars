@@ -8,6 +8,7 @@ const { registrarIpcSessao } = require("./ipc/sessao");
 const { registrarIpcModelos } = require("./ipc/modelos");
 const { registrarIpcColaboradores } = require("./ipc/colaboradores");
 const { registrarIpcClientes } = require("./ipc/clientes");
+const { registrarIpcFrota } = require("./ipc/frota");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -336,48 +337,8 @@ function mostrarAviso(janelaMae, { tipo, titulo, mensagem, textoConfirmar }) {
 }
 
 // =========================== FROTAS ======================
-ipcMain.handle("buscar-frota", async () => {
-  try {
-    console.log("Buscando frota filtrada para a empresa: ${idEmpresaLogada}");
-
-    const { data, error } = await supabase
-      .from("veiculos")
-      .select("*")
-      .eq("id_empresa", idEmpresaLogada)
-      .eq("ativo", true)
-      .order("id", { ascending: true });
-
-    if (error) {
-      console.error("Erro ao buscar frota:", error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error("Erro inesperado ao buscar frota:", err);
-    return [];
-  }
-});
-
-ipcMain.handle("buscar-frota-arquivada", async () => {
-  try {
-    const { data, error } = await supabase
-      .from("veiculos")
-      .select("*")
-      .eq("id_empresa", idEmpresaLogada)
-      .eq("ativo", false)
-      .order("id", { ascending: true });
-
-    if (error) {
-      console.error("Erro ao buscar frota arquivada:", error.message);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error("Erro inesperado ao buscar frota arquivada:", err);
-    return [];
-  }
-});
-
+// Listar, salvar, arquivar e reativar ficam em main/ipc/frota.js.
+// Aqui ficam só a abertura e o fechamento do modal.
 ipcMain.on("abrir-modal-veiculo", (evento) => {
   if (janelaModalVeiculo) {
     janelaModalVeiculo.focus();
@@ -387,8 +348,8 @@ ipcMain.on("abrir-modal-veiculo", (evento) => {
   const janelaMae = BrowserWindow.fromWebContents(evento.sender);
 
   janelaModalVeiculo = new BrowserWindow({
-    width: 480,
-    height: 540,
+    width: 520,
+    height: 530,
     parent: janelaMae,
     modal: true,
     frame: false,
@@ -414,159 +375,12 @@ ipcMain.on("fechar-modal-veiculo", () => {
   if (janelaModalVeiculo) janelaModalVeiculo.close();
 });
 
-ipcMain.handle("salvar-veiculo-banco", async (event, dadosVeiculo) => {
-  try {
-    if (await negarSemPermissao(janelaModalVeiculo, "veiculos_gerenciar")) return { sucesso: false };
-
-    let query;
-
-    if (dadosVeiculo.id) {
-      query = supabase
-        .from("veiculos")
-        .update({
-          modelo: dadosVeiculo.modelo,
-          marca: dadosVeiculo.marca,
-          placa: dadosVeiculo.placa,
-          diaria: dadosVeiculo.diaria,
-          status: dadosVeiculo.status,
-        })
-        .eq("id", dadosVeiculo.id);
-    } else {
-      const novoVeiculo = {
-        ...dadosVeiculo,
-        id_empresa: idEmpresaLogada,
-      };
-
-      query = supabase.from("veiculos").insert([novoVeiculo]);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      console.error("Erro ao salvar veículo no Supabase:", error.message);
-      await mostrarAviso(janelaModalVeiculo, {
-        tipo: "erro",
-        titulo: "Erro na Operação",
-        mensagem:
-          `Não foi possível salvar os dados do veículo. Motivo: ${error.message}`,
-      });
-      return { sucesso: false, mensagem: error.message };
-    }
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("frota-atualizada");
-    }
-
-    await mostrarAviso(janelaModalVeiculo, {
-      tipo: "sucesso",
-      titulo: "Sucesso",
-      mensagem: dadosVeiculo.id
-        ? `O modelo ${dadosVeiculo.modelo} foi atualizado com sucesso!`
-        : `O modelo ${dadosVeiculo.modelo} foi cadastrado com sucesso!`,
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro interno ao salvar veículo:", err);
-    return { sucesso: false, mensagem: "Erro interno no servidor." };
-  }
+registrarIpcFrota({
+  mostrarAviso,
+  obterJanelaDashboard: () => janelaDashboard,
+  obterJanelaVeiculo: () => janelaModalVeiculo,
 });
 
-ipcMain.handle("arquivar-veiculo-banco", async (event, idVeiculo) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "veiculos_arquivar")) return { sucesso: false };
-
-    const { data: locacoesAtivas, error: erroLocacoes } = await supabase
-      .from("locacoes")
-      .select("id")
-      .eq("id_veiculo", idVeiculo)
-      .eq("status", "Ativo");
-
-    if (erroLocacoes) {
-      console.error(
-        "Erro ao verificar locações do veículo:",
-        erroLocacoes.message,
-      );
-      await mostrarAviso(janelaDashboard, {
-        tipo: "erro",
-        titulo: "Erro na Verificação",
-        mensagem:
-          "Não foi possivel verificar as locações deste veículo. Tente novamente.",
-      });
-      return { sucesso: false };
-    }
-
-    if (locacoesAtivas && locacoesAtivas.length > 0) {
-      await mostrarAviso(janelaDashboard, {
-        tipo: "erro",
-        titulo: "Não é Possível Arquivar",
-        mensagem:
-          "Este veículo está com uma locação ativa no momento. Finalize a locação antes de arquivá-lo.",
-      });
-      return { sucesso: false };
-    }
-
-    const { error } = await supabase
-      .from("veiculos")
-      .update({ ativo: false })
-      .eq("id", idVeiculo);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("frota-atualizada");
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: "sucesso",
-      titulo: "Veículo Arquivado",
-      mensagem: "O veículo foi movido para os arquivos com sucesso!",
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro ao arquivar veículo:", err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: "erro",
-      titulo: "Erro ao Arquivar",
-      mensagem: "Não foi possivel arquivar o veículo. Tente novamente.",
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
-
-ipcMain.handle("reativar-veiculo-banco", async (event, idVeiculo) => {
-  try {
-    if (await negarSemPermissao(janelaDashboard, "veiculos_arquivar")) return { sucesso: false };
-
-    const { error } = await supabase
-      .from("veiculos")
-      .update({ ativo: true })
-      .eq("id", idVeiculo);
-
-    if (error) throw error;
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("frota-atualizada");
-    }
-
-    await mostrarAviso(janelaDashboard, {
-      tipo: "sucesso",
-      titulo: "Veículo Reativado",
-      mensagem: "O veículo voltou a aparecer nas listagens ativas!",
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro ao reativar veículo:", err.message);
-    await mostrarAviso(janelaDashboard, {
-      tipo: "erro",
-      titulo: "Erro ao Reativar",
-      mensagem: "Não foi possível reativar o veículo. Tente novamente.",
-    });
-    return { sucesso: false, mensagem: err.message };
-  }
-});
 
 // =============== CLIENTES ===================
 // Listar, salvar, arquivar e reativar ficam em main/ipc/clientes.js.

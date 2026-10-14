@@ -1,115 +1,98 @@
+// =====================================================================
+//  Modal de veículo: cadastrar ou editar
+// ---------------------------------------------------------------------
+//  Não tem campo de status: quem muda o status são os aluguéis e as
+//  manutenções (ver main/ipc/frota.js). Na edição, o status atual só
+//  aparece escrito, para informação.
+//
+//  formatarPlaca, mascaraDinheiro, formatarDinheiro, soDigitos e
+//  aplicarMascara vêm de ../../compartilhado/formatos.js.
+// =====================================================================
+
 document.addEventListener('DOMContentLoaded', () => {
-    const btnFecharTopo = document.getElementById('btn-fechar-topo');
-    const btnCancelar = document.getElementById('btn-cancelar');
-    const formCadastro = document.getElementById('form-cadastro-veiculo');
-    const inputPlaca = document.getElementById('placa');
-    const inputDiaria = document.getElementById('diaria');
+  const form = document.getElementById('form-cadastro-veiculo');
+  const btnSalvar = document.getElementById('btn-salvar');
 
-    let idVeiculoEdicao = null;
+  const campos = {
+    marca: document.getElementById('marca'),
+    modelo: document.getElementById('modelo'),
+    ano: document.getElementById('ano'),
+    placa: document.getElementById('placa'),
+    chassi: document.getElementById('chassi'),
+    valor_diaria: document.getElementById('valor-diaria'),
+    quilometragem: document.getElementById('quilometragem'),
+  };
 
-    const veiculoSessao = localStorage.getItem('veiculoParaEditar');
-    if (veiculoSessao) {
-        try {
-            const carro = JSON.parse(veiculoSessao);
-            idVeiculoEdicao = carro.id;
+  // O ano máximo é o do ano que vem (carro "ano/modelo" seguinte)
+  campos.ano.max = new Date().getFullYear() + 1;
 
-            document.getElementById('modelo').value = carro.modelo || '';
-            document.getElementById('marca').value = carro.marca || '';
-            if (inputPlaca) inputPlaca.value = carro.placa || '';
-            
-            const tituloModal = document.querySelector('.modal-header h3') || document.querySelector('h2');
-            if (tituloModal) tituloModal.textContent = 'Editar Veículo';
-            
-            const btnSalvarTexto = formCadastro ? formCadastro.querySelector('.btn-save') : null;
-            if (btnSalvarTexto) btnSalvarTexto.textContent = 'Salvar Alterações';
+  // Máscaras: só ajudam a digitar. Quem limpa e confere é o processo principal.
+  aplicarMascara(campos.placa, formatarPlaca);
+  aplicarMascara(campos.chassi, (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 17));
+  aplicarMascara(campos.valor_diaria, mascaraDinheiro);
+  aplicarMascara(campos.quilometragem, (v) => {
+    const numeros = soDigitos(v).slice(0, 7);
+    return numeros ? Number(numeros).toLocaleString('pt-BR') : '';
+  });
 
-            if (inputDiaria && carro.diaria) {
-                const opcoes = { minimumFractionDigits: 2, style: 'currency', currency: 'BRL' };
-                inputDiaria.value = new Intl.NumberFormat('pt-BR', opcoes).format(carro.diaria);
-            }
-            
-            if (document.getElementById('status')) {
-                document.getElementById('status').value = carro.status || 'Disponível';
-            }
-        } catch (err) {
-            console.error('Erro ao mapear veículo para edição:', err);
-        }
+  // Se o dashboard deixou um veículo no localStorage, estamos EDITANDO
+  let veiculoEditando = null;
+  try {
+    const salvo = localStorage.getItem('veiculoParaEditar');
+    if (salvo) veiculoEditando = JSON.parse(salvo);
+  } catch (e) {
+    veiculoEditando = null;
+  }
+  localStorage.removeItem('veiculoParaEditar'); // usou, apagou
 
-        localStorage.removeItem('veiculoParaEditar');
+  if (veiculoEditando) {
+    document.getElementById('titulo-modal-veiculo').textContent = 'Editar Veículo';
+    btnSalvar.textContent = 'Salvar Alterações';
+
+    // textContent + <strong> criado à parte: o status vem do banco
+    const textoStatus = document.getElementById('texto-status');
+    textoStatus.textContent = 'Status atual: ';
+    const destaque = document.createElement('strong');
+    destaque.textContent = veiculoEditando.status;
+    textoStatus.append(destaque, ' (muda sozinho com aluguéis e manutenções).');
+
+    campos.marca.value = veiculoEditando.marca || '';
+    campos.modelo.value = veiculoEditando.modelo || '';
+    campos.ano.value = veiculoEditando.ano || '';
+    campos.placa.value = formatarPlaca(veiculoEditando.placa);
+    campos.chassi.value = veiculoEditando.chassi || '';
+    campos.valor_diaria.value = formatarDinheiro(veiculoEditando.valor_diaria);
+    campos.quilometragem.value = Number(veiculoEditando.quilometragem || 0).toLocaleString('pt-BR');
+
+    // Carro alugado: a quilometragem é atualizada na devolução (regra do banco)
+    if (veiculoEditando.status === 'Alugado') {
+      campos.quilometragem.readOnly = true;
+      campos.quilometragem.title = 'Atualizada na devolução';
     }
+  }
 
-    if (inputPlaca) {
-        inputPlaca.addEventListener('input', (e) => {
-            let value = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-            if (value.length > 7) value = value.slice(0, 7);
+  function fechar() {
+    window.apiAcesso.fecharModalCadastro();
+  }
+  document.getElementById('btn-cancelar').addEventListener('click', fechar);
+  document.getElementById('btn-fechar-topo').addEventListener('click', fechar);
 
-            if (value.length === 7 && /^[A-Z]{3}[0-9]{4}$/.test(value)) {
-                value = value.replace(/^([A-Z]{3})([0-9]{4})$/, '$1-$2');
-            }
-            e.target.value = value;
-        });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const dados = { id: veiculoEditando ? veiculoEditando.id : null };
+    Object.keys(campos).forEach((chave) => {
+      dados[chave] = campos[chave].value;
+    });
+
+    btnSalvar.disabled = true;
+    try {
+      const resposta = await window.apiAcesso.salvarVeiculo(dados);
+      if (resposta && resposta.sucesso) fechar();
+    } catch (erro) {
+      console.error('Erro ao salvar veículo:', erro);
+    } finally {
+      btnSalvar.disabled = false;
     }
-
-    if (inputDiaria) {
-        inputDiaria.addEventListener('input', (e) => {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value === '') {
-                e.target.value = '';
-                return;
-            }
-            const opcoes = { minimumFractionDigits: 2, style: 'currency', currency: 'BRL' };
-            const valorFormatado = new Intl.NumberFormat('pt-BR', opcoes).format(parseFloat(value) / 100);
-            e.target.value = valorFormatado;
-        });
-    }
-
-    if (btnFecharTopo) {
-        btnFecharTopo.addEventListener('click', () => {
-            window.apiAcesso.fecharModalCadastro();
-        });
-    }
-
-    if (btnCancelar) {
-        btnCancelar.addEventListener('click', () => {
-            window.apiAcesso.fecharModalCadastro();
-        });
-    }
-
-    if (formCadastro) {
-        formCadastro.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const btnSalvar = formCadastro.querySelector('.btn-save');
-            if (btnSalvar) btnSalvar.disabled = true;
-
-            const valorDiariaRaw = document.getElementById('diaria').value;
-            const valorLimpo = valorDiariaRaw
-                .replace(/[R$\s]/g, '')    
-                .replace(/\./g, '')       
-                .replace(',', '.');        
-
-            const valorFinalDiaria = parseFloat(valorLimpo) || 0;
-
-            const dadosVeiculo = {
-                modelo: document.getElementById('modelo').value,
-                marca: document.getElementById('marca').value,
-                placa: document.getElementById('placa').value.toUpperCase(),
-                diaria: valorFinalDiaria, 
-                status: document.getElementById('status').value
-            };
-
-            if (idVeiculoEdicao) {
-                dadosVeiculo.id = idVeiculoEdicao;
-            }
-
-            const resposta = await window.apiAcesso.salvarVeiculo(dadosVeiculo);
-
-            if (resposta.sucesso) {
-                sessionStorage.removeItem('veiculoParaEditar');
-                window.apiAcesso.fecharModalCadastro();
-            } else {
-                if (btnSalvar) btnSalvar.disabled = false;
-            }
-        });
-    }
+  });
 });

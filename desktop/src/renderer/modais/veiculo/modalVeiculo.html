@@ -3,77 +3,72 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cadastrar Novo Veículo</title>
+    <title>Veículo</title>
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
     <link rel="stylesheet" href="../../estilos/modal.css" />
   </head>
   <body>
     <div class="modal-header">
-      <h3>Cadastrar Veículo</h3>
+      <h3 id="titulo-modal-veiculo">Cadastrar Veículo</h3>
       <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
         <i class="ri-close-line" style="font-size: 1.2rem; display: block;"></i>
       </button>
     </div>
 
     <div class="modal-content">
-      <form id="form-cadastro-veiculo">
-        <div class="form-group">
-          <label for="modelo">Modelo de Carro *</label>
-          <input
-            type="text"
-            id="modelo"
-            placeholder="Ex: Mustang GT"
-            required
-          />
-        </div>
+      <!-- O status não é escolhido aqui: muda sozinho com aluguéis e manutenções -->
+      <p id="texto-status" style="font-size:0.85rem; color:#777; margin-bottom:14px;">
+        O veículo entra na frota como <strong>Disponível</strong>. Depois o status muda sozinho com os aluguéis e as manutenções.
+      </p>
 
-        <div class="form-group">
-          <label for="marca">Marca / Fabricante *</label>
-          <input type="text" id="marca" placeholder="Ex: Ford" required />
+      <form id="form-cadastro-veiculo">
+        <div class="row-inputs">
+          <div class="form-group">
+            <label for="marca">Marca *</label>
+            <input type="text" id="marca" maxlength="100" placeholder="Ex: Ford" required />
+          </div>
+          <div class="form-group">
+            <label for="modelo">Modelo *</label>
+            <input type="text" id="modelo" maxlength="100" placeholder="Ex: Mustang GT" required />
+          </div>
         </div>
 
         <div class="row-inputs">
           <div class="form-group">
-            <label for="placa">Placa *</label>
-            <input
-              type="text"
-              id="placa"
-              placeholder="Ex: ABC-1234"
-              required
-              style="text-transform: uppercase"
-            />
+            <label for="ano">Ano *</label>
+            <input type="number" id="ano" min="1950" placeholder="Ex: 2024" required />
           </div>
-
           <div class="form-group">
-            <label for="diaria">Valor da Diária (R$) *</label>
-            <input
-              type="text"
-              id="diaria"
-              step="0.01"
-              placeholder="Ex: 590.00"
-              required
-            />
+            <label for="placa">Placa *</label>
+            <input type="text" id="placa" placeholder="ABC-1234 ou ABC1D23" required />
           </div>
         </div>
 
         <div class="form-group">
-          <label for="status">Status Inicial *</label>
-          <select id="status" required>
-            <option value="Disponível" selected>Disponível</option>
-            <option value="Alugado">Alugado</option>
-            <option value="Em Manutenção">Em Manutenção</option>
-          </select>
+          <label for="chassi">Chassi *</label>
+          <input type="text" id="chassi" maxlength="17" placeholder="17 letras/números" required
+            style="text-transform: uppercase" />
+        </div>
+
+        <div class="row-inputs">
+          <div class="form-group">
+            <label for="valor-diaria">Valor da diária *</label>
+            <input type="text" id="valor-diaria" inputmode="numeric" placeholder="R$ 0,00" required />
+          </div>
+          <div class="form-group">
+            <label for="quilometragem">Quilometragem *</label>
+            <input type="text" id="quilometragem" inputmode="numeric" placeholder="Ex: 15000" required />
+          </div>
         </div>
 
         <div class="modal-footer">
-          <button type="button" class="btn-cancel" id="btn-cancelar">
-            Cancelar
-          </button>
-          <button type="submit" class="btn-save">Salvar Veículo</button>
+          <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn-save" id="btn-salvar">Salvar Veículo</button>
         </div>
       </form>
     </div>
 
+    <script src="../../compartilhado/formatos.js"></script>
     <script src="./modalVeiculo.js"></script>
   </body>
 </html>
