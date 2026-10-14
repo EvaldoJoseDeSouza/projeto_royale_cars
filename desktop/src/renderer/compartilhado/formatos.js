@@ -72,9 +72,22 @@ function hojeTexto() {
   return d.toISOString().slice(0, 10);
 }
 
+// Dias entre duas datas "AAAA-MM-DD" (fim - início). Ex.: 10/10 → 13/10 = 3
+// (86400000 = milissegundos de um dia: 24 × 60 × 60 × 1000)
+function diasEntre(inicio, fim) {
+  return Math.round((new Date(fim) - new Date(inicio)) / 86400000);
+}
+
 // Quantos dias faltam até a data (negativo = já passou)
 function diasAte(dataTexto) {
-  return Math.round((new Date(dataTexto) - new Date(hojeTexto())) / 86400000);
+  return diasEntre(hojeTexto(), dataTexto);
+}
+
+// Soma (ou tira) dias de uma data "AAAA-MM-DD". Ex.: somarDias('2026-10-14', -30)
+function somarDias(dataTexto, dias) {
+  const d = new Date(dataTexto);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
 }
 
 // Liga a máscara num campo: a cada tecla, reescreve o texto formatado.

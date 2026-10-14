@@ -974,3 +974,40 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
   gap: 6px;
 }
 
+/* Locações: botões da tabela e etiqueta de cancelada */
+.acoes-locacao {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.btn-acao-tabela {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #fff;
+  background: #198754;
+  margin: 2px;
+}
+
+.btn-acao-tabela.btn-cancelar-locacao {
+  background: #fff;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.custom-table .status-badge {
+  white-space: nowrap; /* "Atrasada 2 dia(s)" numa linha só */
+}
+
+.status-cancelada {
+  background-color: #f1f5f9;
+  color: #64748b;
+}
+
+.custom-table td small {
+  color: var(--text-muted);
+}
+

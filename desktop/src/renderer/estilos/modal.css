@@ -152,6 +152,7 @@ body {
   color: #555555;
   margin-bottom: 18px;
   line-height: 1.4;
+  white-space: pre-line; /* respeita as quebras de linha da mensagem (\n) */
 }
 
 .icone-sucesso {
@@ -392,5 +393,50 @@ input[readonly] {
   background: #eef1f5;
   color: #777;
   cursor: not-allowed;
+}
+
+/* Quadro de resumo dos valores (retirada e devolução de locação) */
+.resumo-valores {
+  background-color: #f8f9fa;
+  border-left: 4px solid var(--blue-dark);
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin: 5px 0 12px;
+}
+.resumo-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 3px;
+  color: #555;
+}
+.resumo-row.total {
+  border-top: 1px dashed var(--border-color);
+  padding-top: 4px;
+  margin-top: 4px;
+  font-weight: bold;
+  font-size: 0.95rem;
+  color: var(--blue-dark);
+}
+.resumo-row.alerta {
+  color: var(--btn-danger);
+  font-weight: 600;
+}
+
+/* Explicação curta embaixo de um campo */
+.dica-campo {
+  font-size: 0.78rem;
+  color: #777;
+  margin-top: 4px;
+}
+
+textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
 }
 

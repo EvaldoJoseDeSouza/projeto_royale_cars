@@ -3,43 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cadastrar Nova Locação</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css"
-      rel="stylesheet"
-    />
+    <title>Nova Locação</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
     <link rel="stylesheet" href="../../estilos/modal.css" />
-
-    <style>
-      .resumo-valores {
-        background-color: #f8f9fa;
-        border-left: 4px solid var(--blue-dark);
-        padding: 10px 15px;
-        border-radius: 6px;
-        margin-top: 5px;
-        margin-bottom: 5px;
-      }
-      .resumo-row {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.85rem;
-        margin-bottom: 3px;
-        color: #555;
-      }
-      .resumo-row.total {
-        border-top: 1px dashed var(--border-color);
-        padding-top: 4px;
-        margin-top: 4px;
-        font-weight: bold;
-        font-size: 0.95rem;
-        color: var(--blue-dark);
-      }
-    </style>
-    
   </head>
   <body>
     <div class="modal-header">
-      <h3>Cadastrar Locação</h3>
+      <h3>Nova Locação (retirada)</h3>
       <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
         <i class="ri-close-line" style="font-size: 1.2rem; display: block"></i>
       </button>
@@ -52,51 +22,54 @@
           <select id="select-cliente" required>
             <option value="">Carregando clientes...</option>
           </select>
+          <p class="dica-campo">Clientes com CNH vencida aparecem bloqueados.</p>
         </div>
 
         <div class="form-group">
-          <label for="select-veiculo">Veículo Disponível *</label>
+          <label for="select-veiculo">Veículo disponível *</label>
           <select id="select-veiculo" required>
-            <option value="">Carregando veículos disponíveis...</option>
+            <option value="">Carregando veículos...</option>
           </select>
         </div>
 
         <div class="row-inputs">
           <div class="form-group">
-            <label for="data-inicio">Data de Retirada *</label>
-            <input type="date" id="data-inicio" required />
+            <label for="data-retirada">Retirada *</label>
+            <input type="date" id="data-retirada" required />
           </div>
-
           <div class="form-group">
-            <label for="data-fim">Data de Devolução *</label>
-            <input type="date" id="data-fim" required />
+            <label for="data-prevista">Devolução prevista *</label>
+            <input type="date" id="data-prevista" required />
+          </div>
+        </div>
+
+        <div class="row-inputs">
+          <div class="form-group">
+            <label for="km-saida">Quilometragem de saída *</label>
+            <input type="text" id="km-saida" inputmode="numeric" placeholder="Escolha o veículo" required />
+            <p class="dica-campo" id="dica-km">O número do painel na hora da retirada.</p>
+          </div>
+          <div class="form-group">
+            <label for="observacoes">Observações</label>
+            <input type="text" id="observacoes" maxlength="500" placeholder="Opcional" />
           </div>
         </div>
 
         <div class="resumo-valores">
-          <div class="resumo-row">
-            <span>Valor da Diária:</span>
-            <span id="resumo-diaria">R$ 0,00</span>
-          </div>
-          <div class="resumo-row">
-            <span>Total de Dias:</span>
-            <span id="resumo-dias">0 dias</span>
-          </div>
-          <div class="resumo-row total">
-            <span>Valor Total:</span>
-            <span id="resumo-total">R$ 0,00</span>
-          </div>
+          <div class="resumo-row"><span>Diária:</span><span id="resumo-diaria">R$ 0,00</span></div>
+          <div class="resumo-row"><span>Diárias previstas:</span><span id="resumo-dias">-</span></div>
+          <div class="resumo-row total"><span>Valor previsto:</span><span id="resumo-total">R$ 0,00</span></div>
         </div>
+        <p class="dica-campo">O valor final é calculado na devolução, pelos dias realmente usados.</p>
 
         <div class="modal-footer">
-          <button type="button" class="btn-cancel" id="btn-cancelar">
-            Cancelar
-          </button>
-          <button type="submit" class="btn-save">Confirmar Locação</button>
+          <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn-save" id="btn-salvar">Registrar retirada</button>
         </div>
       </form>
     </div>
 
+    <script src="../../compartilhado/formatos.js"></script>
     <script src="./modalLocacao.js"></script>
   </body>
 </html>

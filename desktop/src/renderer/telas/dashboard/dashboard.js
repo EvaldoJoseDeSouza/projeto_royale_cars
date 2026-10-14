@@ -236,13 +236,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ultimasCinco.forEach(loc => {
           const tr = document.createElement('tr');
-          const dataSaida = new Date(loc.data_inicio).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-
           tr.innerHTML = `
-            <td><strong>${loc.veiculos?.modelo || 'Desconhecido'}</strong> (${loc.veiculos?.placa || ''})</td>
-            <td>${loc.clientes?.nome || 'Cliente Oculto'}</td>
-            <td>${dataSaida}</td>
-            <td><span class="badge badge-green">${loc.status}</span></td>
+            <td><strong>${escaparHtml(loc.modelo)}</strong> (${formatarPlaca(loc.placa)})</td>
+            <td>${escaparHtml(loc.cliente_nome)}</td>
+            <td>${formatarData(loc.data_retirada)}</td>
+            <td>${etiquetaSituacao(loc.status_exibicao, loc.dias_atraso_atual)}</td>
           `;
           tabelaUltimasLocacoesBody.appendChild(tr);
         });
@@ -535,71 +533,68 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ============================== LOCAÇÕES ==============================
+  // As listas vêm da visão vw_locacoes do banco: cliente_nome, marca,
+  // modelo, placa e a situação de hoje (status_exibicao: "Em andamento",
+  // "Atrasada", "Finalizada" ou "Cancelada").
+
+  // Etiqueta colorida da situação do aluguel
+  function etiquetaSituacao(situacao, diasAtraso) {
+    const classes = {
+      'Em andamento': 'status-disponivel',
+      'Atrasada': 'status-alugado',
+      'Finalizada': 'status-disponivel',
+      'Cancelada': 'status-cancelada',
+    };
+    const texto = situacao === 'Atrasada' ? `Atrasada ${diasAtraso} dia(s)` : situacao;
+    return `<span class="status-badge ${classes[situacao] || ''}">${escaparHtml(texto)}</span>`;
+  }
+
+  function linhaVazia(colunas, texto) {
+    return `<tr><td colspan="${colunas}" style="text-align: center; color: var(--text-muted); padding: 20px;">${texto}</td></tr>`;
+  }
+
   function renderizarLocacoesAtivas(listaLocacoes) {
     if (!tabelaLocacoesAtivasBody) return;
     tabelaLocacoesAtivasBody.innerHTML = '';
 
     if (listaLocacoes.length === 0) {
-      tabelaLocacoesAtivasBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhuma locação em andamento no momento.</td></tr>`;
+      tabelaLocacoesAtivasBody.innerHTML = linhaVazia(7, 'Nenhuma locação em andamento no momento.');
       return;
     }
 
-    listaLocacoes.forEach(loc => {
-      const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(loc.valor_total);
-      const tr = document.createElement('tr');
+    const podeDevolver = tem('locacoes_gerenciar');
+    const podeCancelar = tem('locacoes_cancelar');
 
+    listaLocacoes.forEach(loc => {
+      const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><strong>${loc.clientes?.nome || 'Cliente não encontrado'}</strong></td>
-        <td>${loc.veiculos?.modelo || 'Veículo não encontrado'} (${loc.veiculos?.placa || ''})</td>
-        <td>${new Date(loc.data_inicio).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-        <td>${new Date(loc.data_fim).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-        <td><strong style="color: var(--blue-dark);">${valorFormatado}</strong></td>
-        <td><span class="badge badge-green">${loc.status}</span></td>
-        <td style="text-align: center;">
-          <button class="btn-dar-baixa" data-id="${loc.id}" data-veiculo="${loc.id_veiculo}" style="padding: 6px 12px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: background 0.2s;">
-            <i class="ri-checkbox-circle-fill"></i> Finalizar
-          </button>
+        <td><strong>${escaparHtml(loc.cliente_nome)}</strong><br><small>${formatarTelefone(loc.cliente_telefone)}</small></td>
+        <td>${escaparHtml(loc.marca)} ${escaparHtml(loc.modelo)}<br><small>${formatarPlaca(loc.placa)}</small></td>
+        <td>${formatarData(loc.data_retirada)}</td>
+        <td>${formatarData(loc.data_prevista)}</td>
+        <td><strong style="color: var(--blue-dark);">${formatarDinheiro(loc.valor_previsto)}</strong></td>
+        <td>${etiquetaSituacao(loc.status_exibicao, loc.dias_atraso_atual)}</td>
+        <td class="acoes-locacao">
+          ${podeDevolver ? '<button class="btn-acao-tabela btn-devolver"><i class="ri-checkbox-circle-line"></i> Devolver</button>' : ''}
+          ${podeCancelar ? '<button class="btn-acao-tabela btn-cancelar-locacao"><i class="ri-close-circle-line"></i> Cancelar</button>' : ''}
         </td>
       `;
-      tabelaLocacoesAtivasBody.appendChild(tr);
-    });
 
-    // Sem a permissão "locacoes_gerenciar", o botão Finalizar nem aparece
-    if (!tem('locacoes_gerenciar')) {
-      tabelaLocacoesAtivasBody.querySelectorAll('.btn-dar-baixa').forEach(b => b.remove());
-    }
-
-    tabelaLocacoesAtivasBody.querySelectorAll('.btn-dar-baixa').forEach(botao => {
-      botao.addEventListener('click', async () => {
-        const idLocacao = parseInt(botao.getAttribute('data-id'));
-        const idVeiculo = parseInt(botao.getAttribute('data-veiculo'));
-
-        const confirmou = await window.apiAcesso.confirmar({
-          titulo: "Finalizar Contrato",
-          mensagem: "Tem certeza que deseja encerrar esta locação e liberar o carro para a frota?",
-          textoConfirmar: "Confirmar Devolução",
-          tipo: "sucesso",
-          tipoCancelar: "perigo"
-        });
-
-        if (!confirmou) return;
-
-        try {
-          botao.disabled = true;
-          botao.textContent = "Processando...";
-          const resultado = await window.apiAcesso.finalizarLocacao(idLocacao, idVeiculo);
-          if (resultado && resultado.sucesso) {
-            switchView('view-locacoes-ativas');
-          } else {
-            botao.disabled = false;
-            botao.innerHTML = `<i class="ri-checkbox-circle-fill"></i> Finalizar`;
-          }
-        } catch (erro) {
-          console.error("Erro ao finalizar locação:", erro);
-          botao.disabled = false;
-          botao.innerHTML = `<i class="ri-checkbox-circle-fill"></i> Finalizar`;
-        }
+      // Entrega os dados do aluguel ao modal (mesmo padrão dos outros modais)
+      const devolver = tr.querySelector('.btn-devolver');
+      if (devolver) devolver.addEventListener('click', () => {
+        localStorage.setItem('locacaoParaDevolver', JSON.stringify(loc));
+        window.apiAcesso.abrirModalDevolucao();
       });
+
+      const cancelar = tr.querySelector('.btn-cancelar-locacao');
+      if (cancelar) cancelar.addEventListener('click', () => {
+        localStorage.setItem('locacaoParaCancelar', JSON.stringify(loc));
+        window.apiAcesso.abrirModalCancelarLocacao();
+      });
+
+      tabelaLocacoesAtivasBody.appendChild(tr);
     });
   }
 
@@ -608,21 +603,28 @@ document.addEventListener('DOMContentLoaded', () => {
     tabelaLocacoesHistoricoBody.innerHTML = '';
 
     if (listaLocacoes.length === 0) {
-      tabelaLocacoesHistoricoBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum histórico de locação encontrado.</td></tr>`;
+      tabelaLocacoesHistoricoBody.innerHTML = linhaVazia(7, 'Nenhuma locação encerrada ainda.');
       return;
     }
 
     listaLocacoes.forEach(loc => {
-      const valorFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(loc.valor_total);
-      const tr = document.createElement('tr');
+      const cancelada = loc.status === 'Cancelada';
 
+      // Detalhes do total: atraso e taxas aparecem embaixo do valor
+      const detalhes = [
+        loc.dias_atraso > 0 ? `${loc.dias_atraso} dia(s) de atraso` : '',
+        Number(loc.taxas_extras) > 0 ? `taxas ${formatarDinheiro(loc.taxas_extras)} (${escaparHtml(loc.taxas_motivo)})` : '',
+      ].filter(Boolean).join(' · ');
+
+      const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><strong>${loc.clientes?.nome || 'Cliente não encontrado'}</strong></td>
-        <td><i class="ri-car-fill" style="color: #64748b; margin-right: 4px;"></i> ${loc.veiculos?.modelo || 'Veículo não encontrado'} (${loc.veiculos?.placa || ''})</td>
-        <td>${new Date(loc.data_inicio).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-        <td>${new Date(loc.data_fim).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-        <td><span class="valor-historico">${valorFormatado}</span></td>
-        <td><span class="badge-concluido"><i class="ri-checkbox-circle-line"></i> ${loc.status}</span></td>
+        <td><strong>${escaparHtml(loc.cliente_nome)}</strong></td>
+        <td>${escaparHtml(loc.marca)} ${escaparHtml(loc.modelo)}<br><small>${formatarPlaca(loc.placa)}</small></td>
+        <td>${formatarData(loc.data_retirada)}</td>
+        <td>${cancelada ? '-' : formatarData(loc.data_devolucao)}</td>
+        <td>${loc.km_rodados != null ? formatarKm(loc.km_rodados) : '-'}</td>
+        <td><span class="valor-historico">${formatarDinheiro(loc.valor_total)}</span>${detalhes ? `<br><small>${detalhes}</small>` : ''}</td>
+        <td>${etiquetaSituacao(loc.status)}</td>
       `;
       tabelaLocacoesHistoricoBody.appendChild(tr);
     });
@@ -1278,6 +1280,24 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (erro) {
           console.error("Erro ao atualizar lista de frota em tempo real:", erro);
         }
+      }
+    });
+  }
+
+  // Locações mudaram (retirada, devolução ou cancelamento em outra janela):
+  // recarrega a tabela que estiver aberta. O resumo já é recarregado pelo
+  // aviso "frota-atualizada", que chega junto.
+  if (window.apiAcesso && window.apiAcesso.aoAtualizarLocacoes) {
+    window.apiAcesso.aoAtualizarLocacoes(async () => {
+      try {
+        if (document.getElementById('view-locacoes-ativas')?.classList.contains('active')) {
+          renderizarLocacoesAtivas(await window.apiAcesso.pedirLocacoesAtivas());
+        }
+        if (document.getElementById('view-locacoes-historico')?.classList.contains('active')) {
+          renderizarLocacoesHistorico(await window.apiAcesso.pedirLocacoesHistorico());
+        }
+      } catch (erro) {
+        console.error("Erro ao atualizar as locações:", erro);
       }
     });
   }

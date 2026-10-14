@@ -31,11 +31,19 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     // =========================== LOCAÇÃO =============================
     pedirLocacoesAtivas: () => ipcRenderer.invoke('buscar-locacoes-ativas'),
     pedirLocacoesHistorico: () => ipcRenderer.invoke('buscar-locacoes-historico'),
+    aoAtualizarLocacoes: (funcaoCallback) => ipcRenderer.on('locacoes-atualizadas', () => funcaoCallback()),
+    // Retirada
     abrirModalLocacao: () => ipcRenderer.send('abrir-modal-locacao'),
     fecharModalLocacao: () => ipcRenderer.send('fechar-modal-locacao'),
-    salvarLocacaoBanco: (novaLocacao) => ipcRenderer.invoke('salvar-locacao-banco', novaLocacao),
-    aoAtualizarLocacoes: (funcaoCallback) => ipcRenderer.on('locacoes-atualizadas', () => funcaoCallback()),
-    finalizarLocacao: (idLocacao, idVeiculo) => ipcRenderer.invoke('finalizar-locacao-manual', { idLocacao, idVeiculo }),
+    registrarAluguel: (dados) => ipcRenderer.invoke('registrar-aluguel', dados),
+    // Devolução
+    abrirModalDevolucao: () => ipcRenderer.send('abrir-modal-devolucao'),
+    fecharModalDevolucao: () => ipcRenderer.send('fechar-modal-devolucao'),
+    registrarDevolucao: (dados) => ipcRenderer.invoke('registrar-devolucao', dados),
+    // Cancelamento
+    abrirModalCancelarLocacao: () => ipcRenderer.send('abrir-modal-cancelar-locacao'),
+    fecharModalCancelarLocacao: () => ipcRenderer.send('fechar-modal-cancelar-locacao'),
+    cancelarLocacao: (dados) => ipcRenderer.invoke('cancelar-locacao', dados),
 
     // ============================ FINANÇAS ============================
     pedirDadosFinanceiros: () => ipcRenderer.invoke('buscar-dados-financeiros'),

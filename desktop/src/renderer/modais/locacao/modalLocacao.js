@@ -1,129 +1,138 @@
+// =====================================================================
+//  Modal de nova locação (retirada do carro)
+// ---------------------------------------------------------------------
+//  A conta mostrada aqui é só uma PRÉVIA para o atendente conversar com
+//  o cliente. Quem calcula de verdade é a função registrar_aluguel do
+//  banco (a mesma da web e do celular), chamada pelo processo principal.
+//
+//  As datas seguem as regras do banco: retirada entre 30 dias atrás e
+//  hoje; devolução prevista a partir de hoje (e não antes da retirada).
+//
+//  formatarDinheiro, formatarPlaca, formatarCpf, hojeTexto, somarDias,
+//  diasEntre, diasAte, soDigitos e aplicarMascara vêm de
+//  ../../compartilhado/formatos.js.
+// =====================================================================
+
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🚀 [DEBUG] JS do Modal de Locação foi lido pelo HTML! Iniciando carga de dados...");
+  const form = document.getElementById('form-nova-locacao');
+  const selectCliente = document.getElementById('select-cliente');
+  const selectVeiculo = document.getElementById('select-veiculo');
+  const inputRetirada = document.getElementById('data-retirada');
+  const inputPrevista = document.getElementById('data-prevista');
+  const inputKm = document.getElementById('km-saida');
+  const inputObs = document.getElementById('observacoes');
+  const btnSalvar = document.getElementById('btn-salvar');
 
-    const formLocacao = document.getElementById('form-nova-locacao');
-    const selectCliente = document.getElementById('select-cliente');
-    const selectVeiculo = document.getElementById('select-veiculo');
-    const inputDataInicio = document.getElementById('data-inicio');
-    const inputDataFim = document.getElementById('data-fim');
-    const btnCancelar = document.getElementById('btn-cancelar');
+  let veiculosDisponiveis = [];
 
-    const txtDiaria = document.getElementById('resumo-diaria');
-    const txtDias = document.getElementById('resumo-dias');
-    const txtTotal = document.getElementById('resumo-total');
+  // ----------------------------------------------- DATAS E LIMITES
+  const hoje = hojeTexto();
+  inputRetirada.value = hoje;
+  inputRetirada.min = somarDias(hoje, -30);
+  inputRetirada.max = hoje;
+  inputPrevista.min = hoje;
 
-    let listaVeiculosDisponiveis = [];
-    let valorDiariaSelecionada = 0;
+  // Km: só números, com ponto de milhar enquanto digita
+  aplicarMascara(inputKm, (v) => {
+    const n = soDigitos(v).slice(0, 7);
+    return n ? Number(n).toLocaleString('pt-BR') : '';
+  });
 
-    async function carregarFormulario() {
-        try {
-            console.log("⏳ Buscando clientes e frota do banco via Preload...");
+  // ------------------------------------------------ CARREGAR LISTAS
+  async function carregarListas() {
+    const [clientes, frota] = await Promise.all([
+      window.apiAcesso.pedirClientes(),
+      window.apiAcesso.pedirFrota(),
+    ]);
 
-            const clientes = await window.apiAcesso.pedirClientes();
-            console.log("👥 Clientes retornados do banco:", clientes);
-
-            selectCliente.innerHTML = '<option value="">Selecione um Cliente...</option>';
-            clientes.forEach(cli => {
-                selectCliente.innerHTML += `<option value="${cli.id}">${cli.nome} (CPF: ${cli.cpf})</option>`;
-            });
-
-            const frotaCompleta = await window.apiAcesso.pedirFrota();
-            console.log("🚗 Frota completa retornada do banco:", frotaCompleta);
-
-            listaVeiculosDisponiveis = frotaCompleta.filter(carro => carro.status === 'Disponível');
-
-            selectVeiculo.innerHTML = '<option value="">Selecione um Veículo...</option>';
-            if (listaVeiculosDisponiveis.length === 0) {
-                selectVeiculo.innerHTML = '<option value="">Nenhum veículo disponível no momento</option>';
-            } else {
-                listaVeiculosDisponiveis.forEach(carro => {
-                    selectVeiculo.innerHTML += `<option value="${carro.id}">${carro.modelo} - ${carro.marca} (${carro.placa})</option>`;
-                });
-            }
-        } catch (erro) {
-            console.error("❌ Erro catastrófico ao popular seletores do modal de locação:", erro);
-        }
-    }
-
-    function calcularLocacao() {
-        const veiculoId = selectVeiculo.value;
-        const dataInicioStr = inputDataInicio.value;
-        const dataFimStr = inputDataFim.value;
-
-        if (veiculoId) {
-            const carroEncontrado = listaVeiculosDisponiveis.find(c => c.id == veiculoId);
-            valorDiariaSelecionada = carroEncontrado ? carroEncontrado.diaria : 0;
-        } else {
-            valorDiariaSelecionada = 0;
-        }
-
-        txtDiaria.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorDiariaSelecionada);
-
-        if (dataInicioStr && dataFimStr) {
-            const d1 = new Date(dataInicioStr);
-            const d2 = new Date(dataFimStr);
-
-            const diferencaTempo = d2.getTime() - d1.getTime();
-            let totalDias = Math.ceil(diferencaTempo / (1000 * 60 * 60 * 24));
-
-            if (totalDias <= 0) totalDias = 1;
-
-            const valorTotalGeral = totalDias * valorDiariaSelecionada;
-
-            txtDias.textContent = `${totalDias} ${totalDias === 1 ? 'dia' : 'dias'}`;
-            txtTotal.textContent = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorTotalGeral);
-        } else {
-            txtDias.textContent = "0 dias";
-            txtTotal.textContent = "R$ 0,00";
-        }
-    }
-
-    selectVeiculo.addEventListener('change', calcularLocacao);
-    inputDataInicio.addEventListener('change', calcularLocacao);
-    inputDataFim.addEventListener('change', calcularLocacao);
-
-    formLocacao.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const d1 = new Date(inputDataInicio.value);
-        const d2 = new Date(inputDataFim.value);
-        let totalDias = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-        if (totalDias <= 0) totalDias = 1;
-
-        const valorTotalFinal = totalDias * valorDiariaSelecionada;
-
-        const novaLocacao = {
-            id_cliente: parseInt(selectCliente.value),
-            id_veiculo: parseInt(selectVeiculo.value),
-            data_inicio: inputDataInicio.value,
-            data_fim: inputDataFim.value,
-            valor_total: valorTotalFinal,
-            status: 'Ativo'
-        };
-
-        try {
-            const resultado = await window.apiAcesso.salvarLocacaoBanco(novaLocacao);
-
-            if (resultado.sucesso) {
-                window.apiAcesso.fecharModalLocacao();
-            }
-        } catch (erro) {
-            console.error("Erro ao enviar dados da nova locação:", erro);
-        }
+    // Clientes: quem está com a CNH vencida aparece, mas bloqueado
+    selectCliente.innerHTML = '<option value="">Selecione o cliente...</option>';
+    clientes.forEach((cliente) => {
+      const opcao = document.createElement('option');
+      opcao.value = cliente.id;
+      const vencida = diasAte(cliente.cnh_validade) < 0;
+      opcao.textContent = `${cliente.nome} (CPF ${formatarCpf(cliente.cpf)})${vencida ? ' - CNH vencida' : ''}`;
+      opcao.disabled = vencida;
+      opcao.dataset.cnhValidade = cliente.cnh_validade;
+      selectCliente.appendChild(opcao);
     });
 
-    if (btnCancelar) {
-        btnCancelar.addEventListener('click', () => {
-            window.apiAcesso.fecharModalLocacao();
-        });
-    }
+    // Veículos: só os disponíveis
+    veiculosDisponiveis = frota.filter((carro) => carro.status === 'Disponível');
+    selectVeiculo.innerHTML = veiculosDisponiveis.length
+      ? '<option value="">Selecione o veículo...</option>'
+      : '<option value="">Nenhum veículo disponível no momento</option>';
+    veiculosDisponiveis.forEach((carro) => {
+      const opcao = document.createElement('option');
+      opcao.value = carro.id;
+      opcao.textContent = `${carro.marca} ${carro.modelo} (${formatarPlaca(carro.placa)}) - ${formatarDinheiro(carro.valor_diaria)}/dia`;
+      selectVeiculo.appendChild(opcao);
+    });
+  }
 
-    const btnFecharTopo = document.getElementById('btn-fechar-topo');
-    if (btnFecharTopo) {
-        btnFecharTopo.addEventListener('click', () => {
-            window.apiAcesso.fecharModalLocacao();
-        });
-    }
+  // --------------------------------------------------------- PRÉVIA
+  function veiculoEscolhido() {
+    return veiculosDisponiveis.find((carro) => String(carro.id) === selectVeiculo.value);
+  }
 
-    carregarFormulario();
+  function atualizarResumo() {
+    const carro = veiculoEscolhido();
+    const diaria = carro ? Number(carro.valor_diaria) : 0;
+    document.getElementById('resumo-diaria').textContent = formatarDinheiro(diaria);
+
+    const temDatas = inputRetirada.value && inputPrevista.value;
+    // Igual ao banco: no mínimo 1 diária
+    const dias = temDatas ? Math.max(1, diasEntre(inputRetirada.value, inputPrevista.value)) : 0;
+    document.getElementById('resumo-dias').textContent = temDatas ? `${dias}` : '-';
+    document.getElementById('resumo-total').textContent = formatarDinheiro(dias * diaria);
+  }
+
+  // Trocou o carro: a km de saída começa com a km atual dele
+  selectVeiculo.addEventListener('change', () => {
+    const carro = veiculoEscolhido();
+    inputKm.value = carro ? Number(carro.quilometragem || 0).toLocaleString('pt-BR') : '';
+    document.getElementById('dica-km').textContent = carro
+      ? `Atual do veículo: ${formatarKm(carro.quilometragem)}. Não pode ser menor.`
+      : 'O número do painel na hora da retirada.';
+    atualizarResumo();
+  });
+
+  // A devolução prevista não pode ser antes da retirada (nem antes de hoje)
+  inputRetirada.addEventListener('change', () => {
+    inputPrevista.min = inputRetirada.value > hoje ? inputRetirada.value : hoje;
+    atualizarResumo();
+  });
+  inputPrevista.addEventListener('change', atualizarResumo);
+
+  // ------------------------------------------------------- FECHAR
+  function fechar() {
+    window.apiAcesso.fecharModalLocacao();
+  }
+  document.getElementById('btn-cancelar').addEventListener('click', fechar);
+  document.getElementById('btn-fechar-topo').addEventListener('click', fechar);
+
+  // ------------------------------------------------------- SALVAR
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    btnSalvar.disabled = true;
+    try {
+      const resposta = await window.apiAcesso.registrarAluguel({
+        cliente_id: selectCliente.value,
+        veiculo_id: selectVeiculo.value,
+        data_retirada: inputRetirada.value,
+        data_prevista: inputPrevista.value,
+        km_saida: inputKm.value,
+        observacoes: inputObs.value,
+      });
+      if (resposta && resposta.sucesso) fechar();
+    } catch (erro) {
+      console.error('Erro ao registrar aluguel:', erro);
+    } finally {
+      btnSalvar.disabled = false;
+    }
+  });
+
+  await carregarListas();
+  atualizarResumo();
 });

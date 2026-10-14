@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Devolução</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="../../estilos/modal.css" />
+    <style>
+      /* Estilos só desta janela */
+      .ficha-locacao {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        color: #334155;
+        margin-bottom: 14px;
+        line-height: 1.6;
+      }
+      .linha-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 6px 0 10px;
+        cursor: pointer;
+      }
+      .secao-titulo {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748b;
+        margin: 6px 0 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-scroll-wrapper">
+      <div class="modal-header">
+        <h3>Registrar Devolução</h3>
+        <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+          <i class="ri-close-line" style="font-size: 1.2rem; display: block"></i>
+        </button>
+      </div>
+
+      <form id="form-devolucao" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+        <div class="modal-scroll-body">
+          <!-- Dados do aluguel (preenchidos pelo JavaScript) -->
+          <div class="ficha-locacao" id="ficha-locacao"></div>
+
+          <div class="row-inputs">
+            <div class="form-group">
+              <label for="data-devolucao">Data da devolução *</label>
+              <input type="date" id="data-devolucao" required />
+            </div>
+            <div class="form-group">
+              <label for="km-retorno">Quilometragem de retorno *</label>
+              <input type="text" id="km-retorno" inputmode="numeric" required />
+              <p class="dica-campo" id="dica-km"></p>
+            </div>
+          </div>
+
+          <p class="secao-titulo">Taxas extras (opcional)</p>
+          <div class="row-inputs">
+            <div class="form-group">
+              <label for="taxas-extras">Valor</label>
+              <input type="text" id="taxas-extras" inputmode="numeric" placeholder="R$ 0,00" />
+            </div>
+            <div class="form-group">
+              <label for="taxas-motivo">Motivo</label>
+              <input type="text" id="taxas-motivo" maxlength="200" placeholder="Ex.: combustível, limpeza" />
+            </div>
+          </div>
+
+          <div class="resumo-valores">
+            <div class="resumo-row"><span id="resumo-dias-texto">Diárias:</span><span id="resumo-diarias">R$ 0,00</span></div>
+            <div class="resumo-row alerta" id="linha-atraso" style="display:none;"><span>Atraso:</span><span id="resumo-atraso"></span></div>
+            <div class="resumo-row" id="linha-taxas" style="display:none;"><span>Taxas extras:</span><span id="resumo-taxas"></span></div>
+            <div class="resumo-row" id="linha-km" style="display:none;"><span>Rodou:</span><span id="resumo-km"></span></div>
+            <div class="resumo-row total"><span>Total a cobrar:</span><span id="resumo-total">R$ 0,00</span></div>
+          </div>
+          <p class="dica-campo" id="dica-adiantada" style="display:none;">
+            Devolução antes do previsto: cobra só os dias usados.
+          </p>
+
+          <div class="form-group">
+            <label for="observacoes">Observações da devolução</label>
+            <input type="text" id="observacoes" maxlength="500" placeholder="Opcional" />
+          </div>
+
+          <label class="linha-check">
+            <input type="checkbox" id="com-defeito" />
+            O carro voltou com defeito (vai direto para a manutenção)
+          </label>
+
+          <div id="bloco-defeito" style="display: none;">
+            <div class="form-group">
+              <label for="defeito">Defeito encontrado *</label>
+              <textarea id="defeito" rows="2" maxlength="1000" placeholder="Ex.: barulho na suspensão dianteira"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="oficina">Oficina</label>
+              <input type="text" id="oficina" maxlength="150" placeholder="Opcional" />
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn-save" id="btn-salvar">Registrar devolução</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="../../compartilhado/formatos.js"></script>
+    <script src="./modalDevolucao.js"></script>
+  </body>
+</html>

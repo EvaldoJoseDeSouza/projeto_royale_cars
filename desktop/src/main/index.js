@@ -9,6 +9,7 @@ const { registrarIpcModelos } = require("./ipc/modelos");
 const { registrarIpcColaboradores } = require("./ipc/colaboradores");
 const { registrarIpcClientes } = require("./ipc/clientes");
 const { registrarIpcFrota } = require("./ipc/frota");
+const { registrarIpcLocacoes } = require("./ipc/locacoes");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -272,7 +273,7 @@ function abrirJanelaConfirmacao(janelaMae, dadosConfimacao) {
 
     janelaModalConfirmacao = new BrowserWindow({
       width: 420,
-      height: 320,
+      height: 370,
       parent: janelaMae,
       modal: true,
       frame: false,
@@ -429,76 +430,17 @@ registrarIpcClientes({
 
 
 // ============================= LOCAÇÕES =======================
-ipcMain.handle("buscar-locacoes-ativas", async () => {
-  try {
-    console.log("Buscando locações ativas para a empresa: ${idEmpresaLogada}");
+// Retirada, devolução e cancelamento ficam em main/ipc/locacoes.js
+// (pelas funções do banco). Aqui ficam só as janelas.
 
-    const { data, error } = await supabase
-      .from("locacoes")
-      .select(
-        `
-        id, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status,
-        clientes ( nome ), veiculos ( modelo, placa )
-      `,
-      )
-      .eq("status", "Ativo")
-      .eq("id_empresa", idEmpresaLogada)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Erro ao buscar locações ativas do banco:", error.message);
-      throw error;
-    }
-    return data;
-  } catch (err) {
-    console.error("Erro fatal ao buscar locações ativas:", err);
-    return [];
-  }
-});
-
-ipcMain.handle("buscar-locacoes-historico", async () => {
-  try {
-    console.log(
-      "Buscando histórico de locações para a empresa: ${idEmpresaLogada}",
-    );
-
-    const { data, error } = await supabase
-      .from("locacoes")
-      .select(
-        `
-        id, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status,
-        clientes ( nome ), veiculos ( modelo, placa )
-      `,
-      )
-      .eq("status", "Concluído")
-      .eq("id_empresa", idEmpresaLogada)
-      .order("data_fim", { ascending: false });
-
-    if (error) {
-      console.error(
-        "Erro ao buscar histórico de locações do banco:",
-        error.message,
-      );
-      throw error;
-    }
-    return data;
-  } catch (err) {
-    console.error("Erro fatal ao buscar histórico de locações:", err);
-    return [];
-  }
-});
-
-ipcMain.on("abrir-modal-locacao", (evento) => {
-  if (janelaModalLocacao) {
-    janelaModalLocacao.focus();
-    return;
-  }
-
-  const janelaMae = BrowserWindow.fromWebContents(evento.sender);
-
-  janelaModalLocacao = new BrowserWindow({
-    width: 480,
-    height: 560,
+// Molde para abrir uma janela de modal. Todas as janelas de modal são
+// iguais (sem moldura, presas na janela de trás, com o preload); só mudam
+// o arquivo e o tamanho. Em vez de copiar 20 linhas a cada janela nova,
+// chamamos esta função.
+function criarJanelaModal(janelaMae, arquivoHtml, largura, altura) {
+  const janela = new BrowserWindow({
+    width: largura,
+    height: altura,
     parent: janelaMae,
     modal: true,
     frame: false,
@@ -510,139 +452,51 @@ ipcMain.on("abrir-modal-locacao", (evento) => {
       nodeIntegration: false,
     },
   });
+  janela.loadFile(path.join(__dirname, "../renderer/modais", arquivoHtml));
+  janela.once("ready-to-show", () => janela.show());
+  return janela;
+}
 
-  janelaModalLocacao.loadFile(
-    path.join(__dirname, "../renderer/modais/locacao/modalLocacao.html"),
-  );
-  janelaModalLocacao.once("ready-to-show", () => janelaModalLocacao.show());
-  janelaModalLocacao.on("closed", () => {
-    janelaModalLocacao = null;
-  });
+let janelaModalDevolucao;
+let janelaModalCancelamento;
+
+ipcMain.on("abrir-modal-locacao", (evento) => {
+  if (janelaModalLocacao) return janelaModalLocacao.focus();
+  janelaModalLocacao = criarJanelaModal(BrowserWindow.fromWebContents(evento.sender), "locacao/modalLocacao.html", 560, 620);
+  janelaModalLocacao.on("closed", () => { janelaModalLocacao = null; });
 });
 
 ipcMain.on("fechar-modal-locacao", () => {
   if (janelaModalLocacao) janelaModalLocacao.close();
 });
 
-ipcMain.handle("salvar-locacao-banco", async (event, novaLocacao) => {
-  try {
-    if (await negarSemPermissao(janelaModalLocacao, "locacoes_gerenciar")) return { sucesso: false };
-
-    const { data: veiculoAtual, error: erroConsultaVeiculo } = await supabase
-      .from("veiculos")
-      .select("status")
-      .eq("id", novaLocacao.id_veiculo)
-      .single();
-
-    if (erroConsultaVeiculo || !veiculoAtual) {
-      await mostrarAviso(janelaModalLocacao, {
-        tipo: "erro",
-        titulo: "Veículo Não Encontrado",
-        mensagem:
-          "Não foi possível confirmar a disponibilidade deste veículo. Atualize a lista e tente novamente.",
-      });
-      return { sucesso: false };
-    }
-
-    if (veiculoAtual.status !== "Disponível") {
-      await mostrarAviso(janelaModalLocacao, {
-        tipo: "erro",
-        titulo: "Veículo Indisponível",
-        mensagem: `Este veículo não está mais disponível (status atual: ${veiculoAtual.status}). Atualize a lista e escolha outro veículo.`,
-      });
-      return { sucesso: false };
-    }
-
-    const locacaoComEmpresa = {
-      ...novaLocacao,
-      id_empresa: idEmpresaLogada,
-    };
-
-    const { error: erroLocacao } = await supabase
-      .from("locacoes")
-      .insert([locacaoComEmpresa]);
-
-    if (erroLocacao) {
-      console.error(
-        "Erro ao inserir locação no Supabase:",
-        erroLocacao.message,
-      );
-      await mostrarAviso(janelaModalLocacao, {
-        tipo: "erro",
-        titulo: "Erro na Operação",
-        mensagem: `Não foi possível registrar a locação. Motivo: ${erroLocacao.message}`,
-      });
-      return { sucesso: false, mensagem: erroLocacao.message };
-    }
-
-    const { error: erroVeiculo } = await supabase
-      .from("veiculos")
-      .update({ status: "Alugado" })
-      .eq("id", novaLocacao.id_veiculo);
-
-    if (erroVeiculo) {
-      console.error(
-        "Erro ao mudar status do veículo para Alugado:",
-        erroVeiculo.message,
-      );
-    }
-
-    if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-      janelaDashboard.webContents.send("locacoes-atualizadas");
-      janelaDashboard.webContents.send("frota-atualizada");
-    }
-
-    await mostrarAviso(janelaModalLocacao, {
-      tipo: "sucesso",
-      titulo: "Sucesso",
-      mensagem: "Locação registrada com sucesso! Veículo alugado.",
-    });
-
-    return { sucesso: true };
-  } catch (err) {
-    console.error("Erro interno ao salvar locação:", err);
-    return { sucesso: false, mensagem: "Erro interno no servidor." };
-  }
+ipcMain.on("abrir-modal-devolucao", (evento) => {
+  if (janelaModalDevolucao) return janelaModalDevolucao.focus();
+  janelaModalDevolucao = criarJanelaModal(BrowserWindow.fromWebContents(evento.sender), "devolucao/modalDevolucao.html", 600, 720);
+  janelaModalDevolucao.on("closed", () => { janelaModalDevolucao = null; });
 });
 
-ipcMain.handle(
-  "finalizar-locacao-manual",
-  async (event, { idLocacao, idVeiculo }) => {
-    try {
-      if (await negarSemPermissao(janelaDashboard, "locacoes_gerenciar")) return { sucesso: false };
+ipcMain.on("fechar-modal-devolucao", () => {
+  if (janelaModalDevolucao) janelaModalDevolucao.close();
+});
 
-      const { error: erroLocacao } = await supabase
-        .from("locacoes")
-        .update({ status: "Concluído" })
-        .eq("id", idLocacao);
+ipcMain.on("abrir-modal-cancelar-locacao", (evento) => {
+  if (janelaModalCancelamento) return janelaModalCancelamento.focus();
+  janelaModalCancelamento = criarJanelaModal(BrowserWindow.fromWebContents(evento.sender), "cancelar-locacao/modalCancelarLocacao.html", 460, 360);
+  janelaModalCancelamento.on("closed", () => { janelaModalCancelamento = null; });
+});
 
-      if (erroLocacao) throw erroLocacao;
+ipcMain.on("fechar-modal-cancelar-locacao", () => {
+  if (janelaModalCancelamento) janelaModalCancelamento.close();
+});
 
-      const { error: erroVeiculo } = await supabase
-        .from("veiculos")
-        .update({ status: "Disponível" })
-        .eq("id", idVeiculo);
-
-      if (erroVeiculo) throw erroVeiculo;
-
-      if (janelaDashboard && !janelaDashboard.isDestroyed()) {
-        janelaDashboard.webContents.send("locacoes-atualizadas");
-        janelaDashboard.webContents.send("frota-atualizada");
-      }
-
-      await mostrarAviso(janelaDashboard, {
-        tipo: "sucesso",
-        titulo: "Sucesso",
-        mensagem: "Locação finalizada e veículo liberado com sucesso!",
-      });
-
-      return { sucesso: true };
-    } catch (err) {
-      console.error("Erro ao finalizar locação manualmente:", err.message);
-      return { sucesso: false, mensagem: err.message };
-    }
-  },
-);
+registrarIpcLocacoes({
+  mostrarAviso,
+  obterJanelaDashboard: () => janelaDashboard,
+  obterJanelaLocacao: () => janelaModalLocacao,
+  obterJanelaDevolucao: () => janelaModalDevolucao,
+  obterJanelaCancelamento: () => janelaModalCancelamento,
+});
 
 // ============================== FINANÇAS =======================
 ipcMain.handle("buscar-dados-financeiros", async () => {

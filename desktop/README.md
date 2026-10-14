@@ -30,7 +30,8 @@ src/
 │       ├── modelos.js        modelos de permissão
 │       ├── colaboradores.js  a equipe (usa a Edge Function admin-usuarios)
 │       ├── clientes.js       clientes
-│       └── frota.js          veículos
+│       ├── frota.js          veículos
+│       └── locacoes.js       retirada, devolução e cancelamento (funções do banco)
 ├── preload/preload.js        a ponte entre as telas e o processo principal
 ├── imagens/                  ícone do sistema (bandeja e telas)
 └── renderer/                 as telas, organizadas por tela
@@ -40,7 +41,9 @@ src/
     ├── modais/               as janelas que abrem por cima (cadastros, confirmações)
     │   ├── cliente/
     │   ├── veiculo/
-    │   ├── locacao/
+    │   ├── locacao/          retirada (nova locação)
+    │   ├── devolucao/
+    │   ├── cancelar-locacao/
     │   ├── colaborador/
     │   ├── grupo-permissao/  (modelos de permissão)
     │   ├── confirmacao/
