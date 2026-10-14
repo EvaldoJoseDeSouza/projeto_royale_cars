@@ -660,13 +660,6 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
   margin-bottom: 24px;
 }
 
-.avatar-section label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 8px;
-}
 
 .avatar-wrapper {
   position: relative;
@@ -689,33 +682,8 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
   border: 2px solid #cbd5e1;
 }
 
-.avatar-circle img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
 
-.btn-upload-avatar {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background: #0f172a;
-  color: #ffffff;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 0.8rem;
-  border: 2px solid #ffffff;
-  transition: transform 0.2s;
-}
 
-.btn-upload-avatar:hover {
-  transform: scale(1.1);
-}
 
 .config-grid {
   display: grid;
@@ -723,62 +691,12 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
   gap: 16px 20px;
 }
 
-.input-with-prefix {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  overflow: hidden;
-  background: #f8fafc;
-}
 
-.prefix-ddi {
-  padding: 0 12px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #475569;
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
 
-.input-with-prefix input {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  width: 100%;
-  padding: 10px;
-  outline: none;
-}
 
-.input-with-button {
-  display: flex;
-  gap: 8px;
-}
 
-.input-with-button input {
-  flex: 1;
-}
 
-.btn-inline-action {
-  padding: 0 16px;
-  background: #f1f5f9;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: #334155;
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
 
-.btn-inline-action:hover {
-  background: #e2e8f0;
-}
 
 .config-card-footer {
   margin-top: 24px;
@@ -978,4 +896,30 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 .filtro-dropdown-item.active {
   background-color: var(--blue-dark);
   color: #ffffff;
+}
+
+/* Minha conta: lista do que a pessoa pode fazer */
+.lista-permissoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lista-permissoes .badge {
+  background: rgba(1, 13, 61, 0.06);
+  color: var(--blue-dark);
+  font-weight: 600;
+}
+
+.config-dica {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+/* Campos só de leitura (e-mail e cargo): cinza, para ficar claro que não dá para editar */
+.config-grid .form-control[readonly] {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: default;
 }

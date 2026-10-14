@@ -41,8 +41,9 @@ async function registrarTentativa(email, sucesso, motivo) {
 //   mostrarAviso(janela, { tipo, titulo, mensagem })
 //   obterJanelaPrincipal()       → a janela de login
 //   obterJanelaTrocarSenha()     → o modal de trocar senha
+//   obterJanelaDashboard()       → a janela principal do sistema
 function registrarIpcSessao(deps) {
-  const { mostrarAviso, obterJanelaPrincipal, obterJanelaTrocarSenha } = deps;
+  const { mostrarAviso, obterJanelaPrincipal, obterJanelaTrocarSenha, obterJanelaDashboard } = deps;
 
   const avisarNoLogin = (titulo, mensagem) =>
     mostrarAviso(obterJanelaPrincipal(), { tipo: "erro", titulo, mensagem });
@@ -91,10 +92,12 @@ function registrarIpcSessao(deps) {
         return { sucesso: false };
       }
 
-      // 5. Guarda na sessão
+      // 5. Guarda na sessão. Se a senha for temporária (o chefe acabou de
+      //    criar a conta ou redefinir), a tela de login abre a troca
+      //    obrigatória antes de deixar entrar.
       sessao.usuario = perfil;
       console.log(`Login ok: ${perfil.nome} (${perfil.cargo})`);
-      return { sucesso: true };
+      return { sucesso: true, trocarSenha: perfil.trocar_senha === true };
     } catch (erro) {
       console.error("Erro inesperado no login:", erro);
       await avisarNoLogin("Erro no login", "Não foi possível conectar ao servidor. Verifique a internet e tente de novo.");
@@ -133,16 +136,7 @@ function registrarIpcSessao(deps) {
         return { sucesso: false };
       }
 
-      const { error: erroTroca } = await supabase.auth.updateUser({ password: novaSenha });
-      if (erroTroca) {
-        console.error("Erro ao trocar senha:", erroTroca.message);
-        await avisar("erro", "Erro ao trocar senha", "Não foi possível trocar sua senha. Tente novamente.");
-        return { sucesso: false };
-      }
-
-      // Avisa o banco: tira a marca de "trocar senha" e grava no histórico
-      await supabase.rpc("senha_trocada");
-      sessao.usuario.trocar_senha = false;
+      if (!(await gravarNovaSenha(novaSenha, avisar))) return { sucesso: false };
 
       await avisar("sucesso", "Senha alterada", "Sua senha foi alterada com sucesso!");
       return { sucesso: true };
@@ -150,6 +144,81 @@ function registrarIpcSessao(deps) {
       console.error("Erro inesperado ao trocar senha:", erro);
       return { sucesso: false };
     }
+  });
+
+  // Grava a senha nova no Supabase Auth e avisa o banco. Usada pela troca
+  // normal e pela obrigatória. Devolve true se deu certo.
+  async function gravarNovaSenha(novaSenha, avisar) {
+    const { error } = await supabase.auth.updateUser({ password: novaSenha });
+    if (error) {
+      console.error("Erro ao trocar senha:", error.message);
+      const mensagem = /different|same/i.test(error.message)
+        ? "A nova senha precisa ser diferente da senha atual."
+        : "Não foi possível trocar sua senha. Tente novamente.";
+      await avisar("erro", "Erro ao trocar senha", mensagem);
+      return false;
+    }
+
+    // Tira a marca de "trocar senha" no banco e grava no histórico
+    await supabase.rpc("senha_trocada");
+    sessao.usuario.trocar_senha = false;
+    return true;
+  }
+
+  // ------------------------------------------- TROCA OBRIGATÓRIA DE SENHA
+  // Primeiro acesso com senha temporária: não pede a senha atual (a pessoa
+  // acabou de entrar com ela). Só vale se o banco marcou trocar_senha.
+  ipcMain.handle("trocar-senha-obrigatoria", async (event, { novaSenha }) => {
+    const janela = obterJanelaTrocarSenha();
+    const avisar = (tipo, titulo, mensagem) => mostrarAviso(janela, { tipo, titulo, mensagem });
+
+    try {
+      if (!sessao.usuario || !sessao.usuario.trocar_senha) return { sucesso: false };
+
+      if (!senhaForte(novaSenha)) {
+        await avisar("erro", "Senha fraca", "A nova senha precisa ter pelo menos 8 caracteres, com letras e números.");
+        return { sucesso: false };
+      }
+
+      if (!(await gravarNovaSenha(novaSenha, avisar))) return { sucesso: false };
+
+      await avisar("sucesso", "Senha criada", "Pronto! Use essa senha nos próximos acessos.");
+
+      // Avisa a tela de login que pode seguir para o sistema
+      const janelaLogin = obterJanelaPrincipal();
+      if (janelaLogin && !janelaLogin.isDestroyed()) janelaLogin.webContents.send("senha-obrigatoria-trocada");
+      return { sucesso: true };
+    } catch (erro) {
+      console.error("Erro inesperado na troca obrigatória:", erro);
+      return { sucesso: false };
+    }
+  });
+
+  // ------------------------------------------------------- MINHA CONTA
+  // Cada pessoa muda o próprio nome. Cargo, e-mail e permissões só o chefe
+  // muda (e o banco garante isso: ver tg_perfis_antes no script 01).
+  ipcMain.handle("salvar-minha-conta", async (event, { nome }) => {
+    const janela = obterJanelaDashboard();
+    const avisar = (tipo, titulo, mensagem) => mostrarAviso(janela, { tipo, titulo, mensagem });
+
+    if (!sessao.usuario) return { sucesso: false };
+
+    const nomeLimpo = String(nome || "").trim().replace(/\s+/g, " ");
+    if (nomeLimpo.length < 3 || nomeLimpo.length > 100) {
+      await avisar("erro", "Nome inválido", "O nome precisa ter entre 3 e 100 caracteres.");
+      return { sucesso: false };
+    }
+
+    const { error } = await supabase.from("perfis").update({ nome: nomeLimpo }).eq("id", sessao.usuario.id);
+    if (error) {
+      console.error("Erro ao salvar minha conta:", error.message);
+      await avisar("erro", "Erro ao salvar", "Não foi possível salvar seus dados. Tente novamente.");
+      return { sucesso: false };
+    }
+
+    sessao.usuario.nome = nomeLimpo;
+    await avisar("sucesso", "Dados salvos", "Seu nome foi atualizado.");
+    return { sucesso: true, usuario: sessao.usuario };
   });
 }
 

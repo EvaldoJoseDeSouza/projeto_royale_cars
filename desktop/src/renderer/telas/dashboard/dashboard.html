@@ -401,71 +401,46 @@
         </div>
 
         <div class="config-container">
-          <!-- PERFIL -->
+          <!-- MINHA CONTA -->
+          <!-- Cada pessoa muda só o próprio nome. E-mail, cargo e permissões
+               quem muda é o chefe, na Administração (o banco garante isso). -->
           <div class="config-card">
             <div class="config-card-header">
-              <h3>Perfil</h3>
-              <p>Mantenha seus dados sempre atualizados.</p>
+              <h3>Minha conta</h3>
+              <p>Seus dados de acesso ao sistema.</p>
             </div>
 
             <form id="form-config-perfil">
               <div class="avatar-section">
-                <label>Avatar</label>
                 <div class="avatar-wrapper">
                   <div id="avatar-preview" class="avatar-circle">
                     <span id="avatar-inicial">U</span>
-                    <img id="avatar-img" src="" alt="Avatar" style="display: none;">
                   </div>
-                  <label for="input-upload-avatar" class="btn-upload-avatar" title="Alterar Foto">
-                    <i class="ri-pencil-line"></i>
-                  </label>
-                  <input type="file" id="input-upload-avatar" accept="image/*" style="display: none;">
                 </div>
               </div>
 
               <div class="config-grid">
                 <div class="form-group">
                   <label for="cfg-nome">Nome *</label>
-                  <input type="text" id="cfg-nome" class="form-control" required placeholder="Seu nome completo">
+                  <input type="text" id="cfg-nome" class="form-control" required
+                    minlength="3" maxlength="100" placeholder="Seu nome completo">
                 </div>
 
                 <div class="form-group">
-                  <label for="cfg-cpf-cnpj">CPF / CNPJ *</label>
-                  <input type="text" id="cfg-cpf-cnpj" class="form-control" required
-                    placeholder="000.000.000-00 ou 00.000.000/0001-00" maxlength="18">
+                  <label for="cfg-email">E-mail de acesso</label>
+                  <input type="email" id="cfg-email" class="form-control" readonly>
                 </div>
 
                 <div class="form-group">
-                  <label for="cfg-telefone">WhatsApp / Telefone *</label>
-                  <div class="input-with-prefix">
-                    <span class="prefix-ddi"><i class="ri-whatsapp-line"></i> +55</span>
-                    <input type="text" id="cfg-telefone" required placeholder="(00) 00000-0000" maxlength="15">
-                  </div>
+                  <label for="cfg-cargo">Cargo</label>
+                  <input type="text" id="cfg-cargo" class="form-control" readonly>
                 </div>
+              </div>
 
-                <div class="form-group">
-                  <label for="cfg-email">E-mail *</label>
-                  <div class="input-with-button">
-                    <input type="email" id="cfg-email" class="form-control" readonly placeholder="seuemail@exemplo.com">
-                    <button type="button" class="btn-inline-action" id="btn-alterar-email">
-                      <i class="ri-edit-line"></i> Alterar
-                    </button>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="cfg-username">Nome de usuário *</label>
-                  <input type="text" id="cfg-username" class="form-control" required placeholder="nomeusuario">
-                </div>
-
-                <div class="form-group">
-                  <label for="cfg-tema">Tema</label>
-                  <select id="cfg-tema" class="form-control">
-                    <option value="Claro">Claro</option>
-                    <option value="Escuro">Escuro</option>
-                    <option value="Automático">Automático (Sistema)</option>
-                  </select>
-                </div>
+              <div class="form-group" style="margin-top: 16px;">
+                <label>O que você pode fazer no sistema</label>
+                <div id="cfg-permissoes" class="lista-permissoes"></div>
+                <p class="config-dica">Precisa de outro acesso? Fale com o responsável pela locadora.</p>
               </div>
 
               <div class="config-card-footer">

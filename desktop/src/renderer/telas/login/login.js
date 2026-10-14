@@ -35,7 +35,14 @@ if (formLogin) {
     // Se der errado, o processo principal já mostra o aviso com o motivo
     const resposta = await window.apiAcesso.enviarLogin(email, senha);
 
-    if (resposta.sucesso) {
+    if (resposta.sucesso && resposta.trocarSenha) {
+      // Primeiro acesso (ou senha redefinida pelo chefe): antes de entrar,
+      // a pessoa precisa criar uma senha só dela. O modal abre no modo
+      // obrigatório e, quando a troca der certo, o processo principal
+      // avisa por 'senha-obrigatoria-trocada' e aí sim entramos.
+      mostrarEstadoDoBotao('normal');
+      window.apiAcesso.abrirModalTrocarSenha();
+    } else if (resposta.sucesso) {
       mostrarEstadoDoBotao('ok');
       setTimeout(() => window.apiAcesso.mudarDeTela(), 1500);
     } else {
@@ -43,6 +50,12 @@ if (formLogin) {
     }
   });
 }
+
+// Quando a troca obrigatória terminar, entra no sistema
+window.apiAcesso.aoTrocarSenhaObrigatoria(() => {
+  mostrarEstadoDoBotao('ok');
+  setTimeout(() => window.apiAcesso.mudarDeTela(), 800);
+});
 
 // Botão do "olhinho": mostra ou esconde a senha digitada
 function configurarToggleSenha(idInput, idBotao, idIcone) {

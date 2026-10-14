@@ -263,17 +263,11 @@ document.addEventListener('DOMContentLoaded', () => {
       permissoesUsuario = Array.isArray(usuario.permissoes) ? usuario.permissoes : [];
       aplicarPermissoesNaInterface();
 
-      const nomeExibicao = usuario.nome || usuario.username || 'Usuario';
+      const nomeExibicao = usuario.nome || 'Usuário';
 
-      const elNomeSidebar = document.getElementById('header-usuario-nome');
       const elEmailSidebar = document.getElementById('header-usuario-email');
-      const elAvatarInicial = document.getElementById('header-avatar-inicial');
-      const elNomeTopBar = document.getElementById('top-bar-usuario-nome');
-
-      if (elNomeSidebar) elNomeSidebar.textContent = nomeExibicao;
       if (elEmailSidebar) elEmailSidebar.textContent = usuario.email || '';
-      if (elAvatarInicial) elAvatarInicial.textContent = nomeExibicao.charAt(0).toUpperCase();
-      if (elNomeTopBar) elNomeTopBar.textContent = nomeExibicao;
+      mostrarNomeNoCabecalho(nomeExibicao);
     } catch (erro) {
       console.error("Erro ao carregar usuário logado no rodapé/toto:", erro);
     }
@@ -697,86 +691,128 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  const inputCpfCnpj = document.getElementById('cfg-cpf-cnpj');
-  const inputTelefone = document.getElementById('cfg-telefone');
+  // ============================ MINHA CONTA ============================
+  // Nomes "de gente" para as 13 permissões do banco (mesmos títulos do
+  // modal de modelos). Assim a pessoa lê "Ver clientes" e não "clientes_ver".
+  const NOMES_PERMISSOES = {
+    clientes_ver: 'Ver Clientes',
+    clientes_gerenciar: 'Cadastrar e Editar Clientes',
+    clientes_arquivar: 'Arquivar Clientes',
+    veiculos_ver: 'Ver Frota',
+    veiculos_gerenciar: 'Cadastrar e Editar Veículos',
+    veiculos_arquivar: 'Arquivar Veículos',
+    locacoes_ver: 'Ver Locações',
+    locacoes_gerenciar: 'Registrar Retirada e Devolução',
+    locacoes_cancelar: 'Cancelar Locações',
+    manutencoes: 'Manutenção',
+    financeiro: 'Ver Financeiro',
+    relatorios: 'Relatórios',
+    relatorios_financeiros: 'Valores nos Relatórios',
+  };
 
-  if (inputCpfCnpj) {
-    inputCpfCnpj.addEventListener('input', (e) => {
-      let v = e.target.value.replace(/\D/g, '');
-      if (v.length <= 11) {
-        v = v.replace(/(\d{3})(\d)/, '$1.$2');
-        v = v.replace(/(\d{3})(\d)/, '$1.$2');
-        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-      } else {
-        v = v.substring(0, 14);
-        v = v.replace(/^(\d{2})(\d)/, '$1.$2');
-        v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-        v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
-        v = v.replace(/(\d{4})(\d)/, '$1-$2');
-      }
-      e.target.value = v;
-    });
+  const NOMES_CARGOS = { chefe: 'Chefe', gerente: 'Gerente', funcionario: 'Funcionário' };
+
+  // Mostra o nome no topo e no menu (usado ao entrar e depois de salvar)
+  function mostrarNomeNoCabecalho(nome) {
+    const elNomeSidebar = document.getElementById('header-usuario-nome');
+    const elAvatarInicial = document.getElementById('header-avatar-inicial');
+    const elNomeTopBar = document.getElementById('top-bar-usuario-nome');
+    const elAvatarConta = document.getElementById('avatar-inicial');
+
+    if (elNomeSidebar) elNomeSidebar.textContent = nome;
+    if (elNomeTopBar) elNomeTopBar.textContent = nome;
+    if (elAvatarInicial) elAvatarInicial.textContent = nome.charAt(0).toUpperCase();
+    if (elAvatarConta) elAvatarConta.textContent = nome.charAt(0).toUpperCase();
   }
 
-  if (inputTelefone) {
-    inputTelefone.addEventListener('input', (e) => {
-      let v = e.target.value.replace(/\D/g, '').substring(0, 11);
-      if (v.length > 10) {
-        v = v.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
-      } else if (v.length > 5) {
-        v = v.replace(/^(\d{2})(\d{4})(\d{0,4})$/, '($1) $2-$3');
-      } else if (v.length > 2) {
-        v = v.replace(/^(\d{2})(\d{0,5})$/, '($1) $2');
-      }
-      e.target.value = v;
+  // Monta as "etiquetas" com o que a pessoa pode fazer
+  function mostrarPermissoes(usuario) {
+    const caixa = document.getElementById('cfg-permissoes');
+    if (!caixa) return;
+    caixa.innerHTML = '';
+
+    // O chefe não tem lista: ele pode tudo
+    const lista = usuario.cargo === 'chefe'
+      ? ['Acesso total (chefe)']
+      : (usuario.permissoes || []).map((chave) => NOMES_PERMISSOES[chave] || chave);
+
+    if (lista.length === 0) lista.push('Nenhuma permissão liberada ainda');
+
+    lista.forEach((texto) => {
+      const etiqueta = document.createElement('span');
+      etiqueta.className = 'badge';
+      etiqueta.textContent = texto; // textContent: o texto entra como texto, nunca como HTML
+      caixa.appendChild(etiqueta);
     });
   }
 
   async function carregarDadosConfiguracoes() {
     try {
-      if (window.apiAcesso && window.apiAcesso.pedirUsuarioLogado) {
-        const usuario = await window.apiAcesso.pedirUsuarioLogado();
-        if (!usuario) return;
+      const usuario = await window.apiAcesso.pedirUsuarioLogado();
+      if (!usuario) return;
 
-        const elNome = document.getElementById('cfg-nome');
-        const elCpf = document.getElementById('cfg-cpf-cnpj');
-        const elTel = document.getElementById('cfg-telefone');
-        const elEmail = document.getElementById('cfg-email');
-        const elUser = document.getElementById('cfg-username');
-        const elTema = document.getElementById('cfg-tema');
+      document.getElementById('cfg-nome').value = usuario.nome || '';
+      document.getElementById('cfg-email').value = usuario.email || '';
+      document.getElementById('cfg-cargo').value = NOMES_CARGOS[usuario.cargo] || usuario.cargo || '';
+      document.getElementById('avatar-inicial').textContent = (usuario.nome || 'U').charAt(0).toUpperCase();
+      mostrarPermissoes(usuario);
 
-        if (elNome) elNome.value = usuario.nome || '';
-        if (elCpf) elCpf.value = usuario.cpf_cnpj || '';
-        if (elTel) elTel.value = usuario.telefone || '';
-        if (elEmail) elEmail.value = usuario.email || '';
-        if (elUser) elUser.value = usuario.username || usuario.nome || '';
-        if (elTema) elTema.value = usuario.tema || 'Claro';
-
-        const avatarInicial = document.getElementById('avatar-inicial');
-        const avatarImg = document.getElementById('avatar-img');
-
-        if (usuario.foto_url && avatarImg && avatarInicial) {
-          avatarImg.src = usuario.foto_url;
-          avatarImg.style.display = 'block';
-          avatarInicial.style.display = 'none';
-        } else if (avatarInicial) {
-          avatarInicial.textContent = (usuario.nome || 'U').charAt(0).toUpperCase();
-          if (avatarImg) avatarImg.style.display = 'none';
-          avatarInicial.style.display = 'block';
-        }
-
-        const btnModalNovaSenha = document.getElementById('btn-modal-nova-senha');
-        if (btnModalNovaSenha) {
-          // onclick (e não addEventListener): evita registrar o clique de novo a cada visita à tela
-          btnModalNovaSenha.onclick = () => {
-            window.apiAcesso.abrirModalTrocarSenha();
-          };
-        }
+      const btnModalNovaSenha = document.getElementById('btn-modal-nova-senha');
+      if (btnModalNovaSenha) {
+        // onclick (e não addEventListener): evita registrar o clique de novo a cada visita à tela
+        btnModalNovaSenha.onclick = () => {
+          window.apiAcesso.abrirModalTrocarSenha();
+        };
       }
     } catch (err) {
       console.error("Erro ao carregar configurações:", err);
     }
   }
+
+  // Botão Salvar da Minha conta: manda o nome novo para o processo principal
+  const formConfigPerfil = document.getElementById('form-config-perfil');
+  if (formConfigPerfil) {
+    formConfigPerfil.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const btnSalvar = document.getElementById('btn-salvar-perfil');
+      const nome = document.getElementById('cfg-nome').value;
+
+      btnSalvar.disabled = true;
+      try {
+        // Se der errado, o processo principal já mostra o aviso com o motivo
+        const resposta = await window.apiAcesso.salvarMinhaConta({ nome });
+        if (resposta.sucesso) {
+          document.getElementById('cfg-nome').value = resposta.usuario.nome;
+          mostrarNomeNoCabecalho(resposta.usuario.nome);
+        }
+      } catch (erro) {
+        console.error('Erro ao salvar minha conta:', erro);
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    });
+  }
+
+  // ======================== SAÍDA POR INATIVIDADE ========================
+  // Cada movimento do mouse, tecla, clique ou rolagem "zera o relógio".
+  // Se passar MINUTOS_SEM_USO sem nada disso, o sistema sai sozinho.
+  // (Para testar, troque para 1 e espere um minuto sem mexer.)
+  const MINUTOS_SEM_USO = 30;
+  let relogioInatividade = null;
+
+  function zerarRelogioInatividade() {
+    clearTimeout(relogioInatividade);
+    relogioInatividade = setTimeout(() => {
+      window.apiAcesso.sairPorInatividade();
+    }, MINUTOS_SEM_USO * 60 * 1000);
+  }
+
+  ['mousemove', 'keydown', 'click', 'scroll'].forEach((tipoEvento) => {
+    // passive: true avisa o navegador que só estamos "ouvindo", sem travar a rolagem
+    document.addEventListener(tipoEvento, zerarRelogioInatividade, { passive: true });
+  });
+  zerarRelogioInatividade();
 
   async function switchView(targetId) {
     views.forEach(view => view.classList.remove('active'));

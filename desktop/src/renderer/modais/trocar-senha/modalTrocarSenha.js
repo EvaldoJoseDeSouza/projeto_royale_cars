@@ -1,16 +1,45 @@
+// =====================================================================
+//  Modal de trocar senha: funciona de 2 jeitos
+// ---------------------------------------------------------------------
+//  1. NORMAL (Minha conta → Trocar senha): pede a senha atual, a nova
+//     e a confirmação. Pode cancelar.
+//
+//  2. OBRIGATÓRIO (primeiro acesso com senha temporária): o chefe criou
+//     a conta ou redefiniu a senha, então a pessoa PRECISA criar uma
+//     senha própria antes de usar o sistema. Não pede a senha atual
+//     (ela acabou de entrar com ela) e não tem botão de cancelar.
+//
+//  Quem avisa qual jeito usar é o processo principal: ele abre este
+//  arquivo com "?obrigatoria=1" no endereço quando o banco disse que a
+//  pessoa precisa trocar a senha.
+// =====================================================================
+
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('form-trocar-senha');
   const btnCancelar = document.getElementById('btn-cancelar');
   const btnFecharTopo = document.getElementById('btn-fechar-topo');
 
+  // Lê o "?obrigatoria=1" do endereço da janela
+  const parametros = new URLSearchParams(window.location.search);
+  const modoObrigatorio = parametros.get('obrigatoria') === '1';
+
   function fecharJanela() {
     window.apiAcesso.fecharModalTrocarSenha();
   }
 
-  btnCancelar.addEventListener('click', fecharJanela);
-  btnFecharTopo.addEventListener('click', fecharJanela);
+  if (modoObrigatorio) {
+    document.getElementById('titulo-trocar-senha').textContent = 'Crie sua senha';
+    document.getElementById('aviso-senha-obrigatoria').style.display = 'block';
+    document.getElementById('grupo-senha-atual').style.display = 'none';
+    document.getElementById('senha-atual').required = false;
+    btnCancelar.style.display = 'none';
+    btnFecharTopo.style.display = 'none';
+  } else {
+    btnCancelar.addEventListener('click', fecharJanela);
+    btnFecharTopo.addEventListener('click', fecharJanela);
+  }
 
-  function configurarToggleSenha(idInput, idBotao, idIcone){
+  function configurarToggleSenha(idInput, idBotao, idIcone) {
     const inputSenha = document.getElementById(idInput);
     const btnOlho = document.getElementById(idBotao);
     const iconeOlho = document.getElementById(idIcone);
@@ -28,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   configurarToggleSenha('senha-atual', 'btn-olho-senha-atual', 'ic-olho-senha-atual');
   configurarToggleSenha('nova-senha', 'btn-olho-nova-senha', 'ic-olho-nova-senha');
-  configurarToggleSenha('confirmar-nova-senha', 'btn-olho-confirmar-nova-senha', 'ic-olho-confirmar-nova-senha');  
+  configurarToggleSenha('confirmar-nova-senha', 'btn-olho-confirmar-nova-senha', 'ic-olho-confirmar-nova-senha');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -55,10 +84,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSalvar) btnSalvar.disabled = true;
 
     try {
-      const resposta = await window.apiAcesso.trocarSenhaLogado({ senhaAtual, novaSenha });
+      const resposta = modoObrigatorio
+        ? await window.apiAcesso.trocarSenhaObrigatoria({ novaSenha })
+        : await window.apiAcesso.trocarSenhaLogado({ senhaAtual, novaSenha });
 
       if (resposta.sucesso) {
-        window.apiAcesso.fecharModalTrocarSenha();
+        fecharJanela();
       }
     } catch (erro) {
       console.error('Erro ao trocar senha:', erro);

@@ -49,6 +49,12 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     abrirModalTrocarSenha: () => ipcRenderer.send('abrir-modal-trocar-senha'),
     fecharModalTrocarSenha: () => ipcRenderer.send('fechar-modal-trocar-senha'),
     trocarSenhaLogado: (dados) => ipcRenderer.invoke('trocar-senha-logado', dados),
+    trocarSenhaObrigatoria: (dados) => ipcRenderer.invoke('trocar-senha-obrigatoria', dados),
+    aoTrocarSenhaObrigatoria: (funcao) => ipcRenderer.on('senha-obrigatoria-trocada', () => funcao()),
+
+    // ============================  MINHA CONTA E SESSÃO ======================
+    salvarMinhaConta: (dados) => ipcRenderer.invoke('salvar-minha-conta', dados),
+    sairPorInatividade: () => ipcRenderer.send('sair-por-inatividade'),
 
     // ==================== MODELOS DE PERMISSÃO (antigos grupos) ====================
     pedirGruposPermissao: () => ipcRenderer.invoke('buscar-grupos-permissao'),

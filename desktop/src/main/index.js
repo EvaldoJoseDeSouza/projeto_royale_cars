@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs"); // ainda usado no cadastro de colaborador (s
 
 // Conexão com o banco, sessão e conversas (IPC) do login ficam em arquivos próprios
 const supabase = require("./supabase");
-const { temPermissao } = require("./sessao");
+const { sessao, temPermissao, limparSessao } = require("./sessao");
 const { registrarIpcSessao } = require("./ipc/sessao");
 const { registrarIpcModelos } = require("./ipc/modelos");
 
@@ -147,6 +147,7 @@ registrarIpcSessao({
   mostrarAviso,
   obterJanelaPrincipal: () => janelaPrincipal,
   obterJanelaTrocarSenha: () => janelaModalTrocarSenha,
+  obterJanelaDashboard: () => janelaDashboard,
 });
 
 registrarIpcModelos({
@@ -178,8 +179,13 @@ ipcMain.on("abrir-modal-trocar-senha", (evento) => {
     },
   });
 
+  // Se a pessoa entrou com senha temporária, o modal abre no modo
+  // obrigatório. Quem decide é o processo principal (ele sabe o que o banco
+  // disse), e não a tela: assim ninguém consegue "pular" a troca.
+  const obrigatoria = Boolean(sessao.usuario && sessao.usuario.trocar_senha);
   janelaModalTrocarSenha.loadFile(
     path.join(__dirname, "../renderer/modais/trocar-senha/modalTrocarSenha.html"),
+    { query: { obrigatoria: obrigatoria ? "1" : "0" } },
   );
   janelaModalTrocarSenha.once("ready-to-show", () =>
     janelaModalTrocarSenha.show(),
@@ -194,6 +200,10 @@ ipcMain.on("fechar-modal-trocar-senha", () => {
 });
 
 ipcMain.on("login-sucesso", () => {
+  // Trava de segurança: só abre o sistema para quem está logado e já
+  // criou a própria senha (não dá para pular a troca obrigatória).
+  if (!sessao.usuario || sessao.usuario.trocar_senha) return;
+
   janelaDashboard = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -221,6 +231,36 @@ ipcMain.on("login-sucesso", () => {
 
 ipcMain.on("fechar", () => {
   app.quit();
+});
+
+// ===================== SAÍDA POR INATIVIDADE ====================
+// O dashboard conta o tempo sem uso (mouse e teclado). Passou do limite,
+// ele pede para sair: encerramos o login, fechamos o sistema e voltamos
+// para a tela de login. Igual à web, que sai depois de 30 minutos parada.
+ipcMain.on("sair-por-inatividade", async () => {
+  await supabase.auth.signOut();
+  limparSessao();
+
+  // A ordem importa: PRIMEIRO abrimos o login, DEPOIS fechamos o resto.
+  // Se fechássemos tudo antes, por um instante não haveria nenhuma janela
+  // e o Electron encerraria o programa (evento "window-all-closed").
+  criarJanela();
+  const janelaLogin = janelaPrincipal;
+
+  // Fecha o dashboard e qualquer modal aberto. O dashboard normalmente só
+  // se esconde ao fechar (bandeja); destroy() fecha de verdade.
+  BrowserWindow.getAllWindows().forEach((janela) => {
+    if (janela !== janelaLogin && !janela.isDestroyed()) janela.destroy();
+  });
+  janelaDashboard = null;
+
+  janelaLogin.webContents.once("did-finish-load", () => {
+    mostrarAviso(janelaLogin, {
+      tipo: "erro",
+      titulo: "Sessão encerrada",
+      mensagem: "Você ficou muito tempo sem usar o sistema. Entre de novo para continuar.",
+    });
+  });
 });
 
 // ===================== MODAL DE CONFIRMAÇÃO ====================
