@@ -91,7 +91,7 @@ function criarJanela() {
 
   janelaPrincipal.maximize();
   janelaPrincipal.show();
-  janelaPrincipal.loadFile(path.join(__dirname, "../renderer/index.html"));
+  janelaPrincipal.loadFile(path.join(__dirname, "../renderer/telas/login/login.html"));
 
   janelaPrincipal.on("close", () => {
     app.isQuitting = true;
@@ -146,7 +146,7 @@ app.whenReady().then(() => {
   const menuReal = Menu.buildFromTemplate(templateDoMenu);
   Menu.setApplicationMenu(menuReal);
 
-  const iconeCaminho = path.join(__dirname, "icone.png");
+  const iconeCaminho = path.join(__dirname, "../imagens/icone.png");
   tray = new Tray(iconeCaminho);
   tray.setToolTip("Royale Cars - Rodando em segundo plano");
 
@@ -523,7 +523,7 @@ ipcMain.on("abrir-modal-trocar-senha", (evento) => {
   });
 
   janelaModalTrocarSenha.loadFile(
-    path.join(__dirname, "../renderer/modalTrocarSenha.html"),
+    path.join(__dirname, "../renderer/modais/trocar-senha/modalTrocarSenha.html"),
   );
   janelaModalTrocarSenha.once("ready-to-show", () =>
     janelaModalTrocarSenha.show(),
@@ -610,7 +610,7 @@ ipcMain.on("login-sucesso", () => {
   });
 
   janelaDashboard.maximize();
-  janelaDashboard.loadFile(path.join(__dirname, "../renderer/dashboard.html"));
+  janelaDashboard.loadFile(path.join(__dirname, "../renderer/telas/dashboard/dashboard.html"));
 
   janelaDashboard.on("close", (evento) => {
     if (!app.isQuitting) {
@@ -648,7 +648,7 @@ function abrirJanelaConfirmacao(janelaMae, dadosConfimacao) {
     });
 
     janelaModalConfirmacao.loadFile(
-      path.join(__dirname, "../renderer/modalConfirmacao.html"),
+      path.join(__dirname, "../renderer/modais/confirmacao/modalConfirmacao.html"),
     );
 
     janelaModalConfirmacao.webContents.once("did-finish-load", () => {
@@ -765,7 +765,7 @@ ipcMain.on("abrir-modal-veiculo", (evento) => {
   });
 
   janelaModalVeiculo.loadFile(
-    path.join(__dirname, "../renderer/modalVeiculo.html"),
+    path.join(__dirname, "../renderer/modais/veiculo/modalVeiculo.html"),
   );
   janelaModalVeiculo.once("ready-to-show", () => janelaModalVeiculo.show());
   janelaModalVeiculo.on("closed", () => {
@@ -1000,7 +1000,7 @@ ipcMain.on("abrir-modal-cliente", (evento) => {
   });
 
   janelaModalCliente.loadFile(
-    path.join(__dirname, "../renderer/modalCliente.html"),
+    path.join(__dirname, "../renderer/modais/cliente/modalCliente.html"),
   );
   janelaModalCliente.once("ready-to-show", () => janelaModalCliente.show());
   janelaModalCliente.on("closed", () => {
@@ -1250,7 +1250,7 @@ ipcMain.on("abrir-modal-locacao", (evento) => {
   });
 
   janelaModalLocacao.loadFile(
-    path.join(__dirname, "../renderer/modalLocacao.html"),
+    path.join(__dirname, "../renderer/modais/locacao/modalLocacao.html"),
   );
   janelaModalLocacao.once("ready-to-show", () => janelaModalLocacao.show());
   janelaModalLocacao.on("closed", () => {
@@ -1599,7 +1599,7 @@ ipcMain.on('abrir-modal-grupo', (evento) => {
     }
   });
 
-  janelaModalGrupoPermissao.loadFile(path.join(__dirname, '../renderer/modalGrupoPermissao.html'));
+  janelaModalGrupoPermissao.loadFile(path.join(__dirname, '../renderer/modais/grupo-permissao/modalGrupoPermissao.html'));
   janelaModalGrupoPermissao.once('ready-to-show', () => janelaModalGrupoPermissao.show());
   janelaModalGrupoPermissao.on('closed', () => { janelaModalGrupoPermissao = null; });
 });
@@ -1810,7 +1810,7 @@ ipcMain.on('abrir-modal-colaborador', (evento) => {
     }
   });
 
-  janelaModalColaborador.loadFile(path.join(__dirname, '../renderer/modalColaborador.html'));
+  janelaModalColaborador.loadFile(path.join(__dirname, '../renderer/modais/colaborador/modalColaborador.html'));
   janelaModalColaborador.once('ready-to-show', () => janelaModalColaborador.show());
   janelaModalColaborador.on('closed', () => { janelaModalColaborador = null; });
 });
@@ -2031,7 +2031,7 @@ ipcMain.on('abrir-modal-redefinir-senha-colaborador', (evento) => {
     }
   });
 
-  janelaModalRedefinirSenhaColaborador.loadFile(path.join(__dirname, '../renderer/modalRedefinirSenhaColaborador.html'));
+  janelaModalRedefinirSenhaColaborador.loadFile(path.join(__dirname, '../renderer/modais/redefinir-senha-colaborador/modalRedefinirSenhaColaborador.html'));
   janelaModalRedefinirSenhaColaborador.once('ready-to-show', () => janelaModalRedefinirSenhaColaborador.show());
   janelaModalRedefinirSenhaColaborador.on('closed', () => { janelaModalRedefinirSenhaColaborador = null; });
 });
@@ -2117,7 +2117,7 @@ ipcMain.on('abrir-modal-ver-colaboradores', (evento) => {
     }
   });
 
-  janelaModalVerColaboradores.loadFile(path.join(__dirname, '../renderer/modalVerColaboradores.html'));
+  janelaModalVerColaboradores.loadFile(path.join(__dirname, '../renderer/modais/ver-colaboradores/modalVerColaboradores.html'));
   janelaModalVerColaboradores.once('ready-to-show', () => janelaModalVerColaboradores.show());
   janelaModalVerColaboradores.on('closed', () => { janelaModalVerColaboradores = null; });
 });
