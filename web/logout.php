@@ -9,11 +9,7 @@ require __DIR__ . '/includes/bootstrap.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
 
-    if (usuario_logado()) {
-        registrar_log('seguranca', 'logout', (int) $_SESSION['usuario_id'], 'Saiu do sistema.');
-    }
-
-    encerrar_sessao();
+    encerrar_sessao(); // também avisa o Supabase (ver includes/auth.php)
     flash('sucesso', 'Você saiu do sistema.');
 }
 

@@ -3,13 +3,15 @@
 |--------------------------------------------------------------------------
 | LOGIN
 |--------------------------------------------------------------------------
-| - Senha guardada com password_hash (nunca em texto puro).
-| - Após 5 senhas erradas no mesmo e-mail, bloqueia por 15 minutos.
+| Quem confere a senha é o Supabase (o mesmo login do desktop e do
+| celular). O roteiro completo está em includes/auth.php:
+| entrar_no_sistema().
+|
+| - Após 5 senhas erradas no mesmo e-mail, o banco bloqueia por 15 minutos.
 | - Usuário desativado pelo chefe não consegue entrar.
 | - Toda tentativa fica registrada para o chefe consultar.
 |
-| Não existe mais "Criar uma conta" aqui: só o chefe cadastra usuários,
-| pelo Painel Administrativo.
+| Não existe "Criar uma conta" aqui: só o chefe cadastra usuários.
 */
 
 require __DIR__ . '/includes/bootstrap.php';
@@ -29,44 +31,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($email === '' || $senha === '') {
         $erro = 'Preencha o e-mail e a senha.';
-    } elseif (login_bloqueado($email)) {
-        registrar_tentativa($email, false, 'Bloqueado por excesso de tentativas');
-        registrar_log('seguranca', 'login_bloqueado', null,
-            "Login bloqueado por excesso de tentativas para {$email} (IP " . ip_cliente() . ').');
-
-        $erro = 'Muitas tentativas erradas. Por segurança, aguarde ' . MINUTOS_BLOQUEIO . ' minutos e tente de novo.';
+    } elseif (!validar_email($email)) {
+        $erro = 'Entre com o seu e-mail de acesso.';
     } else {
-        $usuario = db_linha('SELECT id, nome, email, senha, ativo FROM usuarios WHERE email = ?', [$email]);
+        $erro = entrar_no_sistema($email, $senha) ?? '';
 
-        // Mesmo sem usuário, roda a verificação para o tempo de resposta ser igual
-        $hash = $usuario['senha'] ?? '$2y$10$usesomesillystringfore7hnbRJHxXVLeakoG8K30oukPsA.ztMG';
-        $senhaCorreta = password_verify($senha, $hash);
-
-        if (!$usuario || !$senhaCorreta) {
-            registrar_tentativa($email, false, $usuario ? 'Senha incorreta' : 'E-mail não cadastrado');
-            $erro = 'E-mail ou senha incorretos.';
-        } elseif (!$usuario['ativo']) {
-            registrar_tentativa($email, false, 'Usuário desativado');
-            registrar_log('seguranca', 'login_desativado', (int) $usuario['id'],
-                "Usuário desativado tentou entrar: {$usuario['nome']}.");
-
-            $erro = 'Seu acesso está desativado. Fale com o responsável pela locadora.';
-        } else {
-            // Nova identificação de sessão (evita roubo de sessão)
-            session_regenerate_id(true);
-
-            $_SESSION['usuario_id'] = (int) $usuario['id'];
-            $_SESSION['ultima_atividade'] = time();
-
-            if (password_needs_rehash($usuario['senha'], PASSWORD_DEFAULT)) {
-                db_executar('UPDATE usuarios SET senha = ? WHERE id = ?',
-                    [password_hash($senha, PASSWORD_DEFAULT), (int) $usuario['id']]);
-            }
-
-            db_executar('UPDATE usuarios SET ultimo_acesso = NOW() WHERE id = ?', [(int) $usuario['id']]);
-            registrar_tentativa($email, true);
-            registrar_log('seguranca', 'login', (int) $usuario['id'], 'Entrou no sistema.');
-
+        if ($erro === '') {
+            // Senha temporária? O exigir_login() do dashboard manda para a troca.
             redirecionar('dashboard.php');
         }
     }

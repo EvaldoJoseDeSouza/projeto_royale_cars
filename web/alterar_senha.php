@@ -3,9 +3,13 @@
 |--------------------------------------------------------------------------
 | ALTERAR SENHA
 |--------------------------------------------------------------------------
-| Usada de dois jeitos:
-|  1) Obrigatória, quando o chefe redefiniu a senha (senha temporária).
-|  2) Voluntária, pelo menu "Minha conta".
+| Usada de dois jeitos (igual ao desktop):
+|  1) Obrigatória: a pessoa entrou com uma senha temporária (o chefe acabou
+|     de criar a conta ou redefinir a senha). Não pede a senha atual, porque
+|     ela acabou de entrar com a temporária.
+|  2) Voluntária, pela "Minha conta": pede a senha atual para conferir.
+|
+| A senha fica no Supabase Auth, não no nosso banco (ver includes/auth.php).
 */
 
 require __DIR__ . '/includes/bootstrap.php';
@@ -21,43 +25,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nova = (string) ($_POST['nova_senha'] ?? '');
     $confirmacao = (string) ($_POST['confirmar_senha'] ?? '');
 
-    $hashAtual = db_valor('SELECT senha FROM usuarios WHERE id = ?', [(int) $usuario['id']]);
-
-    if (!password_verify($atual, $hashAtual)) {
-        $erros['senha_atual'] = 'A senha atual está incorreta.';
-    }
-
     if ($erro = validar_senha($nova)) {
         $erros['nova_senha'] = $erro;
-    } elseif (password_verify($nova, $hashAtual)) {
-        $erros['nova_senha'] = 'A nova senha precisa ser diferente da atual.';
     }
 
     if ($nova !== $confirmacao) {
         $erros['confirmar_senha'] = 'As senhas não são iguais.';
     }
 
+    // Só confere a senha atual se o resto estiver certo (cada conferência
+    // é uma tentativa de login no Supabase).
+    if (!$erros && !$obrigatoria && !senha_atual_confere($usuario['email'], $atual)) {
+        $erros['senha_atual'] = 'A senha atual está incorreta.';
+    }
+
+    if (!$erros && ($erro = gravar_nova_senha($nova))) {
+        $erros['nova_senha'] = $erro;
+    }
+
     if (!$erros) {
-        db_executar('UPDATE usuarios SET senha = ?, trocar_senha = 0 WHERE id = ?',
-            [password_hash($nova, PASSWORD_DEFAULT), (int) $usuario['id']]);
-
-        registrar_log('usuarios', 'alterar_senha', (int) $usuario['id'], 'Alterou a própria senha.');
-
         session_regenerate_id(true);
-        flash('sucesso', 'Senha alterada com sucesso.');
+        flash('sucesso', $obrigatoria ? 'Pronto! Use essa senha nos próximos acessos.' : 'Senha alterada com sucesso.');
         redirecionar($obrigatoria ? 'dashboard.php' : 'configuracoes/index.php');
     }
 }
 
 $titulo = 'Alterar senha';
-$subtitulo = $obrigatoria ? 'Crie uma senha pessoal para continuar' : 'Segurança da conta';
+$subtitulo = $obrigatoria ? 'Crie a sua senha para continuar' : 'Segurança da conta';
 $menu = 'configuracoes';
 require RAIZ . '/includes/cabecalho.php';
 ?>
 
 <?php if ($obrigatoria): ?>
     <div class="alert-warning">
-        Sua senha foi redefinida pelo chefe. Por segurança, crie uma senha nova antes de continuar.
+        Você entrou com uma senha temporária. Crie a sua senha para continuar.
     </div>
 <?php endif; ?>
 
@@ -65,12 +66,14 @@ require RAIZ . '/includes/cabecalho.php';
     <form method="POST">
         <?= csrf_campo() ?>
 
-        <div class="form-group">
-            <label for="senha_atual"><?= $obrigatoria ? 'Senha temporária' : 'Senha atual' ?></label>
-            <input type="password" id="senha_atual" name="senha_atual" class="<?= classe_erro($erros, 'senha_atual') ?>"
-                   autocomplete="current-password" required>
-            <?= erro_campo($erros, 'senha_atual') ?>
-        </div>
+        <?php if (!$obrigatoria): ?>
+            <div class="form-group">
+                <label for="senha_atual">Senha atual</label>
+                <input type="password" id="senha_atual" name="senha_atual" class="<?= classe_erro($erros, 'senha_atual') ?>"
+                       autocomplete="current-password" required>
+                <?= erro_campo($erros, 'senha_atual') ?>
+            </div>
+        <?php endif; ?>
 
         <div class="form-group">
             <label for="nova_senha">Nova senha</label>

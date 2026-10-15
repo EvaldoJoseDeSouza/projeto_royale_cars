@@ -21,12 +21,19 @@ Se o MySQL tiver senha, ajuste em `config/database.php`.
 
 ### Logins de teste
 
-| Pessoa         | E-mail                      | Senha                        | Cargo        |
-|----------------|-----------------------------|------------------------------|--------------|
-| Gabriel S      | gabriel@gmail.com           | *a mesma que vocês já usavam* | Chefe        |
-| Mariana Costa  | mariana@royalecars.com.br   | `Royale@123`                 | Gerente      |
-| Lucas Pereira  | lucas@royalecars.com.br     | `Royale@123`                 | Funcionário  |
-| Pedro Alves    | pedro@royalecars.com.br     | `Royale@123`                 | Desativado   |
+Desde o pacote 3.2, o login é o do **Supabase**: as mesmas contas do desktop e
+do celular (criadas pelo `banco/03_dados_demo.sql`). A senha é a que o grupo
+definiu ao criar cada conta no painel do Supabase (Authentication → Users).
+
+| Pessoa         | E-mail                      | Cargo                      |
+|----------------|-----------------------------|----------------------------|
+| Gabriel S      | gabriel@royalecars.com.br   | Chefe                      |
+| Mariana Costa  | mariana@royalecars.com.br   | Gerente                    |
+| Lucas Pereira  | lucas@royalecars.com.br     | Funcionário                |
+| Pedro Alves    | pedro@royalecars.com.br     | Funcionário (desativado)   |
+
+Enquanto a mudança para o Supabase não termina (pacote 3.8), as telas que ainda
+usam o MySQL continuam lendo os dados de exemplo do `royale_cars.sql`.
 
 As datas dos dados de exemplo são calculadas a partir do dia da importação, então
 o sistema sempre tem um aluguel atrasado, um que vence amanhã e um carro na oficina
@@ -98,8 +105,8 @@ para demonstrar os alertas.
 | SQL Injection | Todas as consultas usam *prepared statements* |
 | XSS | Tudo que vem do banco passa por `htmlspecialchars` |
 | CSRF | Todo formulário tem um token secreto; ações como arquivar só aceitam POST |
-| Senhas | `password_hash` (bcrypt); mínimo de 8 caracteres com letras e números |
-| Força bruta | 5 senhas erradas no mesmo e-mail → bloqueio de 15 minutos |
+| Senhas | Guardadas e conferidas pelo Supabase Auth (o PHP nunca vê o hash); mínimo de 8 caracteres com letras e números |
+| Força bruta | 5 senhas erradas no mesmo e-mail → bloqueio de 15 minutos (regra do banco, igual nas 3 plataformas) |
 | Sessão | Cookie `HttpOnly`, novo ID a cada login e saída automática após 30 minutos parado |
 | Acesso direto | Toda página confere login e permissão; `config/` e `includes/` bloqueados pelo `.htaccess` |
 | Uploads | Tipo real do arquivo conferido, nome aleatório e a pasta não executa PHP |

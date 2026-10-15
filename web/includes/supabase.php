@@ -280,7 +280,10 @@ function sb_token_atual(): ?string
                 ['refresh_token' => $sessao['refresh_token']], [], false)['dados'];
             sb_guardar_sessao($novo);
         } catch (SupabaseErro $e) {
-            unset($_SESSION['supabase']); // não deu para renovar: precisa entrar de novo
+            if ($e->codigo === 'sem_conexao') {
+                throw $e; // sem internet: avisa, mas NÃO tira a pessoa do sistema
+            }
+            unset($_SESSION['supabase']); // o Supabase recusou: precisa entrar de novo
             return null;
         }
     }

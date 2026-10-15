@@ -3,46 +3,36 @@
 |--------------------------------------------------------------------------
 | MINHA CONTA
 |--------------------------------------------------------------------------
-| Cada usuário atualiza o próprio nome e e-mail e vê suas permissões.
-| Cargo e permissões só o chefe muda, no Painel Administrativo.
+| Cada usuário muda o próprio nome e vê suas permissões. Igual ao desktop:
+| cargo, e-mail de acesso e permissões só o chefe muda (decisão 11 do
+| plano), e o banco garante isso mesmo se alguém tentar burlar a tela.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
 
 $usuario = exigir_login();
 $erros = [];
-$dados = db_linha('SELECT nome, email, cargo, ultimo_acesso, criado_em FROM usuarios WHERE id = ?', [(int) $usuario['id']]);
+$dados = $usuario; // já vem do banco em usuario_logado()
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
 
     $dados['nome'] = trim(preg_replace('/\s+/', ' ', $_POST['nome'] ?? ''));
-    $dados['email'] = mb_strtolower(trim($_POST['email'] ?? ''));
+    $tamanho = mb_strlen($dados['nome']);
 
-    if (!validar_nome_completo($dados['nome'])) {
-        $erros['nome'] = 'Informe nome e sobrenome.';
-    }
-
-    if (!validar_email($dados['email'])) {
-        $erros['email'] = 'Digite um e-mail válido.';
-    } elseif (db_valor('SELECT id FROM usuarios WHERE email = ? AND id <> ?', [$dados['email'], (int) $usuario['id']])) {
-        $erros['email'] = 'Este e-mail já está sendo usado por outra pessoa.';
+    // Mesma regra do banco (tabela perfis) e do desktop
+    if ($tamanho < 3 || $tamanho > 100) {
+        $erros['nome'] = 'O nome precisa ter entre 3 e 100 caracteres.';
     }
 
     if (!$erros) {
         try {
-            db_executar('UPDATE usuarios SET nome = ?, email = ? WHERE id = ?',
-                [$dados['nome'], $dados['email'], (int) $usuario['id']]);
+            sb_atualizar('perfis', ['id' => 'eq.' . $usuario['id']], ['nome' => $dados['nome']]);
 
-            registrar_log('usuarios', 'editar', (int) $usuario['id'], 'Atualizou os próprios dados de conta.');
-            flash('sucesso', 'Dados atualizados com sucesso!');
+            flash('sucesso', 'Seu nome foi atualizado.');
             redirecionar('configuracoes/index.php');
-        } catch (mysqli_sql_exception $e) {
-            if (campo_duplicado($e)) {
-                $erros['email'] = 'Este e-mail já está sendo usado por outra pessoa.';
-            } else {
-                throw $e;
-            }
+        } catch (SupabaseErro $e) {
+            $erros['nome'] = sb_mensagem_erro($e);
         }
     }
 }
@@ -62,17 +52,16 @@ require RAIZ . '/includes/cabecalho.php';
             <?= csrf_campo() ?>
 
             <div class="form-group">
-                <label for="nome">Nome completo</label>
+                <label for="nome">Nome</label>
                 <input type="text" id="nome" name="nome" value="<?= campo($dados, 'nome') ?>"
-                       data-validar="nome" class="<?= classe_erro($erros, 'nome') ?>" maxlength="100" required>
+                       class="<?= classe_erro($erros, 'nome') ?>" minlength="3" maxlength="100" required>
                 <?= erro_campo($erros, 'nome') ?>
             </div>
 
             <div class="form-group">
                 <label for="email">E-mail de acesso</label>
-                <input type="email" id="email" name="email" value="<?= campo($dados, 'email') ?>"
-                       data-validar="email" class="<?= classe_erro($erros, 'email') ?>" maxlength="150" required>
-                <?= erro_campo($erros, 'email') ?>
+                <input type="email" id="email" value="<?= campo($dados, 'email') ?>" disabled>
+                <small class="campo-ajuda">Só o responsável pela locadora muda o e-mail de acesso.</small>
             </div>
 
             <div class="form-actions">
