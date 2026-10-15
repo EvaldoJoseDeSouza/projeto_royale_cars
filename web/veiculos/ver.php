@@ -11,26 +11,31 @@ require RAIZ . '/includes/veiculos.php';
 exigir_permissao('veiculos_ver');
 
 $id = (int) ($_GET['id'] ?? 0);
-$veiculo = db_linha('SELECT * FROM veiculos WHERE id = ?', [$id]);
+$veiculo = buscar_veiculo($id);
 
 if (!$veiculo) {
     flash('erro', 'Veículo não encontrado.');
     redirecionar('veiculos/index.php');
 }
 
-$locacoes = db_todos(
-    'SELECT l.*, c.nome AS cliente
-     FROM locacoes l
-     JOIN clientes c ON c.id = l.cliente_id
-     WHERE l.veiculo_id = ?
-     ORDER BY l.data_retirada DESC',
-    [$id]
-);
+// Aluguéis do carro com o nome do cliente "pendurado" em cada um.
+// (O banco só entrega o que a pessoa pode ver: sem permissão, vem vazio.)
+$locacoes = sb_select('locacoes', [
+    'select'     => 'id,status,data_retirada,data_prevista,data_devolucao,valor_total,clientes(nome)',
+    'veiculo_id' => 'eq.' . $id,
+    'order'      => 'data_retirada.desc,id.desc',
+]);
 
-$manutencoes = db_todos(
-    'SELECT * FROM manutencoes WHERE veiculo_id = ? ORDER BY data_entrada DESC',
-    [$id]
-);
+foreach ($locacoes as &$l) {
+    $l['cliente'] = $l['clientes']['nome'] ?? '—';
+}
+unset($l);
+
+$manutencoes = sb_select('manutencoes', [
+    'select'     => 'id,data_entrada,defeito,oficina,data_liberacao,custo,status',
+    'veiculo_id' => 'eq.' . $id,
+    'order'      => 'data_entrada.desc,id.desc',
+]);
 
 $faturado = 0;
 $diasAlugado = 0;
@@ -94,6 +99,7 @@ require RAIZ . '/includes/cabecalho.php';
             <div><span>Placa</span><strong><?= e(formatar_placa($veiculo['placa'])) ?></strong></div>
             <div><span>Chassi</span><strong><?= e($veiculo['chassi']) ?></strong></div>
             <div><span>Diária</span><strong><?= moeda($veiculo['valor_diaria']) ?></strong></div>
+            <div><span>Quilometragem</span><strong><?= number_format((int) $veiculo['quilometragem'], 0, ',', '.') ?> km</strong></div>
         </div>
     </div>
 

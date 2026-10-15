@@ -13,7 +13,7 @@ require RAIZ . '/includes/veiculos.php';
 exigir_permissao('veiculos_gerenciar');
 
 $id = (int) ($_GET['id'] ?? 0);
-$veiculo = db_linha('SELECT * FROM veiculos WHERE id = ?', [$id]);
+$veiculo = buscar_veiculo($id);
 
 if (!$veiculo) {
     flash('erro', 'Veículo não encontrado.');
@@ -31,60 +31,43 @@ $erros = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
 
-    [$dados, $erros] = validar_veiculo($_POST, $id);
+    [$dados, $erros] = validar_veiculo($_POST, $veiculo);
     $dados['imagem'] = $veiculo['imagem'];
-    $novaImagem = null;
+    $novaFoto = null;
 
     if (!$erros) {
-        [$novaImagem, $erroImagem] = salvar_imagem_veiculo($_FILES['imagem'] ?? null);
+        [$novaFoto, $erroFoto] = enviar_foto_veiculo($_FILES['imagem'] ?? null);
 
-        if ($erroImagem) {
-            $erros['imagem'] = $erroImagem;
+        if ($erroFoto) {
+            $erros['imagem'] = $erroFoto;
         }
     }
 
     if (!$erros) {
-        $imagemFinal = $veiculo['imagem'];
-
-        if ($novaImagem) {
-            $imagemFinal = $novaImagem;
+        if ($novaFoto) {
+            $dados['imagem'] = $novaFoto;
         } elseif (!empty($_POST['remover_imagem'])) {
-            $imagemFinal = null;
+            $dados['imagem'] = null;
         }
 
-        try {
-            db_executar(
-                'UPDATE veiculos
-                 SET marca = ?, modelo = ?, ano = ?, placa = ?, chassi = ?, valor_diaria = ?, imagem = ?
-                 WHERE id = ?',
-                [$dados['marca'], $dados['modelo'], $dados['ano'], $dados['placa'], $dados['chassi'], $dados['valor_diaria'], $imagemFinal, $id]
-            );
+        // O banco grava no histórico o que mudou ("diária de R$ ... para R$ ...")
+        [$gravado, $erros] = salvar_veiculo($dados, $id);
 
-            if ($imagemFinal !== $veiculo['imagem']) {
-                apagar_imagem_veiculo($veiculo['imagem']);
+        if ($gravado) {
+            // Trocou ou tirou a foto: a antiga não serve mais
+            if ($dados['imagem'] !== $veiculo['imagem']) {
+                apagar_foto_veiculo($veiculo['imagem']);
             }
-
-            $descricao = descrever_alteracoes_veiculo($veiculo, $dados);
-
-            if ($imagemFinal !== $veiculo['imagem']) {
-                $descricao .= $imagemFinal ? '; trocou a foto' : '; removeu a foto';
-            }
-
-            registrar_log('veiculos', 'editar', $id,
-                'Editou o ' . nome_veiculo($dados) . ' (' . formatar_placa($dados['placa']) . "): {$descricao}.");
 
             flash('sucesso', 'Veículo atualizado.');
             redirecionar('veiculos/ver.php?id=' . $id);
-        } catch (mysqli_sql_exception $e) {
-            apagar_imagem_veiculo($novaImagem);
+        }
 
-            if ($campo = campo_duplicado($e)) {
-                $erros[$campo] = 'Este valor já está cadastrado em outro veículo.';
-            } elseif (violou_regra_banco($e)) {
-                $erros[] = 'O banco de dados recusou os dados. Confira os campos.';
-            } else {
-                throw $e;
-            }
+        apagar_foto_veiculo($novaFoto);
+        $dados['imagem'] = $veiculo['imagem'];
+
+        if (!$erros) {
+            $erros['geral'] = 'Não foi possível salvar. O veículo pode ter sido arquivado por outra pessoa.';
         }
     }
 }

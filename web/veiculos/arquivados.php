@@ -10,12 +10,8 @@ require RAIZ . '/includes/veiculos.php';
 
 exigir_permissao('veiculos_ver');
 
-$veiculos = db_todos(
-    'SELECT v.*, (SELECT COUNT(*) FROM locacoes l WHERE l.veiculo_id = v.id) AS total_alugueis
-     FROM veiculos v
-     WHERE v.arquivado = 1
-     ORDER BY v.arquivado_em DESC'
-);
+$veiculos = listar_veiculos(true);
+$alugueis = contar_alugueis_veiculos(array_column($veiculos, 'id'));
 
 $titulo = 'Veículos arquivados';
 $subtitulo = 'Fora da frota, com histórico preservado';
@@ -44,7 +40,7 @@ require RAIZ . '/includes/cabecalho.php';
                     <td><?= (int) $veiculo['ano'] ?></td>
                     <td><?= e(formatar_placa($veiculo['placa'])) ?></td>
                     <td class="texto-fraco"><?= e($veiculo['chassi']) ?></td>
-                    <td><?= (int) $veiculo['total_alugueis'] ?></td>
+                    <td><?= $alugueis[$veiculo['id']] ?? 0 ?></td>
                     <td><?= data_hora_br($veiculo['arquivado_em']) ?></td>
                     <td>
                         <a href="<?= e(url('veiculos/ver.php?id=' . $veiculo['id'])) ?>" class="btn-small btn-claro">Histórico</a>

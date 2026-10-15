@@ -17,43 +17,24 @@ if (!in_array($status, STATUS_VEICULO, true)) {
     $status = '';
 }
 
-$where = 'v.arquivado = 0';
-$parametros = [];
+// Uma pergunta ao banco traz a frota (com a busca). As abas e o filtro
+// por status são feitos aqui mesmo, sem voltar ao banco.
+$frota = listar_veiculos(false, $busca);
 
-if ($busca !== '') {
-    $where .= ' AND (v.marca LIKE ? OR v.modelo LIKE ? OR v.placa LIKE ? OR v.chassi LIKE ?)';
-    $placaBusca = str_replace('-', '', strtoupper($busca));
-    array_push($parametros, "%{$busca}%", "%{$busca}%", "%{$placaBusca}%", "%{$placaBusca}%");
+$contagem = ['' => count($frota)] + array_fill_keys(STATUS_VEICULO, 0);
+
+foreach ($frota as $v) {
+    $contagem[$v['status']]++;
 }
 
-// Contagem por status para as abas
-$contagem = ['' => 0];
+$veiculos = $status === '' ? $frota : array_values(array_filter($frota, fn ($v) => $v['status'] === $status));
 
-foreach (STATUS_VEICULO as $s) {
-    $contagem[$s] = 0;
-}
+// Ordem da tela: disponíveis primeiro, depois alugados, depois na oficina
+// (dentro de cada grupo, a ordem de marca e modelo que veio do banco)
+usort($veiculos, fn ($a, $b) => array_search($a['status'], STATUS_VEICULO) <=> array_search($b['status'], STATUS_VEICULO));
 
-foreach (db_todos("SELECT v.status, COUNT(*) AS total FROM veiculos v WHERE {$where} GROUP BY v.status", $parametros) as $linha) {
-    $contagem[$linha['status']] = (int) $linha['total'];
-    $contagem[''] += (int) $linha['total'];
-}
-
-if ($status !== '') {
-    $where .= ' AND v.status = ?';
-    $parametros[] = $status;
-}
-
-$veiculos = db_todos(
-    "SELECT v.*,
-            (SELECT l.data_prevista FROM locacoes l
-              WHERE l.veiculo_id = v.id AND l.status = 'Em andamento' LIMIT 1) AS devolucao_prevista
-     FROM veiculos v
-     WHERE {$where}
-     ORDER BY FIELD(v.status, 'Disponível', 'Alugado', 'Em manutenção'), v.marca, v.modelo",
-    $parametros
-);
-
-$totalArquivados = (int) db_valor('SELECT COUNT(*) FROM veiculos WHERE arquivado = 1');
+$voltas = devolucoes_previstas();
+$totalArquivados = sb_contar('veiculos', ['arquivado' => 'eq.true']);
 
 $titulo = 'Frota de veículos';
 $subtitulo = 'Disponíveis, alugados e em manutenção';
@@ -103,6 +84,7 @@ $linkAba = fn (string $s) => e(url('veiculos/index.php?' . http_build_query(arra
                 <th>Ano</th>
                 <th>Placa</th>
                 <th>Chassi</th>
+                <th class="numero">Km</th>
                 <th class="numero">Diária</th>
                 <th>Status</th>
                 <th>Ações</th>
@@ -116,12 +98,13 @@ $linkAba = fn (string $s) => e(url('veiculos/index.php?' . http_build_query(arra
                     <td><?= (int) $veiculo['ano'] ?></td>
                     <td class="nowrap"><?= e(formatar_placa($veiculo['placa'])) ?></td>
                     <td class="texto-fraco"><?= e($veiculo['chassi']) ?></td>
+                    <td class="numero nowrap"><?= number_format((int) $veiculo['quilometragem'], 0, ',', '.') ?></td>
                     <td class="numero"><?= moeda($veiculo['valor_diaria']) ?></td>
                     <td>
                         <?= badge_status($veiculo['status']) ?>
-                        <?php if ($veiculo['devolucao_prevista']): ?>
-                            <br><small class="<?= $veiculo['devolucao_prevista'] < date('Y-m-d') ? 'texto-vermelho' : 'texto-fraco' ?>">
-                                volta <?= data_br($veiculo['devolucao_prevista']) ?>
+                        <?php if ($volta = $voltas[$veiculo['id']] ?? null): ?>
+                            <br><small class="<?= $volta < date('Y-m-d') ? 'texto-vermelho' : 'texto-fraco' ?>">
+                                volta <?= data_br($volta) ?>
                             </small>
                         <?php endif; ?>
                     </td>
@@ -145,7 +128,7 @@ $linkAba = fn (string $s) => e(url('veiculos/index.php?' . http_build_query(arra
             <?php endforeach; ?>
 
             <?php if (!$veiculos): ?>
-                <tr><td colspan="8" class="empty">Nenhum veículo encontrado.</td></tr>
+                <tr><td colspan="9" class="empty">Nenhum veículo encontrado.</td></tr>
             <?php endif; ?>
         </tbody>
     </table>

@@ -1,25 +1,23 @@
 <?php
 /*
-| Reativa um veículo arquivado: ele volta para a frota como Disponível.
+| Reativa um veículo arquivado: ele volta para a frota como Disponível
+| (o banco acerta o status sozinho).
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/veiculos.php';
 
 exigir_permissao('veiculos_arquivar');
 exigir_post();
 
 $id = (int) ($_POST['id'] ?? 0);
-$veiculo = db_linha('SELECT * FROM veiculos WHERE id = ?', [$id]);
 
-if (!$veiculo || !$veiculo['arquivado']) {
-    flash('erro', 'Veículo não encontrado ou já está na frota.');
+[$veiculo, $erro] = mudar_arquivado_veiculo($id, false);
+
+if ($erro) {
+    flash('erro', $erro);
     redirecionar('veiculos/arquivados.php');
 }
-
-db_executar("UPDATE veiculos SET arquivado = 0, arquivado_em = NULL, status = 'Disponível' WHERE id = ?", [$id]);
-
-registrar_log('veiculos', 'reativar', $id,
-    'Reativou o veículo ' . nome_veiculo($veiculo) . ' (' . formatar_placa($veiculo['placa']) . ').');
 
 flash('sucesso', nome_veiculo($veiculo) . ' voltou para a frota.');
 redirecionar('veiculos/ver.php?id=' . $id);

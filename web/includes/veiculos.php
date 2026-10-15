@@ -1,30 +1,62 @@
 <?php
 /*
 |--------------------------------------------------------------------------
-| REGRAS DE VEÍCULOS (usadas no cadastro e na edição)
+| REGRAS DE VEÍCULOS (usadas pelas telas da pasta veiculos/)
 |--------------------------------------------------------------------------
-| O status do veículo NÃO é escolhido no formulário. Ele muda sozinho:
+| O status do veículo NÃO é escolhido no formulário. Ele muda sozinho,
+| pelas funções do banco (igual no desktop e no celular):
 |   - Disponível    → Alugado        quando um aluguel é registrado
 |   - Alugado       → Disponível     quando o carro é devolvido
 |   - Disponível    → Em manutenção  quando vai para a oficina
 |   - Em manutenção → Disponível     quando a manutenção é concluída
-| Assim a frota nunca fica com informação errada.
+| Se alguém tentar mudar à mão, o banco recusa.
+|
+| O banco também: só deixa arquivar carro Disponível, barra placa e chassi
+| repetidos e grava o histórico sozinho (o que mudou em cada edição).
+|
+| FOTOS: ficam no Supabase Storage (bucket "veiculos"), e não numa pasta
+| do XAMPP. Assim a mesma foto aparece em qualquer computador e no
+| celular. Na coluna "imagem" guardamos só o nome do arquivo no bucket.
 */
 
-const PASTA_IMAGENS = 'uploads/veiculos';
-const TAMANHO_MAX_IMAGEM = 2 * 1024 * 1024; // 2 MB
+const BUCKET_FOTOS = 'veiculos';
+const TAMANHO_MAX_IMAGEM = 2 * 1024 * 1024; // 2 MB (o bucket também limita)
+const KM_MAXIMO = 2000000;
 
 const STATUS_VEICULO = ['Disponível', 'Alugado', 'Em manutenção'];
 
-function validar_veiculo(array $entrada, ?int $idAtual = null): array
+const COLUNAS_VEICULO = 'id,marca,modelo,ano,placa,chassi,valor_diaria,quilometragem,imagem,status,arquivado,arquivado_em,criado_em';
+
+// Frases para cada regra do banco → [campo do formulário, mensagem]
+const REGRAS_VEICULO = [
+    'veiculos_marca_check'         => ['marca', 'Informe a marca.'],
+    'veiculos_modelo_check'        => ['modelo', 'Informe o modelo.'],
+    'veiculos_ano_check'           => ['ano', 'Ano inválido.'],
+    'veiculos_placa_check'         => ['placa', 'Placa inválida. Use o padrão antigo (ABC-1234) ou Mercosul (ABC1D23).'],
+    'veiculos_chassi_check'        => ['chassi', 'Chassi inválido. São 17 letras/números, sem as letras I, O e Q.'],
+    'veiculos_valor_diaria_check'  => ['valor_diaria', 'Informe um valor de diária maior que zero.'],
+    'veiculos_quilometragem_check' => ['quilometragem', 'A quilometragem não pode ser negativa.'],
+];
+
+const DUPLICADOS_VEICULO = [
+    'veiculos_placa_key'  => ['placa', 'Esta placa'],
+    'veiculos_chassi_key' => ['chassi', 'Este chassi'],
+];
+
+/**
+ * Lê e confere os dados do formulário.
+ * $atual: o veículo como está no banco (na edição). Devolve [dados, erros].
+ */
+function validar_veiculo(array $entrada, ?array $atual = null): array
 {
     $dados = [
-        'marca'        => trim(preg_replace('/\s+/', ' ', (string) ($entrada['marca'] ?? ''))),
-        'modelo'       => trim(preg_replace('/\s+/', ' ', (string) ($entrada['modelo'] ?? ''))),
-        'ano'          => trim((string) ($entrada['ano'] ?? '')),
-        'placa'        => (string) ($entrada['placa'] ?? ''),
-        'chassi'       => (string) ($entrada['chassi'] ?? ''),
-        'valor_diaria' => (string) ($entrada['valor_diaria'] ?? ''),
+        'marca'         => trim(preg_replace('/\s+/', ' ', (string) ($entrada['marca'] ?? ''))),
+        'modelo'        => trim(preg_replace('/\s+/', ' ', (string) ($entrada['modelo'] ?? ''))),
+        'ano'           => trim((string) ($entrada['ano'] ?? '')),
+        'placa'         => (string) ($entrada['placa'] ?? ''),
+        'chassi'        => (string) ($entrada['chassi'] ?? ''),
+        'valor_diaria'  => (string) ($entrada['valor_diaria'] ?? ''),
+        'quilometragem' => so_digitos($entrada['quilometragem'] ?? ''),
     ];
 
     $erros = [];
@@ -69,32 +101,149 @@ function validar_veiculo(array $entrada, ?int $idAtual = null): array
         $dados['valor_diaria'] = $diaria;
     }
 
-    // Duplicidade (o banco também barra pelo UNIQUE)
-    foreach (['placa' => 'Esta placa', 'chassi' => 'Este chassi'] as $campo => $rotulo) {
-        if (isset($erros[$campo])) {
-            continue;
-        }
-
-        $existente = db_linha(
-            "SELECT id, marca, modelo, arquivado FROM veiculos WHERE {$campo} = ? AND id <> ?",
-            [$dados[$campo], $idAtual ?? 0]
-        );
-
-        if ($existente) {
-            $erros[$campo] = "{$rotulo} já pertence ao " . nome_veiculo($existente)
-                . ($existente['arquivado'] ? ' (arquivado — reative em "Veículos arquivados").' : '.');
-        }
+    // Carro alugado: a quilometragem só muda na devolução (regra do banco).
+    // Então nem lemos o campo: mantemos a que está gravada.
+    if ($atual && $atual['status'] === 'Alugado') {
+        $dados['quilometragem'] = (int) $atual['quilometragem'];
+    } elseif ($dados['quilometragem'] === '' || (int) $dados['quilometragem'] > KM_MAXIMO) {
+        $erros['quilometragem'] = 'Informe a quilometragem atual do veículo (só números).';
+    } else {
+        $dados['quilometragem'] = (int) $dados['quilometragem'];
     }
 
     return [$dados, $erros];
 }
 
 /**
- * Recebe a imagem enviada. Confere o tipo real do arquivo (não só a
- * extensão), o tamanho e salva com um nome aleatório.
- * Devolve [nome do arquivo ou null, mensagem de erro ou null].
+ * Grava no Supabase: sem $id cadastra, com $id edita.
+ * Devolve [veículo gravado ou null, erros por campo].
+ * (Mesma ideia dos clientes: tenta gravar e, se o banco recusar por
+ * repetido, descobre de qual carro é a placa ou o chassi.)
  */
-function salvar_imagem_veiculo(?array $arquivo): array
+function salvar_veiculo(array $dados, ?int $id = null): array
+{
+    try {
+        $gravado = $id
+            ? (sb_atualizar('veiculos', ['id' => 'eq.' . $id], $dados)[0] ?? null)
+            : sb_inserir('veiculos', $dados);
+
+        return [$gravado, []];
+    } catch (SupabaseErro $e) {
+        $regra = sb_regra($e);
+
+        if (isset(DUPLICADOS_VEICULO[$regra])) {
+            [$campo, $rotulo] = DUPLICADOS_VEICULO[$regra];
+            return [null, [$campo => mensagem_duplicado_veiculo($campo, $rotulo, $dados[$campo], $id)]];
+        }
+
+        if (isset(REGRAS_VEICULO[$regra])) {
+            [$campo, $mensagem] = REGRAS_VEICULO[$regra];
+            return [null, [$campo => $mensagem]];
+        }
+
+        return [null, ['geral' => sb_mensagem_erro($e)]];
+    }
+}
+
+function mensagem_duplicado_veiculo(string $campo, string $rotulo, string $valor, ?int $idAtual): string
+{
+    $dono = sb_linha('veiculos', [
+        'select' => 'id,marca,modelo,arquivado',
+        $campo   => 'eq.' . $valor,
+        'id'     => 'neq.' . ($idAtual ?? 0),
+    ]);
+
+    if (!$dono) {
+        return "{$rotulo} já está cadastrado.";
+    }
+
+    return "{$rotulo} já pertence ao " . nome_veiculo($dono)
+        . ($dono['arquivado'] ? ' (arquivado — reative em "Veículos arquivados").' : '.');
+}
+
+function buscar_veiculo(int $id): ?array
+{
+    return $id > 0 ? sb_linha('veiculos', ['select' => COLUNAS_VEICULO, 'id' => 'eq.' . $id]) : null;
+}
+
+/**
+ * Arquiva ou reativa. O banco confere se o carro está Disponível (para
+ * arquivar) e volta o status para Disponível ao reativar.
+ * Devolve [veículo atualizado ou null, mensagem de erro ou null].
+ */
+function mudar_arquivado_veiculo(int $id, bool $arquivar): array
+{
+    try {
+        $veiculo = sb_atualizar('veiculos',
+            ['id' => 'eq.' . $id, 'arquivado' => 'eq.' . ($arquivar ? 'false' : 'true')],
+            ['arquivado' => $arquivar])[0] ?? null;
+
+        return $veiculo
+            ? [$veiculo, null]
+            : [null, $arquivar ? 'Veículo não encontrado ou já arquivado.' : 'Veículo não encontrado ou já está na frota.'];
+    } catch (SupabaseErro $e) {
+        return [null, sb_mensagem_erro($e)];
+    }
+}
+
+/**
+ * Lista da frota (ativos ou arquivados), com busca por marca, modelo,
+ * placa ou chassi. A frota de uma locadora é pequena: vem tudo de uma vez.
+ */
+function listar_veiculos(bool $arquivados, string $busca = ''): array
+{
+    $filtros = [
+        'select'    => COLUNAS_VEICULO,
+        'arquivado' => 'eq.' . ($arquivados ? 'true' : 'false'),
+        'order'     => $arquivados ? 'arquivado_em.desc' : 'marca.asc,modelo.asc',
+    ];
+
+    // Tira a "pontuação de comando" do filtro (ver filtro_clientes)
+    $texto = trim(str_replace([',', '(', ')', '*', '"', '\\'], ' ', $busca));
+
+    if ($texto !== '') {
+        $codigo = strtoupper(str_replace(['-', ' '], '', $texto)); // "abc-1234" → "ABC1234"
+        $filtros['or'] = "(marca.ilike.*{$texto}*,modelo.ilike.*{$texto}*,placa.ilike.*{$codigo}*,chassi.ilike.*{$codigo}*)";
+    }
+
+    return sb_select('veiculos', $filtros);
+}
+
+/** [id do veículo => data prevista de volta] dos carros que estão na rua. */
+function devolucoes_previstas(): array
+{
+    $ativas = sb_select('locacoes', ['select' => 'veiculo_id,data_prevista', 'status' => 'eq.Em andamento']);
+
+    return array_column($ativas, 'data_prevista', 'veiculo_id');
+}
+
+/** [id do veículo => quantos aluguéis já teve]. */
+function contar_alugueis_veiculos(array $ids): array
+{
+    if (!$ids) {
+        return [];
+    }
+
+    $contagem = [];
+
+    foreach (sb_select('locacoes', ['select' => 'veiculo_id', 'veiculo_id' => 'in.(' . implode(',', array_map('intval', $ids)) . ')']) as $l) {
+        $contagem[$l['veiculo_id']] = ($contagem[$l['veiculo_id']] ?? 0) + 1;
+    }
+
+    return $contagem;
+}
+
+
+/* ========================================================================
+   FOTOS (Supabase Storage)
+   ======================================================================== */
+
+/**
+ * Recebe a foto enviada, confere o tipo real do arquivo (não só a
+ * extensão) e o tamanho, e envia para o Storage com um nome aleatório.
+ * Devolve [nome no bucket ou null, mensagem de erro ou null].
+ */
+function enviar_foto_veiculo(?array $arquivo): array
 {
     if (!$arquivo || ($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
         return [null, null];
@@ -115,66 +264,45 @@ function salvar_imagem_veiculo(?array $arquivo): array
         return [null, 'Envie uma imagem JPG, PNG ou WEBP.'];
     }
 
-    $pasta = RAIZ . '/' . PASTA_IMAGENS;
-
-    if (!is_dir($pasta)) {
-        mkdir($pasta, 0755, true);
-    }
-
+    // Nome aleatório: ninguém adivinha nem sobrescreve a foto de outro carro
     $nome = bin2hex(random_bytes(16)) . '.' . $tipos[$tipo];
 
-    if (!move_uploaded_file($arquivo['tmp_name'], $pasta . '/' . $nome)) {
-        return [null, 'Não foi possível salvar a imagem no servidor.'];
+    try {
+        sb_enviar_arquivo(BUCKET_FOTOS, $nome, $arquivo['tmp_name'], $tipo);
+    } catch (SupabaseErro $e) {
+        return [null, 'Não foi possível guardar a foto: ' . sb_mensagem_erro($e)];
     }
 
     return [$nome, null];
 }
 
-function apagar_imagem_veiculo(?string $nome): void
+/** Apaga a foto do Storage. Se falhar, só registra: não pode travar a tela. */
+function apagar_foto_veiculo(?string $nome): void
 {
-    if ($nome && preg_match('/^[a-f0-9]{32}\.(jpg|png|webp)$/', $nome)) {
-        $caminho = RAIZ . '/' . PASTA_IMAGENS . '/' . $nome;
-
-        if (is_file($caminho)) {
-            unlink($caminho);
-        }
+    if (!$nome) {
+        return;
     }
+
+    try {
+        sb_apagar_arquivo(BUCKET_FOTOS, $nome);
+    } catch (SupabaseErro $e) {
+        error_log("Não foi possível apagar a foto {$nome}: " . $e->getMessage());
+    }
+}
+
+function url_foto_veiculo(string $nome): string
+{
+    return sb_url_publica(BUCKET_FOTOS, $nome);
 }
 
 /** Foto do veículo ou um quadro com as iniciais. */
 function imagem_veiculo(array $veiculo, string $classe = 'miniatura'): string
 {
     if (!empty($veiculo['imagem'])) {
-        return '<img src="' . e(url(PASTA_IMAGENS . '/' . $veiculo['imagem'])) . '" alt="' . e(nome_veiculo($veiculo)) . '" class="' . e($classe) . '">';
+        return '<img src="' . e(url_foto_veiculo($veiculo['imagem'])) . '" alt="' . e(nome_veiculo($veiculo)) . '" class="' . e($classe) . '" loading="lazy">';
     }
 
     $iniciais = mb_strtoupper(mb_substr($veiculo['marca'] ?? '?', 0, 1) . mb_substr($veiculo['modelo'] ?? '', 0, 1));
 
     return '<div class="' . e($classe) . ' miniatura-vazia">' . e($iniciais) . '</div>';
-}
-
-function descrever_alteracoes_veiculo(array $antes, array $depois): string
-{
-    $rotulos = ['marca' => 'marca', 'modelo' => 'modelo', 'ano' => 'ano', 'placa' => 'placa', 'chassi' => 'chassi', 'valor_diaria' => 'diária'];
-    $mudancas = [];
-
-    foreach ($rotulos as $campo => $rotulo) {
-        $a = $antes[$campo];
-        $d = $depois[$campo];
-
-        if ($campo === 'valor_diaria') {
-            if (abs((float) $a - (float) $d) < 0.005) {
-                continue;
-            }
-
-            $mudancas[] = "diária de " . moeda($a) . ' para ' . moeda($d);
-            continue;
-        }
-
-        if ((string) $a !== (string) $d) {
-            $mudancas[] = "{$rotulo}: {$a} → {$d}";
-        }
-    }
-
-    return $mudancas ? implode('; ', $mudancas) : 'nenhum dado alterado';
 }

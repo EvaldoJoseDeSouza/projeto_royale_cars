@@ -1,8 +1,10 @@
 <?php
 /*
 | Campos do formulário de veículo (usado em cadastrar e editar).
-| Espera as variáveis $dados e $erros.
+| Espera as variáveis $dados e $erros (e $veiculo, na edição).
 */
+
+$alugado = isset($veiculo) && $veiculo['status'] === 'Alugado';
 
 $valorDiaria = $dados['valor_diaria'] ?? '';
 
@@ -60,6 +62,17 @@ if (is_numeric($valorDiaria)) {
         <?= erro_campo($erros, 'valor_diaria') ?>
     </div>
 
+    <div class="form-group">
+        <label for="quilometragem">Quilometragem atual (km) *</label>
+        <input type="number" id="quilometragem" name="quilometragem" value="<?= campo($dados, 'quilometragem') ?>"
+               min="0" max="<?= KM_MAXIMO ?>" step="1" placeholder="Ex.: 15000"
+               class="<?= classe_erro($erros, 'quilometragem') ?>" <?= $alugado ? 'disabled' : 'required' ?>>
+        <small class="campo-ajuda">
+            <?= $alugado ? 'O carro está alugado: a quilometragem é atualizada na devolução.' : 'Depois, ela muda sozinha a cada devolução.' ?>
+        </small>
+        <?= erro_campo($erros, 'quilometragem') ?>
+    </div>
+
     <div class="form-group inteiro">
         <label for="imagem">Foto do veículo</label>
         <input type="file" id="imagem" name="imagem" accept="image/jpeg,image/png,image/webp"
@@ -68,7 +81,7 @@ if (is_numeric($valorDiaria)) {
         <?= erro_campo($erros, 'imagem') ?>
 
         <?php if (!empty($dados['imagem'])): ?>
-            <img src="<?= e(url(PASTA_IMAGENS . '/' . $dados['imagem'])) ?>" id="preview-imagem" class="preview-imagem" alt="Foto atual">
+            <img src="<?= e(url_foto_veiculo($dados['imagem'])) ?>" id="preview-imagem" class="preview-imagem" alt="Foto atual">
             <label class="checkbox">
                 <input type="checkbox" name="remover_imagem" value="1"> Remover a foto atual
             </label>

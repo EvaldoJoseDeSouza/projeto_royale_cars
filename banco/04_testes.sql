@@ -206,6 +206,20 @@ select pg_temp.confere('Histórico registrou cadastro, aluguel, devolução e ma
      from logs where modulo in ('clientes', 'veiculos', 'locacoes', 'manutencoes')));
 
 -- ---------------------------------------------------------------------
+-- 7. Foto do veículo (correção de 15/10: trocar a foto dava erro)
+-- ---------------------------------------------------------------------
+
+-- A gerente troca e depois tira a foto; o chefe (só ele lê o histórico) confere
+select pg_temp.como('mariana@royalecars.com.br');
+update veiculos set imagem = 'teste-foto.jpg' where placa = 'TST1A23';
+update veiculos set imagem = null where placa = 'TST1A23';
+
+select pg_temp.como('gabriel@royalecars.com.br');
+select pg_temp.confere('Trocar e tirar a foto ficam no histórico ("trocou a foto" e "removeu a foto")',
+    (select bool_or(descricao like '%trocou a foto%') and bool_or(descricao like '%removeu a foto%')
+     from logs where modulo = 'veiculos' and acao = 'editar' and descricao like '%TST1A23%'));
+
+-- ---------------------------------------------------------------------
 -- Fim. A mensagem abaixo aparece em VERMELHO, como erro, de propósito:
 -- é o erro que faz o banco desfazer tudo que o teste gravou.
 -- ---------------------------------------------------------------------

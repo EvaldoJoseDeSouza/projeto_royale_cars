@@ -20,39 +20,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     [$dados, $erros] = validar_veiculo($_POST);
 
     if (!$erros) {
-        [$imagem, $erroImagem] = salvar_imagem_veiculo($_FILES['imagem'] ?? null);
+        [$foto, $erroFoto] = enviar_foto_veiculo($_FILES['imagem'] ?? null);
 
-        if ($erroImagem) {
-            $erros['imagem'] = $erroImagem;
+        if ($erroFoto) {
+            $erros['imagem'] = $erroFoto;
         }
     }
 
     if (!$erros) {
-        try {
-            db_executar(
-                "INSERT INTO veiculos (marca, modelo, ano, placa, chassi, valor_diaria, imagem, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'Disponível')",
-                [$dados['marca'], $dados['modelo'], $dados['ano'], $dados['placa'], $dados['chassi'], $dados['valor_diaria'], $imagem]
-            );
+        // O banco põe o status "Disponível" e grava o histórico sozinho
+        [$veiculo, $erros] = salvar_veiculo($dados + ['imagem' => $foto]);
 
-            $id = db_ultimo_id();
-
-            registrar_log('veiculos', 'cadastrar', $id,
-                'Cadastrou o veículo ' . nome_veiculo($dados) . ' (' . formatar_placa($dados['placa']) . '), diária de ' . moeda($dados['valor_diaria']) . '.');
-
+        if ($veiculo) {
             flash('sucesso', 'Veículo cadastrado e disponível para aluguel.');
-            redirecionar('veiculos/ver.php?id=' . $id);
-        } catch (mysqli_sql_exception $e) {
-            apagar_imagem_veiculo($imagem);
-
-            if ($campo = campo_duplicado($e)) {
-                $erros[$campo] = 'Este valor já está cadastrado em outro veículo.';
-            } elseif (violou_regra_banco($e)) {
-                $erros[] = 'O banco de dados recusou os dados. Confira os campos.';
-            } else {
-                throw $e;
-            }
+            redirecionar('veiculos/ver.php?id=' . $veiculo['id']);
         }
+
+        // O banco recusou: a foto que já subiu ficaria "órfã" no Storage
+        apagar_foto_veiculo($foto);
     }
 }
 

@@ -306,7 +306,10 @@ begin
     if new.quilometragem is distinct from old.quilometragem then
         mudancas := mudancas || format('quilometragem: %s → %s km', old.quilometragem, new.quilometragem);
     end if;
-    if new.imagem is distinct from old.imagem then mudancas := mudancas || 'trocou a foto'; end if;
+    -- "::text" diz ao banco que é UM texto (sem isso ele tenta ler como lista inteira e dá erro)
+    if new.imagem is distinct from old.imagem then
+        mudancas := mudancas || (case when new.imagem is null then 'removeu a foto' else 'trocou a foto' end)::text;
+    end if;
 
     if array_length(mudancas, 1) > 0 then
         perform registrar_log('veiculos', 'editar', new.id, format('Editou o %s: %s.', nome, array_to_string(mudancas, '; ')));
