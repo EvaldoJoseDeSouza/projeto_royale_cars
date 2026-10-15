@@ -13,20 +13,9 @@ require RAIZ . '/includes/clientes.php';
 exigir_permissao('clientes_ver');
 
 $busca = trim($_GET['busca'] ?? '');
-[$where, $parametros] = filtro_clientes(true, $busca);
 
-$total = (int) db_valor("SELECT COUNT(*) FROM clientes c WHERE {$where}", $parametros);
-[$limite, $offset, $pagina, $totalPaginas] = paginar($total);
-
-$clientes = db_todos(
-    "SELECT c.*,
-            (SELECT COUNT(*) FROM locacoes l WHERE l.cliente_id = c.id) AS total_alugueis
-     FROM clientes c
-     WHERE {$where}
-     ORDER BY c.arquivado_em DESC
-     LIMIT {$limite} OFFSET {$offset}",
-    $parametros
-);
+[$clientes, $total, $pagina, $totalPaginas] = listar_clientes(true, $busca, 'arquivado_em.desc');
+$alugueis = contar_alugueis_clientes(array_column($clientes, 'id'));
 
 $titulo = 'Clientes arquivados';
 $subtitulo = 'Cadastros fora de uso, com histórico preservado';
@@ -72,7 +61,7 @@ require RAIZ . '/includes/cabecalho.php';
                     <td><?= e(formatar_cpf($cliente['cpf'])) ?></td>
                     <td><?= e(formatar_telefone($cliente['telefone'])) ?></td>
                     <td><?= e($cliente['email']) ?></td>
-                    <td><?= (int) $cliente['total_alugueis'] ?></td>
+                    <td><?= array_sum($alugueis[$cliente['id']] ?? []) ?></td>
                     <td><?= data_hora_br($cliente['arquivado_em']) ?></td>
                     <td>
                         <a href="<?= e(url('clientes/ver.php?id=' . $cliente['id'])) ?>" class="btn-small btn-claro">Histórico</a>

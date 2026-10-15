@@ -1,24 +1,47 @@
 <?php
 /*
 |--------------------------------------------------------------------------
-| REGRAS DE CLIENTES (usadas no cadastro e na edição)
+| REGRAS DE CLIENTES (usadas pelas telas da pasta clientes/)
 |--------------------------------------------------------------------------
+| Quem confere o quê (as mesmas regras do desktop e do celular):
+|
+| - A TELA ajuda quem digita: máscara no CPF e no telefone (js/app.js).
+| - ESTE ARQUIVO limpa os dados (só números no CPF, CNH e telefone) e
+|   confere tudo antes de enviar, para mostrar o erro ao lado do campo.
+| - O BANCO (Supabase) é o juiz final: confere de novo, barra CPF, CNH e
+|   e-mail repetidos, impede arquivar quem tem aluguel em andamento e
+|   grava o histórico sozinho (quem cadastrou, o que mudou na edição).
+|
+| Nada é apagado: "arquivar" só tira o cliente da lista. O histórico de
+| aluguéis continua.
 */
 
-const ROTULOS_CLIENTE = [
-    'nome'         => 'nome',
-    'cpf'          => 'CPF',
-    'cnh'          => 'CNH',
-    'cnh_validade' => 'validade da CNH',
-    'email'        => 'e-mail',
-    'telefone'     => 'telefone',
+// As colunas que as telas usam (nunca "select *": só o que precisa)
+const COLUNAS_CLIENTE = 'id,nome,cpf,cnh,cnh_validade,email,telefone,endereco,arquivado,arquivado_em,criado_em';
+
+// Frases para cada regra do banco (nomes em banco/01 e banco/02).
+// A chave do 2º nível diz em qual campo do formulário o erro aparece.
+const REGRAS_CLIENTE = [
+    'clientes_nome_check'     => ['nome', 'Informe o nome completo (nome e sobrenome).'],
+    'clientes_cpf_check'      => ['cpf', 'CPF inválido. Confira os números digitados.'],
+    'clientes_cnh_check'      => ['cnh', 'Número de CNH inválido. São 11 números.'],
+    'clientes_email_check'    => ['email', 'Digite um e-mail válido.'],
+    'clientes_telefone_check' => ['telefone', 'Telefone inválido. Informe DDD + número, ex.: (19) 99999-9999.'],
+    'clientes_endereco_check' => ['endereco', 'O endereço pode ter no máximo 200 caracteres.'],
+];
+
+// Para o aviso de repetido: qual coluna cada regra UNIQUE protege
+const DUPLICADOS_CLIENTE = [
+    'clientes_cpf_key'   => ['cpf', 'Este CPF'],
+    'clientes_cnh_key'   => ['cnh', 'Esta CNH'],
+    'clientes_email_key' => ['email', 'Este e-mail'],
 ];
 
 /**
- * Lê e valida os dados do formulário.
+ * Lê e confere os dados do formulário.
  * Devolve [dados limpos, erros por campo].
  */
-function validar_cliente(array $entrada, ?int $idAtual = null): array
+function validar_cliente(array $entrada): array
 {
     $dados = [
         'nome'         => trim(preg_replace('/\s+/', ' ', (string) ($entrada['nome'] ?? ''))),
@@ -27,6 +50,8 @@ function validar_cliente(array $entrada, ?int $idAtual = null): array
         'cnh_validade' => trim((string) ($entrada['cnh_validade'] ?? '')),
         'email'        => mb_strtolower(trim((string) ($entrada['email'] ?? ''))),
         'telefone'     => so_digitos($entrada['telefone'] ?? ''),
+        // Endereço é opcional (decisão 8): vazio vira null no banco
+        'endereco'     => trim(preg_replace('/\s+/', ' ', (string) ($entrada['endereco'] ?? ''))) ?: null,
     ];
 
     $erros = [];
@@ -58,56 +83,91 @@ function validar_cliente(array $entrada, ?int $idAtual = null): array
         $erros['telefone'] = 'Telefone inválido. Informe DDD + número, ex.: (19) 99999-9999.';
     }
 
-    // Duplicidade (o banco também barra pelo UNIQUE)
-    foreach (['cpf' => 'Este CPF', 'cnh' => 'Esta CNH', 'email' => 'Este e-mail'] as $campo => $rotulo) {
-        if (isset($erros[$campo])) {
-            continue;
-        }
-
-        $existente = db_linha(
-            "SELECT id, nome, arquivado FROM clientes WHERE {$campo} = ? AND id <> ?",
-            [$dados[$campo], $idAtual ?? 0]
-        );
-
-        if ($existente) {
-            $erros[$campo] = mensagem_duplicado_cliente($rotulo, $existente);
-        }
+    if ($dados['endereco'] !== null && mb_strlen($dados['endereco']) > 200) {
+        $erros['endereco'] = 'O endereço pode ter no máximo 200 caracteres.';
     }
 
     return [$dados, $erros];
 }
 
-function mensagem_duplicado_cliente(string $rotulo, array $existente): string
+/**
+ * Grava o cliente no Supabase: sem $id cadastra, com $id edita.
+ * Devolve [cliente gravado ou null, erros por campo].
+ *
+ * Não conferimos repetidos antes (seriam 3 perguntas a mais ao banco):
+ * tentamos gravar e, se o banco recusar por repetido, aí sim
+ * descobrimos de quem é o CPF/CNH/e-mail para dar uma mensagem útil.
+ */
+function salvar_cliente(array $dados, ?int $id = null): array
 {
-    if ($existente['arquivado']) {
-        return "{$rotulo} pertence a {$existente['nome']}, cujo cadastro está arquivado. "
+    try {
+        $gravado = $id
+            ? (sb_atualizar('clientes', ['id' => 'eq.' . $id], $dados)[0] ?? null)
+            : sb_inserir('clientes', $dados);
+
+        return [$gravado, []];
+    } catch (SupabaseErro $e) {
+        $regra = sb_regra($e);
+
+        if (isset(DUPLICADOS_CLIENTE[$regra])) {
+            [$campo, $rotulo] = DUPLICADOS_CLIENTE[$regra];
+            return [null, [$campo => mensagem_duplicado_cliente($campo, $rotulo, $dados[$campo], $id)]];
+        }
+
+        if (isset(REGRAS_CLIENTE[$regra])) {
+            [$campo, $mensagem] = REGRAS_CLIENTE[$regra];
+            return [null, [$campo => $mensagem]];
+        }
+
+        return [null, ['geral' => sb_mensagem_erro($e)]];
+    }
+}
+
+/** "Este CPF já pertence ao cliente Ana..." (ou sugere reativar, se arquivado). */
+function mensagem_duplicado_cliente(string $campo, string $rotulo, string $valor, ?int $idAtual): string
+{
+    $dono = sb_linha('clientes', [
+        'select' => 'id,nome,arquivado',
+        $campo   => 'eq.' . $valor,
+        'id'     => 'neq.' . ($idAtual ?? 0),
+    ]);
+
+    if (!$dono) {
+        return "{$rotulo} já está cadastrado.";
+    }
+
+    if ($dono['arquivado']) {
+        return "{$rotulo} pertence a {$dono['nome']}, cujo cadastro está arquivado. "
              . 'Reative o cadastro em "Clientes arquivados" em vez de criar outro.';
     }
 
-    return "{$rotulo} já pertence ao cliente {$existente['nome']}.";
+    return "{$rotulo} já pertence ao cliente {$dono['nome']}.";
 }
 
-/** Texto para o histórico com o que mudou. Ex.: "telefone: (19) 9... → (19) 9..." */
-function descrever_alteracoes_cliente(array $antes, array $depois): string
+/** Busca um cliente pelo id (ou null se não existir). */
+function buscar_cliente(int $id): ?array
 {
-    $mudancas = [];
+    return $id > 0 ? sb_linha('clientes', ['select' => COLUNAS_CLIENTE, 'id' => 'eq.' . $id]) : null;
+}
 
-    foreach (ROTULOS_CLIENTE as $campo => $rotulo) {
-        if ((string) $antes[$campo] === (string) $depois[$campo]) {
-            continue;
-        }
+/**
+ * Arquiva ou reativa. Quem confere se o cliente tem aluguel em andamento
+ * é o banco (tg_clientes_antes): se tiver, ele recusa com a frase pronta.
+ * Devolve [cliente atualizado ou null, mensagem de erro ou null].
+ */
+function mudar_arquivado_cliente(int $id, bool $arquivar): array
+{
+    try {
+        $cliente = sb_atualizar('clientes',
+            ['id' => 'eq.' . $id, 'arquivado' => 'eq.' . ($arquivar ? 'false' : 'true')],
+            ['arquivado' => $arquivar])[0] ?? null;
 
-        $formatar = match ($campo) {
-            'cpf'          => 'formatar_cpf',
-            'telefone'     => 'formatar_telefone',
-            'cnh_validade' => 'data_br',
-            default        => fn ($v) => (string) $v,
-        };
-
-        $mudancas[] = $rotulo . ': ' . $formatar($antes[$campo]) . ' → ' . $formatar($depois[$campo]);
+        return $cliente
+            ? [$cliente, null]
+            : [null, $arquivar ? 'Cliente não encontrado ou já arquivado.' : 'Cliente não encontrado ou já está ativo.'];
+    } catch (SupabaseErro $e) {
+        return [null, sb_mensagem_erro($e)];
     }
-
-    return $mudancas ? implode('; ', $mudancas) : 'nenhum dado alterado';
 }
 
 /** Situação da CNH para mostrar na tela. */
@@ -126,25 +186,71 @@ function situacao_cnh(string $validade): string
     return '';
 }
 
-/** Monta o filtro de busca da lista de clientes (ativos ou arquivados). */
+/**
+ * Filtros do Supabase para a lista de clientes (ativos ou arquivados).
+ * A busca procura no nome e no e-mail; se tiver números, também no CPF,
+ * no telefone e na CNH. Ex.: "ana" → or=(nome.ilike.*ana*,email.ilike.*ana*)
+ */
 function filtro_clientes(bool $arquivados, string $busca): array
 {
-    $sql = 'c.arquivado = ?';
-    $parametros = [(int) $arquivados];
+    $filtros = ['arquivado' => 'eq.' . ($arquivados ? 'true' : 'false')];
 
-    if ($busca !== '') {
-        $digitos = so_digitos($busca);
-        $sql .= ' AND (c.nome LIKE ? OR c.email LIKE ?';
-        $parametros[] = "%{$busca}%";
-        $parametros[] = "%{$busca}%";
+    // Vírgula, parênteses e asterisco têm significado especial no filtro "or"
+    // do Supabase: tiramos da busca para ninguém "quebrar" a pesquisa.
+    $texto = trim(str_replace([',', '(', ')', '*', '"', '\\'], ' ', $busca));
+
+    if ($texto !== '') {
+        $condicoes = ["nome.ilike.*{$texto}*", "email.ilike.*{$texto}*"];
+        $digitos = so_digitos($texto);
 
         if ($digitos !== '') {
-            $sql .= ' OR c.cpf LIKE ? OR c.telefone LIKE ? OR c.cnh LIKE ?';
-            array_push($parametros, "%{$digitos}%", "%{$digitos}%", "%{$digitos}%");
+            array_push($condicoes, "cpf.ilike.*{$digitos}*", "telefone.ilike.*{$digitos}*", "cnh.ilike.*{$digitos}*");
         }
 
-        $sql .= ')';
+        $filtros['or'] = '(' . implode(',', $condicoes) . ')';
     }
 
-    return [$sql, $parametros];
+    return $filtros;
+}
+
+/**
+ * Quantos aluguéis cada cliente da página tem, por situação.
+ * Devolve [id do cliente => ['Em andamento' => 1, 'Finalizada' => 4]].
+ * (Quem não tem permissão de ver aluguéis recebe tudo zerado: regra do banco.)
+ */
+function contar_alugueis_clientes(array $ids): array
+{
+    if (!$ids) {
+        return [];
+    }
+
+    $locacoes = sb_select('locacoes', [
+        'select'     => 'cliente_id,status',
+        'cliente_id' => 'in.(' . implode(',', array_map('intval', $ids)) . ')',
+    ]);
+
+    $contagem = [];
+
+    foreach ($locacoes as $l) {
+        $contagem[$l['cliente_id']][$l['status']] = ($contagem[$l['cliente_id']][$l['status']] ?? 0) + 1;
+    }
+
+    return $contagem;
+}
+
+/** Página da lista: [clientes, total, pagina, totalPaginas]. */
+function listar_clientes(bool $arquivados, string $busca, string $ordem): array
+{
+    $filtros = filtro_clientes($arquivados, $busca);
+    $total = sb_contar('clientes', $filtros);
+    [$limite, $offset, $pagina, $totalPaginas] = paginar($total);
+
+    $clientes = sb_select('clientes', $filtros + [
+        'select' => COLUNAS_CLIENTE,
+        'order'  => $ordem,
+        'limit'  => $limite,
+        'offset' => $offset,
+    ]);
+
+    return [$clientes, $total, $pagina, $totalPaginas];
 }

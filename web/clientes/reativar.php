@@ -7,21 +7,19 @@
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/clientes.php';
 
 exigir_permissao('clientes_arquivar');
 exigir_post();
 
 $id = (int) ($_POST['id'] ?? 0);
-$cliente = db_linha('SELECT id, nome, cnh_validade, arquivado FROM clientes WHERE id = ?', [$id]);
 
-if (!$cliente || !$cliente['arquivado']) {
-    flash('erro', 'Cliente não encontrado ou já está ativo.');
+[$cliente, $erro] = mudar_arquivado_cliente($id, false);
+
+if ($erro) {
+    flash('erro', $erro);
     redirecionar('clientes/clientes_arquivados.php');
 }
-
-db_executar('UPDATE clientes SET arquivado = 0, arquivado_em = NULL WHERE id = ?', [$id]);
-
-registrar_log('clientes', 'reativar', $id, "Reativou o cliente {$cliente['nome']}.");
 
 flash('sucesso', "Cliente {$cliente['nome']} reativado com os dados anteriores.");
 

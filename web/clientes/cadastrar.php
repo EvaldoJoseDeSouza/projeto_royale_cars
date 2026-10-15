@@ -19,34 +19,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     [$dados, $erros] = validar_cliente($_POST);
 
     if (!$erros) {
-        try {
-            db_executar(
-                'INSERT INTO clientes (nome, cpf, cnh, cnh_validade, email, telefone)
-                 VALUES (?, ?, ?, ?, ?, ?)',
-                [$dados['nome'], $dados['cpf'], $dados['cnh'], $dados['cnh_validade'], $dados['email'], $dados['telefone']]
-            );
+        // O banco grava o histórico ("Cadastrou o cliente...") sozinho
+        [$cliente, $erros] = salvar_cliente($dados);
 
-            $id = db_ultimo_id();
+        if ($cliente) {
+            flash('sucesso', "Cliente {$cliente['nome']} cadastrado com sucesso!");
 
-            registrar_log('clientes', 'cadastrar', $id,
-                "Cadastrou o cliente {$dados['nome']} (CPF " . formatar_cpf($dados['cpf']) . ').');
-
-            flash('sucesso', "Cliente {$dados['nome']} cadastrado com sucesso!");
-
-            if ($dados['cnh_validade'] < date('Y-m-d')) {
+            if ($cliente['cnh_validade'] < date('Y-m-d')) {
                 flash('aviso', 'Atenção: a CNH deste cliente está vencida. Ele só poderá alugar depois de atualizar a validade.');
             }
 
-            redirecionar('clientes/ver.php?id=' . $id);
-        } catch (mysqli_sql_exception $e) {
-            // Segunda barreira: o banco recusou (duplicado ou regra CHECK)
-            if ($campo = campo_duplicado($e)) {
-                $erros[$campo] = 'Este valor já está cadastrado para outro cliente.';
-            } elseif (violou_regra_banco($e)) {
-                $erros[] = 'O banco de dados recusou os dados. Confira os campos.';
-            } else {
-                throw $e;
-            }
+            redirecionar('clientes/ver.php?id=' . $cliente['id']);
         }
     }
 }

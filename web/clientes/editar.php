@@ -11,7 +11,7 @@ require RAIZ . '/includes/clientes.php';
 exigir_permissao('clientes_gerenciar');
 
 $id = (int) ($_GET['id'] ?? 0);
-$cliente = db_linha('SELECT * FROM clientes WHERE id = ?', [$id]);
+$cliente = buscar_cliente($id);
 
 if (!$cliente) {
     flash('erro', 'Cliente não encontrado.');
@@ -29,30 +29,22 @@ $erros = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
 
-    [$dados, $erros] = validar_cliente($_POST, $id);
+    [$dados, $erros] = validar_cliente($_POST);
 
     if (!$erros) {
-        try {
-            db_executar(
-                'UPDATE clientes
-                 SET nome = ?, cpf = ?, cnh = ?, cnh_validade = ?, email = ?, telefone = ?
-                 WHERE id = ?',
-                [$dados['nome'], $dados['cpf'], $dados['cnh'], $dados['cnh_validade'], $dados['email'], $dados['telefone'], $id]
-            );
+        // O banco grava no histórico o que mudou ("telefone: ... → ...")
+        [$gravado, $erros] = salvar_cliente($dados, $id);
 
-            registrar_log('clientes', 'editar', $id,
-                "Editou o cliente {$dados['nome']}: " . descrever_alteracoes_cliente($cliente, $dados) . '.');
-
+        if ($gravado) {
             flash('sucesso', 'Dados do cliente atualizados.');
-            redirecionar('clientes/ver.php?id=' . $id);
-        } catch (mysqli_sql_exception $e) {
-            if ($campo = campo_duplicado($e)) {
-                $erros[$campo] = 'Este valor já está cadastrado para outro cliente.';
-            } elseif (violou_regra_banco($e)) {
-                $erros[] = 'O banco de dados recusou os dados. Confira os campos.';
-            } else {
-                throw $e;
+
+            if ($gravado['cnh_validade'] < date('Y-m-d')) {
+                flash('aviso', 'Atenção: a CNH deste cliente está vencida. Ele só poderá alugar depois de atualizar a validade.');
             }
+
+            redirecionar('clientes/ver.php?id=' . $id);
+        } elseif (!$erros) {
+            $erros['geral'] = 'Não foi possível salvar. O cliente pode ter sido arquivado por outra pessoa.';
         }
     }
 }

@@ -55,4 +55,12 @@
         <?= erro_campo($erros, 'email') ?>
     </div>
 
+    <div class="form-group inteiro">
+        <label for="endereco">Endereço (opcional)</label>
+        <input type="text" id="endereco" name="endereco" value="<?= campo($dados, 'endereco') ?>"
+               placeholder="Rua, número - bairro, cidade/UF" maxlength="200"
+               class="<?= classe_erro($erros, 'endereco') ?>">
+        <?= erro_campo($erros, 'endereco') ?>
+    </div>
+
 </div>

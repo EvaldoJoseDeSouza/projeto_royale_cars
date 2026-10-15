@@ -12,21 +12,26 @@ require RAIZ . '/includes/clientes.php';
 exigir_permissao('clientes_ver');
 
 $id = (int) ($_GET['id'] ?? 0);
-$cliente = db_linha('SELECT * FROM clientes WHERE id = ?', [$id]);
+$cliente = buscar_cliente($id);
 
 if (!$cliente) {
     flash('erro', 'Cliente não encontrado.');
     redirecionar('clientes/index.php');
 }
 
-$locacoes = db_todos(
-    'SELECT l.*, v.marca, v.modelo, v.placa
-     FROM locacoes l
-     JOIN veiculos v ON v.id = l.veiculo_id
-     WHERE l.cliente_id = ?
-     ORDER BY l.data_retirada DESC',
-    [$id]
-);
+// Os aluguéis do cliente, com o veículo "pendurado" em cada um.
+// Quem não tem permissão de ver aluguéis recebe a lista vazia (regra do banco).
+$locacoes = sb_select('locacoes', [
+    'select'     => 'id,status,data_retirada,data_prevista,data_devolucao,valor_total,veiculos(marca,modelo,placa)',
+    'cliente_id' => 'eq.' . $id,
+    'order'      => 'data_retirada.desc,id.desc',
+]);
+
+// Tira o veículo da "caixinha" para as funções nome_veiculo() e formatar_placa()
+foreach ($locacoes as &$l) {
+    $l += $l['veiculos'] ?? [];
+}
+unset($l);
 
 $totalGasto = 0;
 $ativos = 0;
@@ -84,6 +89,7 @@ require RAIZ . '/includes/cabecalho.php';
         <div><span>Telefone</span><strong><?= e(formatar_telefone($cliente['telefone'])) ?></strong></div>
         <div><span>E-mail</span><strong><?= e($cliente['email']) ?></strong></div>
         <div><span>CNH</span><strong><?= e($cliente['cnh']) ?></strong></div>
+        <div><span>Endereço</span><strong><?= e($cliente['endereco'] ?? '—') ?></strong></div>
         <div>
             <span>Validade da CNH</span>
             <strong><?= data_br($cliente['cnh_validade']) ?></strong>
