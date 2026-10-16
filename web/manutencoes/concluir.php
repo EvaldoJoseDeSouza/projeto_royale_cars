@@ -3,24 +3,18 @@
 |--------------------------------------------------------------------------
 | CONCLUIR MANUTENÇÃO (liberar o veículo)
 |--------------------------------------------------------------------------
-| Registra o serviço feito, o custo e a data de liberação.
-| O veículo volta a ficar "Disponível".
+| Quem grava é a função concluir_manutencao do banco: registra o serviço,
+| o custo e a data, e devolve o carro para "Disponível" (se não houver
+| outro reparo aberto para ele) — tudo de uma vez.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
-require RAIZ . '/includes/locacoes.php';
+require RAIZ . '/includes/manutencoes.php';
 
 exigir_permissao('manutencoes');
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
-
-$m = db_linha(
-    'SELECT m.*, v.marca, v.modelo, v.placa
-     FROM manutencoes m
-     JOIN veiculos v ON v.id = m.veiculo_id
-     WHERE m.id = ?',
-    [$id]
-);
+$m = buscar_manutencao($id);
 
 if (!$m || $m['status'] !== 'Em andamento') {
     flash('erro', 'Manutenção não encontrada ou já concluída.');
@@ -41,10 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!validar_data($dados['data_liberacao'])) {
         $erros['data_liberacao'] = 'Informe a data de liberação.';
-    } elseif ($dados['data_liberacao'] < $m['data_entrada']) {
-        $erros['data_liberacao'] = 'A liberação não pode ser antes da entrada (' . data_br($m['data_entrada']) . ').';
-    } elseif ($dados['data_liberacao'] > $hoje) {
-        $erros['data_liberacao'] = 'A liberação não pode ser no futuro.';
     }
 
     if (mb_strlen($dados['servico_realizado']) < 5 || mb_strlen($dados['servico_realizado']) > 1000) {
@@ -58,43 +48,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$erros) {
-        try {
-            em_transacao(function () use ($id, $dados, $custo) {
-                $manutencao = db_linha('SELECT * FROM manutencoes WHERE id = ? FOR UPDATE', [$id]);
+        [, $erros] = chamar_funcao_manutencao('concluir_manutencao', [
+            'p_manutencao_id'  => $id,
+            'p_data_liberacao' => $dados['data_liberacao'],
+            'p_servico'        => $dados['servico_realizado'],
+            'p_custo'          => $custo,
+        ]);
 
-                if (!$manutencao || $manutencao['status'] !== 'Em andamento') {
-                    throw new RegraNegocio('Esta manutenção já foi concluída.');
-                }
-
-                $veiculo = db_linha('SELECT * FROM veiculos WHERE id = ? FOR UPDATE', [$manutencao['veiculo_id']]);
-
-                db_executar(
-                    "UPDATE manutencoes
-                     SET status = 'Concluída', data_liberacao = ?, servico_realizado = ?, custo = ?, concluido_por = ?
-                     WHERE id = ?",
-                    [$dados['data_liberacao'], $dados['servico_realizado'], $custo, (int) $_SESSION['usuario_id'], $id]
-                );
-
-                // Só libera se não houver outra manutenção aberta para o mesmo carro
-                $outras = (int) db_valor(
-                    "SELECT COUNT(*) FROM manutencoes WHERE veiculo_id = ? AND status = 'Em andamento'",
-                    [$veiculo['id']]
-                );
-
-                if (!$outras && $veiculo['status'] === 'Em manutenção') {
-                    db_executar("UPDATE veiculos SET status = 'Disponível' WHERE id = ?", [$veiculo['id']]);
-                }
-
-                registrar_log('manutencoes', 'concluir', $id,
-                    'Liberou o ' . nome_veiculo($veiculo) . ' (' . formatar_placa($veiculo['placa']) . ') da manutenção. '
-                    . "Serviço: {$dados['servico_realizado']}. Custo: " . moeda($custo) . '.');
-            });
-
-            flash('sucesso', nome_veiculo($m) . ' liberado e disponível para aluguel.');
+        if (!$erros) {
+            flash('sucesso', nome_veiculo($m) . ' liberado da manutenção.');
             redirecionar('manutencoes/index.php?aba=concluidas');
-        } catch (RegraNegocio $e) {
-            flash('erro', $e->getMessage());
-            redirecionar('manutencoes/index.php');
         }
     }
 }
@@ -110,6 +73,9 @@ require RAIZ . '/includes/cabecalho.php';
         <div>
             <h2>Concluir manutenção</h2>
             <p>Entrou na oficina em <strong><?= data_br($m['data_entrada']) ?></strong>: <?= e($m['defeito']) ?></p>
+            <?php if ($vistoria = resumo_checklist($m)): ?>
+                <p class="texto-fraco">Vistoria na entrada: <?= e($vistoria) ?><?= itens_com_problema($m) ? ' — problema em ' . e(itens_com_problema($m)) : '' ?></p>
+            <?php endif; ?>
         </div>
         <a href="<?= e(url('manutencoes/index.php')) ?>" class="btn-secondary">Voltar</a>
     </div>

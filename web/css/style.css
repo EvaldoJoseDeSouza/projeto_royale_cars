@@ -1259,3 +1259,20 @@ tr.linha-alerta td {
     border-radius: 8px;
     padding: 6px;
 }
+
+/* Vistoria da manutenção (checklist: motor, freios, pneus, óleo) */
+.checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 24px;
+    margin-top: 10px;
+    padding: 12px 16px;
+    background: #f8f9fc;
+    border: 1px dashed var(--borda-2);
+    border-radius: 10px;
+}
+
+.checklist .campo-ajuda {
+    flex-basis: 100%;
+    margin: 0 0 4px;
+}

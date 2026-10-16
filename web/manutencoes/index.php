@@ -8,41 +8,29 @@
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/manutencoes.php';
 
 exigir_permissao('manutencoes');
 
-$abas = [
-    'andamento'  => ['texto' => 'Na oficina', 'sql' => "m.status = 'Em andamento'"],
-    'concluidas' => ['texto' => 'Concluídas', 'sql' => "m.status = 'Concluída'"],
-    'todas'      => ['texto' => 'Todas',      'sql' => '1 = 1'],
-];
-
 $aba = $_GET['aba'] ?? 'andamento';
 
-if (!isset($abas[$aba])) {
+if (!isset(ABAS_MANUTENCAO[$aba])) {
     $aba = 'andamento';
 }
 
 $contagem = [];
 
-foreach ($abas as $chave => $info) {
-    $contagem[$chave] = (int) db_valor("SELECT COUNT(*) FROM manutencoes m WHERE {$info['sql']}");
+foreach (ABAS_MANUTENCAO as $chave => $info) {
+    $contagem[$chave] = sb_contar('manutencoes', $info['filtro']);
 }
 
-$manutencoes = db_todos(
-    "SELECT m.*, v.marca, v.modelo, v.placa, u.nome AS aberto_por,
-            DATEDIFF(COALESCE(m.data_liberacao, CURDATE()), m.data_entrada) AS dias_parado
-     FROM manutencoes m
-     JOIN veiculos v ON v.id = m.veiculo_id
-     LEFT JOIN usuarios u ON u.id = m.usuario_id
-     WHERE {$abas[$aba]['sql']}
-     ORDER BY m.status = 'Concluída', m.data_entrada DESC"
-);
+// Os carros na oficina primeiro; dentro de cada grupo, a entrada mais recente primeiro
+$manutencoes = array_map('preparar_manutencao', sb_select('manutencoes', ABAS_MANUTENCAO[$aba]['filtro'] + [
+    'select' => COLUNAS_MANUTENCAO,
+    'order'  => 'status.asc,data_entrada.desc,id.desc',
+]));
 
-$custoMes = (float) db_valor(
-    "SELECT COALESCE(SUM(custo), 0) FROM manutencoes
-     WHERE status = 'Concluída' AND data_liberacao >= DATE_FORMAT(CURDATE(), '%Y-%m-01')"
-);
+$custoMes = custo_manutencao_mes();
 
 $titulo = 'Manutenção';
 $subtitulo = 'Veículos na oficina e histórico de reparos';
@@ -59,7 +47,7 @@ require RAIZ . '/includes/cabecalho.php';
 </div>
 
 <nav class="abas">
-    <?php foreach ($abas as $chave => $info): ?>
+    <?php foreach (ABAS_MANUTENCAO as $chave => $info): ?>
         <a href="<?= e(url('manutencoes/index.php?aba=' . $chave)) ?>" class="<?= $aba === $chave ? 'ativa' : '' ?>">
             <?= e($info['texto']) ?> <b><?= $contagem[$chave] ?></b>
         </a>
@@ -93,6 +81,11 @@ require RAIZ . '/includes/cabecalho.php';
                         <?= e($m['defeito']) ?>
                         <?php if ($m['locacao_id']): ?>
                             <br><small class="texto-fraco">Na devolução do aluguel #<?= (int) $m['locacao_id'] ?></small>
+                        <?php endif; ?>
+                        <?php if ($vistoria = resumo_checklist($m)): ?>
+                            <br><small class="<?= itens_com_problema($m) ? 'texto-vermelho' : 'texto-fraco' ?>">
+                                Vistoria: <?= e($vistoria) ?><?= itens_com_problema($m) ? ' — problema em ' . e(itens_com_problema($m)) : '' ?>
+                            </small>
                         <?php endif; ?>
                         <?php if ($m['servico_realizado']): ?>
                             <br><small class="texto-fraco">Serviço: <?= e($m['servico_realizado']) ?></small>

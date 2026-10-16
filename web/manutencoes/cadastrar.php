@@ -3,12 +3,18 @@
 |--------------------------------------------------------------------------
 | ENVIAR VEÍCULO PARA MANUTENÇÃO
 |--------------------------------------------------------------------------
-| Só veículos disponíveis. (Carro alugado vai para a manutenção na hora da
-| devolução, marcando "voltou com defeito".)
+| Quem grava é a função abrir_manutencao do banco (a mesma do desktop e do
+| celular): confere se o carro está Disponível, trava-o, registra a ida à
+| oficina e marca o carro "Em manutenção" — tudo de uma vez.
+| (Carro alugado vai para a manutenção na DEVOLUÇÃO, marcando
+| "voltou com defeito".)
+|
+| Vistoria (opcional): o mesmo checklist do celular (motor, freios, pneus,
+| óleo). Se a caixa "Fiz a vistoria" não for marcada, vai vazio (null).
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
-require RAIZ . '/includes/locacoes.php';
+require RAIZ . '/includes/manutencoes.php';
 
 exigir_permissao('manutencoes');
 
@@ -21,7 +27,12 @@ $dados = [
     'oficina'            => trim((string) ($_POST['oficina'] ?? '')),
     'data_entrada'       => (string) ($_POST['data_entrada'] ?? $hoje),
     'previsao_liberacao' => (string) ($_POST['previsao_liberacao'] ?? ''),
+    'fez_vistoria'       => !empty($_POST['fez_vistoria']),
 ];
+
+foreach (array_keys(CHECKLIST_MANUTENCAO) as $item) {
+    $dados[$item] = !empty($_POST[$item]);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
@@ -34,72 +45,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erros['defeito'] = 'Descreva o defeito ou o serviço (mínimo 5 caracteres).';
     }
 
-    if (mb_strlen($dados['oficina']) > 150) {
-        $erros['oficina'] = 'Nome da oficina muito longo.';
+    if (!validar_data($dados['data_entrada'])) {
+        $erros['data_entrada'] = 'Informe a data de entrada na oficina.';
     }
 
-    if (!validar_data($dados['data_entrada']) || $dados['data_entrada'] > $hoje) {
-        $erros['data_entrada'] = 'Data de entrada inválida (não pode ser no futuro).';
-    } elseif ($dados['data_entrada'] < date('Y-m-d', strtotime('-30 days'))) {
-        $erros['data_entrada'] = 'A data de entrada não pode ser de mais de 30 dias atrás.';
-    }
-
-    if ($dados['previsao_liberacao'] !== '') {
-        if (!validar_data($dados['previsao_liberacao'])) {
-            $erros['previsao_liberacao'] = 'Data de previsão inválida.';
-        } elseif (!isset($erros['data_entrada']) && $dados['previsao_liberacao'] < $dados['data_entrada']) {
-            $erros['previsao_liberacao'] = 'A previsão não pode ser antes da entrada.';
-        }
+    if ($dados['previsao_liberacao'] !== '' && !validar_data($dados['previsao_liberacao'])) {
+        $erros['previsao_liberacao'] = 'Data de previsão inválida.';
     }
 
     if (!$erros) {
-        try {
-            $id = em_transacao(function () use ($dados) {
-                $veiculo = db_linha('SELECT * FROM veiculos WHERE id = ? FOR UPDATE', [$dados['veiculo_id']]);
+        $parametros = [
+            'p_veiculo_id'   => $dados['veiculo_id'],
+            'p_defeito'      => $dados['defeito'],
+            'p_oficina'      => $dados['oficina'] !== '' ? $dados['oficina'] : null,
+            'p_data_entrada' => $dados['data_entrada'],
+            'p_previsao'     => $dados['previsao_liberacao'] !== '' ? $dados['previsao_liberacao'] : null,
+        ];
 
-                if (!$veiculo || $veiculo['arquivado']) {
-                    throw new RegraNegocio('Veículo não encontrado.');
-                }
+        // Cada item: marcado = OK (true), desmarcado = com problema (false).
+        // Sem vistoria, os 4 ficam null ("não foi verificado").
+        foreach (array_keys(CHECKLIST_MANUTENCAO) as $item) {
+            $parametros['p_' . $item] = $dados['fez_vistoria'] ? $dados[$item] : null;
+        }
 
-                if ($veiculo['status'] !== 'Disponível') {
-                    throw new RegraNegocio(nome_veiculo($veiculo) . ' está "' . $veiculo['status'] . '". Só veículos disponíveis podem ir para a oficina por aqui.');
-                }
+        [$id, $erros] = chamar_funcao_manutencao('abrir_manutencao', $parametros);
 
-                db_executar(
-                    "INSERT INTO manutencoes (veiculo_id, defeito, oficina, data_entrada, previsao_liberacao, status, usuario_id)
-                     VALUES (?, ?, ?, ?, ?, 'Em andamento', ?)",
-                    [
-                        $veiculo['id'], $dados['defeito'],
-                        $dados['oficina'] !== '' ? $dados['oficina'] : null,
-                        $dados['data_entrada'],
-                        $dados['previsao_liberacao'] !== '' ? $dados['previsao_liberacao'] : null,
-                        (int) $_SESSION['usuario_id'],
-                    ]
-                );
-
-                $id = db_ultimo_id();
-
-                db_executar("UPDATE veiculos SET status = 'Em manutenção' WHERE id = ?", [$veiculo['id']]);
-
-                registrar_log('manutencoes', 'abrir', $id,
-                    'Enviou o ' . nome_veiculo($veiculo) . ' (' . formatar_placa($veiculo['placa']) . ") para manutenção: {$dados['defeito']}.");
-
-                return $id;
-            });
-
+        if ($id) {
             flash('sucesso', 'Veículo enviado para manutenção. Ele não poderá ser alugado até ser liberado.');
             redirecionar('manutencoes/index.php');
-        } catch (RegraNegocio $e) {
-            $erros['veiculo_id'] = $e->getMessage();
         }
     }
 }
 
-$veiculos = db_todos(
-    "SELECT id, marca, modelo, placa FROM veiculos
-     WHERE arquivado = 0 AND status = 'Disponível'
-     ORDER BY marca, modelo"
-);
+$veiculos = sb_select('veiculos', [
+    'select'    => 'id,marca,modelo,placa',
+    'arquivado' => 'eq.false',
+    'status'    => 'eq.Disponível',
+    'order'     => 'marca.asc,modelo.asc',
+]);
 
 $titulo = 'Enviar para manutenção';
 $subtitulo = 'O veículo fica bloqueado para aluguel';
@@ -162,6 +145,22 @@ require RAIZ . '/includes/cabecalho.php';
                 <small class="campo-ajuda">Se passar desta data, o sistema avisa nos alertas.</small>
                 <?= erro_campo($erros, 'previsao_liberacao') ?>
             </div>
+        </div>
+
+        <h3 class="secao-form">Vistoria (opcional)</h3>
+
+        <label class="checkbox">
+            <input type="checkbox" id="fez_vistoria" name="fez_vistoria" value="1" <?= $dados['fez_vistoria'] ? 'checked' : '' ?>>
+            Fiz a vistoria do veículo (o mesmo checklist do celular)
+        </label>
+
+        <div id="area-vistoria" class="checklist" <?= $dados['fez_vistoria'] ? '' : 'hidden' ?>>
+            <p class="campo-ajuda">Marque o que está OK. O que ficar desmarcado é registrado como problema.</p>
+            <?php foreach (CHECKLIST_MANUTENCAO as $item => $nome): ?>
+                <label class="checkbox">
+                    <input type="checkbox" name="<?= $item ?>" value="1" <?= $dados[$item] ? 'checked' : '' ?>> <?= e($nome) ?> OK
+                </label>
+            <?php endforeach; ?>
         </div>
 
         <div class="form-actions">

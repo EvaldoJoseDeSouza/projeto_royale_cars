@@ -449,6 +449,16 @@
         }
     }
 
+    // Manutenção: os 4 itens da vistoria só aparecem se "Fiz a vistoria" estiver marcada
+    var caixaVistoria = document.getElementById('fez_vistoria');
+    var areaVistoria = document.getElementById('area-vistoria');
+
+    if (caixaVistoria && areaVistoria) {
+        caixaVistoria.addEventListener('change', function () {
+            areaVistoria.hidden = !caixaVistoria.checked;
+        });
+    }
+
     var formDevolucao = document.querySelector('[data-calculo-devolucao]');
 
     if (formDevolucao) {

@@ -169,31 +169,3 @@ function url_assinatura(?string $caminho): ?string
     }
 }
 
-
-/* ========================================================================
-   SÓ PARA AS TELAS DE MANUTENÇÃO, QUE AINDA USAM O MYSQL.
-   Saem no pacote 3.6, quando a manutenção passar para o Supabase.
-   ======================================================================== */
-
-/** Executa várias operações como uma só: ou tudo dá certo, ou nada é gravado. */
-function em_transacao(callable $operacao)
-{
-    global $conexao;
-
-    $conexao->begin_transaction();
-
-    try {
-        $resultado = $operacao();
-        $conexao->commit();
-
-        return $resultado;
-    } catch (Throwable $erro) {
-        $conexao->rollback();
-        throw $erro;
-    }
-}
-
-/** Erro de regra de negócio (mensagem pode ser mostrada ao usuário). */
-class RegraNegocio extends Exception
-{
-}
