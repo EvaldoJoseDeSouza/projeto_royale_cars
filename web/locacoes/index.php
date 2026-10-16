@@ -7,20 +7,13 @@
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/locacoes.php';
 
 exigir_permissao('locacoes_ver');
 
-$abas = [
-    'andamento'   => ['texto' => 'Em andamento', 'sql' => "l.status = 'Em andamento' AND l.data_prevista >= CURDATE()"],
-    'atrasadas'   => ['texto' => 'Atrasados',    'sql' => "l.status = 'Em andamento' AND l.data_prevista < CURDATE()"],
-    'finalizadas' => ['texto' => 'Finalizados',  'sql' => "l.status = 'Finalizada'"],
-    'canceladas'  => ['texto' => 'Cancelados',   'sql' => "l.status = 'Cancelada'"],
-    'todas'       => ['texto' => 'Todos',        'sql' => '1 = 1'],
-];
-
 $aba = $_GET['aba'] ?? 'andamento';
 
-if (!isset($abas[$aba])) {
+if (!isset(ABAS_LOCACAO[$aba])) {
     $aba = 'andamento';
 }
 
@@ -28,47 +21,25 @@ $busca = trim($_GET['busca'] ?? '');
 $de = $_GET['de'] ?? '';
 $ate = $_GET['ate'] ?? '';
 
-$filtro = '1 = 1';
-$parametros = [];
-
-if ($busca !== '') {
-    $filtro .= ' AND (c.nome LIKE ? OR v.marca LIKE ? OR v.modelo LIKE ? OR v.placa LIKE ? OR l.id = ?)';
-    $placa = str_replace('-', '', strtoupper($busca));
-    array_push($parametros, "%{$busca}%", "%{$busca}%", "%{$busca}%", "%{$placa}%", (int) ltrim($busca, '#'));
-}
-
-if (validar_data($de)) {
-    $filtro .= ' AND l.data_retirada >= ?';
-    $parametros[] = $de;
-}
-
-if (validar_data($ate)) {
-    $filtro .= ' AND l.data_retirada <= ?';
-    $parametros[] = $ate;
-}
-
-$base = 'FROM locacoes l
-         JOIN clientes c ON c.id = l.cliente_id
-         JOIN veiculos v ON v.id = l.veiculo_id';
+// A visão vw_locacoes já junta aluguel + cliente + veículo
+$filtro = filtro_locacoes($busca, $de, $ate);
 
 $contagem = [];
 
-foreach ($abas as $chave => $info) {
-    $contagem[$chave] = (int) db_valor("SELECT COUNT(*) {$base} WHERE {$filtro} AND {$info['sql']}", $parametros);
+foreach (ABAS_LOCACAO as $chave => $info) {
+    $contagem[$chave] = sb_contar('vw_locacoes', $filtro + $info['filtro']);
 }
 
 [$limite, $offset, $pagina, $totalPaginas] = paginar($contagem[$aba]);
 
-$ordem = in_array($aba, ['andamento', 'atrasadas'], true) ? 'l.data_prevista ASC' : 'l.id DESC';
-
-$locacoes = db_todos(
-    "SELECT l.*, c.nome AS cliente, c.telefone, v.marca, v.modelo, v.placa
-     {$base}
-     WHERE {$filtro} AND {$abas[$aba]['sql']}
-     ORDER BY {$ordem}
-     LIMIT {$limite} OFFSET {$offset}",
-    $parametros
-);
+$locacoes = sb_select('vw_locacoes', $filtro + ABAS_LOCACAO[$aba]['filtro'] + [
+    'select' => 'id,cliente_nome,cliente_telefone,marca,modelo,placa,data_retirada,data_prevista,data_devolucao,'
+              . 'valor_previsto,valor_total,status,status_exibicao,dias_atraso_atual',
+    // Em andamento e atrasados: quem vence primeiro aparece primeiro
+    'order'  => in_array($aba, ['andamento', 'atrasadas'], true) ? 'data_prevista.asc,id.asc' : 'id.desc',
+    'limit'  => $limite,
+    'offset' => $offset,
+]);
 
 $titulo = 'Aluguéis';
 $subtitulo = 'Retiradas, devoluções e atrasos';
@@ -110,7 +81,7 @@ $filtrosAtuais = array_filter(['busca' => $busca, 'de' => $de, 'ate' => $ate]);
 </form>
 
 <nav class="abas">
-    <?php foreach ($abas as $chave => $info): ?>
+    <?php foreach (ABAS_LOCACAO as $chave => $info): ?>
         <a href="<?= e(url('locacoes/index.php?' . http_build_query(['aba' => $chave] + $filtrosAtuais))) ?>"
            class="<?= $aba === $chave ? 'ativa' : '' ?>">
             <?= e($info['texto']) ?> <b><?= $contagem[$chave] ?></b>
@@ -134,12 +105,12 @@ $filtrosAtuais = array_filter(['busca' => $busca, 'de' => $de, 'ate' => $ate]);
         </thead>
         <tbody>
             <?php foreach ($locacoes as $l): ?>
-                <?php $status = status_locacao($l); ?>
+                <?php $status = $l['status_exibicao']; ?>
                 <tr class="<?= $status === 'Atrasada' ? 'linha-alerta' : '' ?>">
                     <td>#<?= $l['id'] ?></td>
                     <td>
-                        <strong><?= e($l['cliente']) ?></strong><br>
-                        <span class="texto-fraco"><?= e(formatar_telefone($l['telefone'])) ?></span>
+                        <strong><?= e($l['cliente_nome']) ?></strong><br>
+                        <span class="texto-fraco"><?= e(formatar_telefone($l['cliente_telefone'])) ?></span>
                     </td>
                     <td>
                         <?= e(nome_veiculo($l)) ?><br>
@@ -152,7 +123,7 @@ $filtrosAtuais = array_filter(['busca' => $busca, 'de' => $de, 'ate' => $ate]);
                         <?php else: ?>
                             <span class="<?= $status === 'Atrasada' ? 'texto-vermelho' : '' ?>">prevista <?= data_br($l['data_prevista']) ?></span>
                             <?php if ($status === 'Atrasada'): ?>
-                                <br><small class="texto-vermelho"><?= dias_entre($l['data_prevista'], date('Y-m-d')) ?> dia(s) de atraso</small>
+                                <br><small class="texto-vermelho"><?= (int) $l['dias_atraso_atual'] ?> dia(s) de atraso</small>
                             <?php endif; ?>
                         <?php endif; ?>
                     </td>

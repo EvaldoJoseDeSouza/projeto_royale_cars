@@ -6,24 +6,12 @@
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/locacoes.php';
 
 exigir_permissao('locacoes_ver');
 
 $id = (int) ($_GET['id'] ?? 0);
-
-$l = db_linha(
-    'SELECT l.*,
-            c.nome AS cliente, c.cpf, c.telefone, c.email, c.cnh, c.cnh_validade,
-            v.marca, v.modelo, v.ano, v.placa, v.chassi,
-            u.nome AS registrado_por, f.nome AS encerrado_por
-     FROM locacoes l
-     JOIN clientes c ON c.id = l.cliente_id
-     JOIN veiculos v ON v.id = l.veiculo_id
-     LEFT JOIN usuarios u ON u.id = l.usuario_id
-     LEFT JOIN usuarios f ON f.id = l.finalizado_por
-     WHERE l.id = ?',
-    [$id]
-);
+$l = buscar_locacao($id);
 
 if (!$l) {
     flash('erro', 'Aluguel não encontrado.');
@@ -109,6 +97,14 @@ require RAIZ . '/includes/cabecalho.php';
         <div><span>Devolução prevista</span><strong><?= data_br($l['data_prevista']) ?></strong></div>
         <div><span>Devolvido em</span><strong><?= data_br($l['data_devolucao']) ?></strong></div>
         <div><span>Diárias previstas</span><strong><?= (int) $l['dias_previstos'] ?></strong></div>
+        <div><span>Km na saída</span><strong><?= $l['km_saida'] !== null ? number_format((int) $l['km_saida'], 0, ',', '.') . ' km' : '—' ?></strong></div>
+        <?php if ($l['km_retorno'] !== null): ?>
+            <div>
+                <span>Km na volta</span>
+                <strong><?= number_format((int) $l['km_retorno'], 0, ',', '.') ?> km</strong>
+                <small class="texto-fraco">rodou <?= number_format((int) $l['km_retorno'] - (int) $l['km_saida'], 0, ',', '.') ?> km</small>
+            </div>
+        <?php endif; ?>
         <div><span>Valor previsto</span><strong><?= moeda($l['valor_previsto']) ?></strong></div>
 
         <?php if ($l['status'] === 'Finalizada'): ?>
@@ -118,6 +114,13 @@ require RAIZ . '/includes/cabecalho.php';
                     <?= $l['dias_atraso'] > 0 ? $l['dias_atraso'] . ' dia(s) — ' . moeda($l['valor_atraso']) : 'Sem atraso' ?>
                 </strong>
             </div>
+            <?php if ((float) $l['taxas_extras'] > 0): ?>
+                <div>
+                    <span>Taxas extras</span>
+                    <strong><?= moeda($l['taxas_extras']) ?></strong>
+                    <small class="texto-fraco"><?= e($l['taxas_motivo']) ?></small>
+                </div>
+            <?php endif; ?>
             <div><span>Total cobrado</span><strong style="font-size: 20px; color: var(--azul);"><?= moeda($l['valor_total']) ?></strong></div>
             <div><span>Devolução registrada por</span><strong><?= e($l['encerrado_por'] ?? '—') ?></strong></div>
         <?php elseif ($l['status'] === 'Cancelada'): ?>
@@ -131,6 +134,12 @@ require RAIZ . '/includes/cabecalho.php';
             </div>
         <?php endif; ?>
     </div>
+
+    <?php if ($assinatura = url_assinatura($l['assinatura_path'])): ?>
+        <h4 style="margin-top: 20px; color: var(--azul);">Assinatura do cliente</h4>
+        <img src="<?= e($assinatura) ?>" alt="Assinatura de <?= e($l['cliente']) ?>" class="assinatura-contrato">
+        <p class="texto-fraco">Assinado no celular em <?= data_hora_br($l['assinada_em']) ?>.</p>
+    <?php endif; ?>
 
     <?php if ($l['observacoes']): ?>
         <h4 style="margin-top: 20px; color: var(--azul);">Observações</h4>

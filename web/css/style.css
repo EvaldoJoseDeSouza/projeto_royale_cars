@@ -1247,3 +1247,15 @@ tr.linha-alerta td {
         grid-template-columns: 1fr;
     }
 }
+
+/* Assinatura do contrato (colhida no celular, mostrada na web) */
+.assinatura-contrato {
+    display: block;
+    max-width: 320px;
+    max-height: 140px;
+    margin: 8px 0 4px;
+    background: #fff;
+    border: 1px solid var(--borda-2);
+    border-radius: 8px;
+    padding: 6px;
+}

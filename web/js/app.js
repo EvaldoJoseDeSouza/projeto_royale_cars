@@ -424,6 +424,29 @@
         });
 
         atualizarLocacao();
+
+        // Quilometragem de saída: ao escolher o carro, vem a km dele.
+        // Só troca se a pessoa ainda não digitou outra coisa no campo.
+        var campoKm = formLocacao.querySelector('#km_saida');
+
+        if (campoKm) {
+            var kmAutomatica = '';
+
+            var preencherKm = function () {
+                var opcao = selectVeiculo.options[selectVeiculo.selectedIndex];
+                var km = opcao && opcao.dataset.km ? opcao.dataset.km : '';
+
+                if (campoKm.value === '' || campoKm.value === kmAutomatica) {
+                    campoKm.value = km;
+                    kmAutomatica = km;
+                }
+
+                campoKm.min = km || 0;
+            };
+
+            selectVeiculo.addEventListener('change', preencherKm);
+            preencherKm();
+        }
     }
 
     var formDevolucao = document.querySelector('[data-calculo-devolucao]');
@@ -434,6 +457,11 @@
         var retirada = formDevolucao.dataset.retirada;
         var prevista = formDevolucao.dataset.prevista;
 
+        var campoTaxas = formDevolucao.querySelector('#taxas_extras');
+        var campoKmRetorno = formDevolucao.querySelector('#km_retorno');
+        var kmSaida = Number(formDevolucao.dataset.kmSaida || 0);
+
+        // A mesma conta que o banco faz (é só uma prévia: quem grava é o banco)
         var atualizarDevolucao = function () {
             if (!campoDevolucao.value) {
                 return;
@@ -441,14 +469,30 @@
 
             var dias = Math.max(1, diasEntre(retirada, campoDevolucao.value));
             var atraso = Math.max(0, diasEntre(prevista, campoDevolucao.value));
+            var taxas = campoTaxas ? Math.max(0, Number(String(campoTaxas.value).replace(',', '.')) || 0) : 0;
+            var kmRetorno = campoKmRetorno ? Number(campoKmRetorno.value) : 0;
 
             document.getElementById('dev-dias').textContent = dias + (dias === 1 ? ' diária' : ' diárias');
-            document.getElementById('dev-atraso').textContent = atraso ? atraso + ' dia(s) — ' + moeda(atraso * diaria) : 'Sem atraso';
-            document.getElementById('dev-total').textContent = moeda(dias * diaria);
+            document.getElementById('dev-atraso').textContent = atraso ? atraso + ' dia(s) (já somados)' : 'Sem atraso';
+            document.getElementById('dev-total').textContent = moeda(dias * diaria + taxas);
+
+            if (document.getElementById('dev-taxas')) {
+                document.getElementById('dev-taxas').textContent = taxas ? moeda(taxas) : '—';
+            }
+
+            if (document.getElementById('dev-km')) {
+                document.getElementById('dev-km').textContent = kmRetorno >= kmSaida && campoKmRetorno.value !== ''
+                    ? (kmRetorno - kmSaida).toLocaleString('pt-BR') + ' km'
+                    : '—';
+            }
         };
 
-        campoDevolucao.addEventListener('input', atualizarDevolucao);
-        campoDevolucao.addEventListener('change', atualizarDevolucao);
+        [campoDevolucao, campoTaxas, campoKmRetorno].forEach(function (campo) {
+            if (campo) {
+                campo.addEventListener('input', atualizarDevolucao);
+                campo.addEventListener('change', atualizarDevolucao);
+            }
+        });
         atualizarDevolucao();
 
         var caixaManutencao = formDevolucao.querySelector('#enviar_manutencao');

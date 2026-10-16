@@ -1,11 +1,16 @@
 <?php
 /*
 |--------------------------------------------------------------------------
-| REGISTRAR DEVOLUÇÃO (substitui o antigo finalizar.php)
+| REGISTRAR DEVOLUÇÃO
 |--------------------------------------------------------------------------
-| - Calcula os dias usados e o atraso.
-| - Libera o veículo, ou já envia para a manutenção se voltou com defeito.
-| - Tudo numa transação: ou grava tudo, ou nada.
+| Quem calcula e grava é a função registrar_devolucao do banco (a mesma do
+| desktop e do celular), numa transação só:
+|  - dias usados × diária (mínimo 1), com o atraso já somado;
+|  - taxas extras com motivo (combustível, limpeza, avaria);
+|  - quilometragem de retorno (atualiza a do carro);
+|  - libera o carro, ou manda direto para a oficina se voltou com defeito.
+| Ela devolve um resumo (dias, atraso, taxas, km rodados, total), que
+| mostramos na tela como comprovante.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -15,14 +20,10 @@ exigir_permissao('locacoes_gerenciar');
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 
-$l = db_linha(
-    'SELECT l.*, c.nome AS cliente, v.marca, v.modelo, v.placa
-     FROM locacoes l
-     JOIN clientes c ON c.id = l.cliente_id
-     JOIN veiculos v ON v.id = l.veiculo_id
-     WHERE l.id = ?',
-    [$id]
-);
+$l = $id > 0 ? sb_linha('vw_locacoes', [
+    'select' => 'id,status,cliente_nome,marca,modelo,placa,data_retirada,data_prevista,valor_diaria,km_saida',
+    'id'     => 'eq.' . $id,
+]) : null;
 
 if (!$l || $l['status'] !== 'Em andamento') {
     flash('erro', 'Aluguel não encontrado ou já encerrado.');
@@ -34,6 +35,9 @@ $erros = [];
 
 $dados = [
     'data_devolucao'    => (string) ($_POST['data_devolucao'] ?? max($hoje, $l['data_retirada'])),
+    'km_retorno'        => so_digitos($_POST['km_retorno'] ?? ''),
+    'taxas_extras'      => (string) ($_POST['taxas_extras'] ?? ''),
+    'taxas_motivo'      => trim((string) ($_POST['taxas_motivo'] ?? '')),
     'observacoes'       => trim((string) ($_POST['observacoes'] ?? '')),
     'enviar_manutencao' => !empty($_POST['enviar_manutencao']),
     'defeito'           => trim((string) ($_POST['defeito'] ?? '')),
@@ -45,92 +49,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!validar_data($dados['data_devolucao'])) {
         $erros['data_devolucao'] = 'Informe a data da devolução.';
-    } elseif ($dados['data_devolucao'] < $l['data_retirada']) {
-        $erros['data_devolucao'] = 'A devolução não pode ser antes da retirada (' . data_br($l['data_retirada']) . ').';
-    } elseif ($dados['data_devolucao'] > $hoje) {
-        $erros['data_devolucao'] = 'A devolução não pode ser registrada com data futura.';
+    }
+
+    if ($dados['km_retorno'] === '') {
+        $erros['km_retorno'] = 'Informe a quilometragem de retorno.';
+    }
+
+    $taxas = $dados['taxas_extras'] === '' ? 0.0 : ler_dinheiro($dados['taxas_extras']);
+
+    if ($taxas === null || $taxas < 0) {
+        $erros['taxas_extras'] = 'Valor das taxas extras inválido.';
     }
 
     if ($dados['enviar_manutencao'] && mb_strlen($dados['defeito']) < 5) {
         $erros['defeito'] = 'Descreva o defeito encontrado.';
     }
 
-    if (mb_strlen($dados['observacoes']) > 1000 || mb_strlen($dados['defeito']) > 1000 || mb_strlen($dados['oficina']) > 150) {
-        $erros[] = 'Texto muito longo em algum campo.';
+    if (mb_strlen($dados['observacoes']) > 1000 || mb_strlen($dados['defeito']) > 1000
+        || mb_strlen($dados['oficina']) > 150 || mb_strlen($dados['taxas_motivo']) > 200) {
+        $erros['geral'] = 'Texto muito longo em algum campo.';
     }
 
     if (!$erros) {
-        try {
-            $resultado = em_transacao(function () use ($id, $dados) {
-                $locacao = db_linha('SELECT * FROM locacoes WHERE id = ? FOR UPDATE', [$id]);
+        [$resumo, $erros] = chamar_funcao_locacao('registrar_devolucao', [
+            'p_locacao_id'     => $id,
+            'p_data_devolucao' => $dados['data_devolucao'],
+            'p_observacoes'    => $dados['observacoes'] !== '' ? $dados['observacoes'] : null,
+            // Só manda o defeito se a caixinha estiver marcada
+            'p_defeito'        => $dados['enviar_manutencao'] ? $dados['defeito'] : null,
+            'p_oficina'        => $dados['enviar_manutencao'] && $dados['oficina'] !== '' ? $dados['oficina'] : null,
+            'p_km_retorno'     => (int) $dados['km_retorno'],
+            'p_taxas_extras'   => $taxas,
+            'p_taxas_motivo'   => $dados['taxas_motivo'] !== '' ? $dados['taxas_motivo'] : null,
+        ]);
 
-                if (!$locacao || $locacao['status'] !== 'Em andamento') {
-                    throw new RegraNegocio('Este aluguel já foi encerrado por outra pessoa.');
-                }
+        if ($resumo) {
+            // O comprovante, com os números que o BANCO calculou
+            $partes = [$resumo['dias'] . ' diária(s): ' . moeda($resumo['valor_diarias'])];
 
-                $veiculo = db_linha('SELECT * FROM veiculos WHERE id = ? FOR UPDATE', [$locacao['veiculo_id']]);
-                $calculo = calcular_devolucao($locacao, $dados['data_devolucao']);
+            if ($resumo['dias_atraso'] > 0) {
+                $partes[] = $resumo['dias_atraso'] . ' dia(s) de atraso (já somados)';
+            }
 
-                $observacoes = trim(implode("\n", array_filter([$locacao['observacoes'], $dados['observacoes'] !== '' ? 'Na devolução: ' . $dados['observacoes'] : null])));
+            if ($resumo['taxas_extras'] > 0) {
+                $partes[] = 'taxas extras: ' . moeda($resumo['taxas_extras']);
+            }
 
-                db_executar(
-                    "UPDATE locacoes
-                     SET status = 'Finalizada', data_devolucao = ?, dias_atraso = ?, valor_atraso = ?,
-                         valor_total = ?, observacoes = ?, finalizado_por = ?, finalizado_em = NOW()
-                     WHERE id = ?",
-                    [
-                        $dados['data_devolucao'], $calculo['dias_atraso'], $calculo['valor_atraso'],
-                        $calculo['valor_total'], $observacoes !== '' ? $observacoes : null,
-                        (int) $_SESSION['usuario_id'], $id,
-                    ]
-                );
+            if ($resumo['km_rodados'] !== null) {
+                $partes[] = 'rodou ' . number_format((int) $resumo['km_rodados'], 0, ',', '.') . ' km';
+            }
 
-                $descricao = "Registrou a devolução do aluguel #{$id}: " . nome_veiculo($veiculo) . ' (' . formatar_placa($veiculo['placa']) . '). '
-                    . "{$calculo['dias']} diária(s), total " . moeda($calculo['valor_total'])
-                    . ($calculo['dias_atraso'] ? ", com {$calculo['dias_atraso']} dia(s) de atraso" : '') . '.';
-
-                registrar_log('locacoes', 'finalizar', $id, $descricao);
-
-                if ($dados['enviar_manutencao']) {
-                    db_executar(
-                        "INSERT INTO manutencoes (veiculo_id, locacao_id, defeito, oficina, data_entrada, status, usuario_id)
-                         VALUES (?, ?, ?, ?, ?, 'Em andamento', ?)",
-                        [
-                            $veiculo['id'], $id, $dados['defeito'],
-                            $dados['oficina'] !== '' ? $dados['oficina'] : null,
-                            $dados['data_devolucao'], (int) $_SESSION['usuario_id'],
-                        ]
-                    );
-
-                    registrar_log('manutencoes', 'abrir', db_ultimo_id(),
-                        'Enviou o ' . nome_veiculo($veiculo) . ' (' . formatar_placa($veiculo['placa']) . ") para manutenção na devolução: {$dados['defeito']}.");
-                }
-
-                // Volta a ficar disponível só se não houver reparo pendente
-                $reparoPendente = (int) db_valor(
-                    "SELECT COUNT(*) FROM manutencoes WHERE veiculo_id = ? AND status = 'Em andamento'",
-                    [$veiculo['id']]
-                );
-
-                $novoStatus = $reparoPendente ? 'Em manutenção' : 'Disponível';
-                db_executar('UPDATE veiculos SET status = ? WHERE id = ?', [$novoStatus, $veiculo['id']]);
-
-                return [$calculo, $novoStatus];
-            });
-
-            [$calculo, $novoStatus] = $resultado;
-
-            flash('sucesso', "Devolução registrada. Total: " . moeda($calculo['valor_total']) . ". Veículo agora: {$novoStatus}.");
-            redirecionar('locacoes/ver.php?id=' . $id);
-        } catch (RegraNegocio $e) {
-            flash('erro', $e->getMessage());
+            flash('sucesso', 'Devolução registrada. ' . implode('; ', $partes)
+                . '. Total: ' . moeda($resumo['valor_total']) . '. Veículo agora: ' . $resumo['status_veiculo'] . '.');
             redirecionar('locacoes/ver.php?id=' . $id);
         }
     }
 }
 
 $titulo = 'Registrar devolução';
-$subtitulo = 'Aluguel #' . $l['id'] . ' · ' . nome_veiculo($l) . ' · ' . $l['cliente'];
+$subtitulo = 'Aluguel #' . $l['id'] . ' · ' . nome_veiculo($l) . ' · ' . $l['cliente_nome'];
 $menu = 'locacoes';
 require RAIZ . '/includes/cabecalho.php';
 ?>
@@ -143,6 +120,9 @@ require RAIZ . '/includes/cabecalho.php';
                 Retirado em <strong><?= data_br($l['data_retirada']) ?></strong>,
                 devolução prevista para <strong><?= data_br($l['data_prevista']) ?></strong>,
                 diária de <strong><?= moeda($l['valor_diaria']) ?></strong>.
+                <?php if ($l['km_saida'] !== null): ?>
+                    Saiu com <strong><?= number_format((int) $l['km_saida'], 0, ',', '.') ?> km</strong>.
+                <?php endif; ?>
             </p>
         </div>
         <a href="<?= e(url('locacoes/ver.php?id=' . $id)) ?>" class="btn-secondary">Voltar</a>
@@ -154,6 +134,7 @@ require RAIZ . '/includes/cabecalho.php';
           data-diaria="<?= e($l['valor_diaria']) ?>"
           data-retirada="<?= e($l['data_retirada']) ?>"
           data-prevista="<?= e($l['data_prevista']) ?>"
+          data-km-saida="<?= (int) $l['km_saida'] ?>"
           data-confirmar="Confirmar a devolução do <?= e(nome_veiculo($l)) ?>?">
         <?= csrf_campo() ?>
         <input type="hidden" name="id" value="<?= $id ?>">
@@ -168,6 +149,28 @@ require RAIZ . '/includes/cabecalho.php';
             </div>
 
             <div class="form-group">
+                <label for="km_retorno">Quilometragem de retorno (km) *</label>
+                <input type="number" id="km_retorno" name="km_retorno" value="<?= e($dados['km_retorno']) ?>"
+                       min="<?= (int) $l['km_saida'] ?>" step="1" class="<?= classe_erro($erros, 'km_retorno') ?>" required>
+                <small class="campo-ajuda">Não pode ser menor que a de saída.</small>
+                <?= erro_campo($erros, 'km_retorno') ?>
+            </div>
+
+            <div class="form-group">
+                <label for="taxas_extras">Taxas extras (R$)</label>
+                <input type="number" id="taxas_extras" name="taxas_extras" value="<?= e($dados['taxas_extras']) ?>"
+                       min="0" step="0.01" placeholder="0,00" class="<?= classe_erro($erros, 'taxas_extras') ?>">
+                <?= erro_campo($erros, 'taxas_extras') ?>
+            </div>
+
+            <div class="form-group">
+                <label for="taxas_motivo">Motivo das taxas</label>
+                <input type="text" id="taxas_motivo" name="taxas_motivo" value="<?= e($dados['taxas_motivo']) ?>"
+                       maxlength="200" placeholder="Ex.: combustível, limpeza, avaria">
+                <small class="campo-ajuda">Obrigatório se houver taxa.</small>
+            </div>
+
+            <div class="form-group inteiro">
                 <label for="observacoes">Observações da devolução</label>
                 <input type="text" id="observacoes" name="observacoes" value="<?= e($dados['observacoes']) ?>"
                        maxlength="1000" placeholder="Ex.: tanque cheio, sem avarias">
@@ -177,8 +180,11 @@ require RAIZ . '/includes/cabecalho.php';
         <div class="resumo-calculo">
             <div><span>Diárias cobradas</span><strong id="dev-dias">—</strong></div>
             <div><span>Atraso</span><strong id="dev-atraso">—</strong></div>
+            <div><span>Taxas extras</span><strong id="dev-taxas">—</strong></div>
+            <div><span>Rodou</span><strong id="dev-km">—</strong></div>
             <div><span>Total a cobrar</span><strong id="dev-total">—</strong></div>
         </div>
+        <p class="campo-ajuda">Prévia. O valor final é calculado pelo banco ao confirmar.</p>
 
         <h3 class="secao-form">Estado do veículo</h3>
 

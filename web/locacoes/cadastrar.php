@@ -3,12 +3,15 @@
 |--------------------------------------------------------------------------
 | NOVO ALUGUEL (registrar retirada)
 |--------------------------------------------------------------------------
-| Regras:
-|  - Só clientes ativos, com CNH válida até o fim do aluguel.
-|  - Só veículos "Disponível" (não alugados e sem manutenção pendente).
-|  - Tudo é gravado numa transação, com o veículo "travado" (FOR UPDATE):
-|    se duas pessoas tentarem alugar o mesmo carro ao mesmo tempo, só a
-|    primeira consegue.
+| Quem decide se pode alugar é a função registrar_aluguel do banco (a
+| mesma do desktop e do celular). Ela confere, numa transação só:
+|  - cliente ativo, com CNH válida até o fim do aluguel;
+|  - veículo "Disponível" (e o "trava": se duas pessoas tentarem alugar o
+|    mesmo carro ao mesmo tempo, só a primeira consegue);
+|  - datas (retirada de até 30 dias atrás, no máximo 365 dias);
+|  - quilometragem de saída não menor que a atual do carro.
+| Se algo não passar, ela responde com a frase pronta, que mostramos ao
+| lado do campo certo. Aqui só conferimos o básico (campos preenchidos).
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -24,15 +27,14 @@ $dados = [
     'veiculo_id'    => (int) ($_POST['veiculo_id'] ?? $_GET['veiculo_id'] ?? 0),
     'data_retirada' => (string) ($_POST['data_retirada'] ?? $hoje),
     'data_prevista' => (string) ($_POST['data_prevista'] ?? date('Y-m-d', strtotime('+3 days'))),
+    'km_saida'      => so_digitos($_POST['km_saida'] ?? ''),
     'observacoes'   => trim((string) ($_POST['observacoes'] ?? '')),
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
 
-    $cliente = db_linha('SELECT * FROM clientes WHERE id = ? AND arquivado = 0', [$dados['cliente_id']]);
-
-    if (!$cliente) {
+    if ($dados['cliente_id'] <= 0) {
         $erros['cliente_id'] = 'Selecione um cliente ativo.';
     }
 
@@ -42,30 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!validar_data($dados['data_retirada'])) {
         $erros['data_retirada'] = 'Informe a data de retirada.';
-    } elseif ($dados['data_retirada'] > $hoje) {
-        $erros['data_retirada'] = 'A retirada não pode ser no futuro. Registre o aluguel no dia em que o cliente pegar o carro.';
-    } elseif ($dados['data_retirada'] < date('Y-m-d', strtotime('-' . MAX_DIAS_RETROATIVO . ' days'))) {
-        $erros['data_retirada'] = 'A retirada não pode ser de mais de ' . MAX_DIAS_RETROATIVO . ' dias atrás.';
     }
 
     if (!validar_data($dados['data_prevista'])) {
         $erros['data_prevista'] = 'Informe a data prevista de devolução.';
-    } elseif (!isset($erros['data_retirada'])) {
-        if ($dados['data_prevista'] < $dados['data_retirada']) {
-            $erros['data_prevista'] = 'A devolução não pode ser antes da retirada.';
-        } elseif (dias_entre($dados['data_retirada'], $dados['data_prevista']) > MAX_DIAS_LOCACAO) {
-            $erros['data_prevista'] = 'O aluguel pode ter no máximo ' . MAX_DIAS_LOCACAO . ' dias.';
-        } elseif ($dados['data_prevista'] < $hoje) {
-            $erros['data_prevista'] = 'A devolução prevista não pode ser antes de hoje.';
-        }
-    }
-
-    if ($cliente && !isset($erros['data_prevista'])) {
-        if ($cliente['cnh_validade'] < $hoje) {
-            $erros['cliente_id'] = "A CNH de {$cliente['nome']} venceu em " . data_br($cliente['cnh_validade']) . '. Atualize o cadastro antes de alugar.';
-        } elseif ($cliente['cnh_validade'] < $dados['data_prevista']) {
-            $erros['cliente_id'] = "A CNH de {$cliente['nome']} vence em " . data_br($cliente['cnh_validade']) . ', antes do fim do aluguel.';
-        }
     }
 
     if (mb_strlen($dados['observacoes']) > 1000) {
@@ -73,71 +55,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$erros) {
-        try {
-            $id = em_transacao(function () use ($dados, $cliente) {
-                // Trava a linha do veículo até o fim da transação
-                $veiculo = db_linha('SELECT * FROM veiculos WHERE id = ? FOR UPDATE', [$dados['veiculo_id']]);
+        [$id, $erros] = chamar_funcao_locacao('registrar_aluguel', [
+            'p_cliente_id'    => $dados['cliente_id'],
+            'p_veiculo_id'    => $dados['veiculo_id'],
+            'p_data_retirada' => $dados['data_retirada'],
+            'p_data_prevista' => $dados['data_prevista'],
+            'p_observacoes'   => $dados['observacoes'] !== '' ? $dados['observacoes'] : null,
+            // Vazio = o banco usa a quilometragem atual do carro
+            'p_km_saida'      => $dados['km_saida'] !== '' ? (int) $dados['km_saida'] : null,
+        ]);
 
-                if (!$veiculo || $veiculo['arquivado']) {
-                    throw new RegraNegocio('Veículo não encontrado.');
-                }
+        // Nesta tela, "devolução" só pode ser a prevista
+        if (isset($erros['data_devolucao'])) {
+            $erros['data_prevista'] = $erros['data_devolucao'];
+            unset($erros['data_devolucao']);
+        }
 
-                if ($veiculo['status'] !== 'Disponível') {
-                    throw new RegraNegocio(nome_veiculo($veiculo) . ' não está disponível (status: ' . $veiculo['status'] . ').');
-                }
-
-                $manutencaoAberta = db_valor(
-                    "SELECT COUNT(*) FROM manutencoes WHERE veiculo_id = ? AND status = 'Em andamento'",
-                    [$veiculo['id']]
-                );
-
-                if ($manutencaoAberta) {
-                    throw new RegraNegocio(nome_veiculo($veiculo) . ' tem manutenção pendente e não pode ser alugado.');
-                }
-
-                $previsto = calcular_previsto($dados['data_retirada'], $dados['data_prevista'], (float) $veiculo['valor_diaria']);
-
-                db_executar(
-                    "INSERT INTO locacoes
-                        (cliente_id, veiculo_id, usuario_id, data_retirada, data_prevista,
-                         valor_diaria, dias_previstos, valor_previsto, valor_total, status, observacoes)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Em andamento', ?)",
-                    [
-                        $cliente['id'], $veiculo['id'], (int) $_SESSION['usuario_id'],
-                        $dados['data_retirada'], $dados['data_prevista'],
-                        (float) $veiculo['valor_diaria'], $previsto['dias'], $previsto['valor'], $previsto['valor'],
-                        $dados['observacoes'] !== '' ? $dados['observacoes'] : null,
-                    ]
-                );
-
-                $id = db_ultimo_id();
-
-                db_executar("UPDATE veiculos SET status = 'Alugado' WHERE id = ?", [$veiculo['id']]);
-
-                registrar_log('locacoes', 'cadastrar', $id,
-                    "Registrou o aluguel #{$id}: " . nome_veiculo($veiculo) . ' (' . formatar_placa($veiculo['placa']) . ") para {$cliente['nome']}, "
-                    . data_br($dados['data_retirada']) . ' a ' . data_br($dados['data_prevista'])
-                    . ", {$previsto['dias']} diária(s), previsto " . moeda($previsto['valor']) . '.');
-
-                return $id;
-            });
-
+        if ($id) {
             flash('sucesso', "Aluguel #{$id} registrado. O veículo agora está como Alugado.");
             redirecionar('locacoes/ver.php?id=' . $id);
-        } catch (RegraNegocio $e) {
-            $erros['veiculo_id'] = $e->getMessage();
         }
     }
 }
 
-$clientes = db_todos('SELECT id, nome, cpf, cnh_validade FROM clientes WHERE arquivado = 0 ORDER BY nome');
+// Listas dos campos de escolha
+$clientes = sb_select('clientes', [
+    'select'    => 'id,nome,cpf,cnh_validade',
+    'arquivado' => 'eq.false',
+    'order'     => 'nome.asc',
+]);
 
-$veiculos = db_todos(
-    "SELECT id, marca, modelo, placa, ano, valor_diaria
-     FROM veiculos
-     WHERE arquivado = 0 AND status = 'Disponível'
-     ORDER BY marca, modelo"
-);
+$veiculos = sb_select('veiculos', [
+    'select'    => 'id,marca,modelo,placa,ano,valor_diaria,quilometragem',
+    'arquivado' => 'eq.false',
+    'status'    => 'eq.Disponível',
+    'order'     => 'marca.asc,modelo.asc',
+]);
 
 $titulo = 'Novo aluguel';
 $subtitulo = 'Registrar a retirada de um veículo';
@@ -183,7 +136,8 @@ require RAIZ . '/includes/cabecalho.php';
                 <select id="veiculo_id" name="veiculo_id" class="<?= classe_erro($erros, 'veiculo_id') ?>" required>
                     <option value="" data-diaria="0">Selecione um veículo</option>
                     <?php foreach ($veiculos as $v): ?>
-                        <option value="<?= $v['id'] ?>" data-diaria="<?= e($v['valor_diaria']) ?>" <?= $dados['veiculo_id'] === (int) $v['id'] ? 'selected' : '' ?>>
+                        <option value="<?= $v['id'] ?>" data-diaria="<?= e($v['valor_diaria']) ?>" data-km="<?= (int) $v['quilometragem'] ?>"
+                                <?= $dados['veiculo_id'] === (int) $v['id'] ? 'selected' : '' ?>>
                             <?= e(nome_veiculo($v)) ?> <?= (int) $v['ano'] ?> — <?= e(formatar_placa($v['placa'])) ?> — <?= moeda($v['valor_diaria']) ?>/dia
                         </option>
                     <?php endforeach; ?>
@@ -206,10 +160,18 @@ require RAIZ . '/includes/cabecalho.php';
                 <?= erro_campo($erros, 'data_prevista') ?>
             </div>
 
+            <div class="form-group">
+                <label for="km_saida">Quilometragem de saída (km) *</label>
+                <input type="number" id="km_saida" name="km_saida" value="<?= e($dados['km_saida']) ?>"
+                       min="0" step="1" class="<?= classe_erro($erros, 'km_saida') ?>" required>
+                <small class="campo-ajuda" id="km-ajuda">Vem preenchida com a do veículo. Não pode ser menor.</small>
+                <?= erro_campo($erros, 'km_saida') ?>
+            </div>
+
             <div class="form-group inteiro">
                 <label for="observacoes">Observações</label>
                 <textarea id="observacoes" name="observacoes" maxlength="1000"
-                          placeholder="Ex.: tanque cheio, quilometragem, avarias já existentes..."><?= e($dados['observacoes']) ?></textarea>
+                          placeholder="Ex.: tanque cheio, avarias já existentes..."><?= e($dados['observacoes']) ?></textarea>
             </div>
         </div>
 
