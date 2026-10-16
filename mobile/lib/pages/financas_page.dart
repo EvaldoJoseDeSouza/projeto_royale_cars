@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../dependencies.dart';
 import '../services/supabase_service.dart';
 import '../theme/colors.dart';
 import '../widgets/animated_golden_title.dart';
@@ -27,14 +26,12 @@ class _FinancasPageState extends State<FinancasPage> {
   }
 
   Future<void> _carregar() async {
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
     setState(() {
       _carregando = true;
       _erro = null;
     });
     try {
-      final dados = await SupabaseService.instance.buscarDadosFinanceiros(idEmpresa);
+      final dados = await SupabaseService.instance.buscarDadosFinanceiros();
       setState(() => _dados = dados);
     } catch (erro) {
       setState(() => _erro = erro.toString().replaceFirst('Exception: ', ''));

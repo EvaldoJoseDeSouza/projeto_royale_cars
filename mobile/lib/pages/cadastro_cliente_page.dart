@@ -44,8 +44,6 @@ class _CadastroClientePageState extends State<CadastroClientePage> {
 
   Future<void> _salvarCliente() async {
     if (!_formKey.currentState!.validate()) return;
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
 
     setState(() => _salvando = true);
     try {
@@ -59,7 +57,7 @@ class _CadastroClientePageState extends State<CadastroClientePage> {
         endereco: _enderecoController.text.trim().isEmpty ? null : _enderecoController.text.trim(),
       );
 
-      await clienteController.salvarCliente(cliente, idEmpresa);
+      await clienteController.salvarCliente(cliente);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

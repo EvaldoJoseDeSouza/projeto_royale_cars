@@ -2,42 +2,61 @@ import 'package:flutter/material.dart';
 import '../models/usuario.dart';
 import '../services/supabase_service.dart';
 
-/// Controla o usuário logado e a "empresa" (id_empresa) ativa —
-/// mesmo modelo multi-tenant do desktop: cada conta de e-mail é uma
-/// empresa, e todos os dados (clientes, veículos, locações) ficam
-/// isolados por id_empresa.
+/// Guarda quem está logado e o que essa pessoa pode fazer.
+///
+/// Não existe mais "empresa" (id_empresa): a locadora é uma só e o
+/// banco decide o que cada pessoa vê pelas permissões dela (RLS).
 class AuthController extends ChangeNotifier {
-  Usuario? _usuarioLogado;
+  Usuario? _usuario;
 
-  Usuario? get usuarioLogado => _usuarioLogado;
-  bool get estaLogado => _usuarioLogado != null;
-  int? get idEmpresa => _usuarioLogado?.idEmpresa;
+  Usuario? get usuario => _usuario;
+  bool get estaLogado => _usuario != null;
 
-  Future<void> login(String loginOuEmail, String senha) async {
-    final usuario = await SupabaseService.instance.login(loginOuEmail, senha);
-    _usuarioLogado = usuario;
+  /// Atalho para as telas: authController.pode('clientes_gerenciar')
+  bool pode(String permissao) => _usuario?.pode(permissao) ?? false;
+
+  /// Login com e-mail e senha (o roteiro completo fica no SupabaseService).
+  Future<void> entrar(String email, String senha) async {
+    _usuario = await SupabaseService.instance.entrar(email.trim().toLowerCase(), senha);
     notifyListeners();
   }
 
-  Future<void> criarConta({
-    required String username,
-    required String email,
-    required String senha,
-  }) async {
-    await SupabaseService.instance.criarConta(username: username, email: email, senha: senha);
+  /// O app abriu e já havia uma sessão salva no aparelho: pergunta de
+  /// novo ao banco o perfil e as permissões (podem ter mudado, ou a
+  /// pessoa pode ter sido desativada enquanto o app estava fechado).
+  Future<void> retomarSessao() async {
+    _usuario = await SupabaseService.instance.carregarSessao();
+    notifyListeners();
   }
 
+  /// Troca normal (sabe a senha atual).
   Future<void> trocarSenha({required String senhaAtual, required String novaSenha}) async {
-    if (_usuarioLogado == null) throw Exception('Sessão expirada.');
+    final usuario = _usuario;
+    if (usuario == null) throw Exception('Sua sessão terminou. Entre novamente.');
+
     await SupabaseService.instance.trocarSenha(
-      usuarioLogado: _usuarioLogado!,
+      email: usuario.email,
       senhaAtual: senhaAtual,
       novaSenha: novaSenha,
     );
+    _usuario = usuario.semTrocaDeSenha();
+    notifyListeners();
   }
 
-  void logout() {
-    _usuarioLogado = null;
+  /// Troca obrigatória: a pessoa acabou de entrar com a senha temporária
+  /// que o chefe gerou, então não pedimos a senha atual de novo.
+  Future<void> criarSenhaPropria(String novaSenha) async {
+    final usuario = _usuario;
+    if (usuario == null || !usuario.trocarSenha) throw Exception('Sua sessão terminou. Entre novamente.');
+
+    await SupabaseService.instance.gravarNovaSenha(novaSenha);
+    _usuario = usuario.semTrocaDeSenha();
+    notifyListeners();
+  }
+
+  Future<void> sair() async {
+    await SupabaseService.instance.sair();
+    _usuario = null;
     notifyListeners();
   }
 }

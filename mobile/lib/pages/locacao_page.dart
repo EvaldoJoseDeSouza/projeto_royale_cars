@@ -52,8 +52,6 @@ class _LocacaoPageState extends State<LocacaoPage> {
     if (!_formKey.currentState!.validate() || _clienteSelecionadoId == null || _veiculoSelecionadoId == null) {
       return;
     }
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
 
     final cliente = clienteController.clientes.firstWhere((c) => c.id == _clienteSelecionadoId);
     final veiculo = frotaController.veiculos.firstWhere((v) => v.id == _veiculoSelecionadoId);
@@ -84,8 +82,8 @@ class _LocacaoPageState extends State<LocacaoPage> {
         assinaturaBase64: assinaturaBase64,
       );
 
-      await locacaoController.registrarLocacao(novaLocacao, idEmpresa);
-      await frotaController.recarregar(idEmpresa);
+      await locacaoController.registrarLocacao(novaLocacao);
+      await frotaController.recarregar();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

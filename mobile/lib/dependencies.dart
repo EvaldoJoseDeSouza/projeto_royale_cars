@@ -13,21 +13,19 @@ final frotaController = FrotaController();
 final locacaoController = LocacaoController();
 final manutencaoController = ManutencaoController();
 
-/// 🌟 Carrega todos os dados da empresa logada (clientes, veículos,
-/// locações ativas e laudos de manutenção). Só pode ser chamado DEPOIS
-/// do login, porque antes disso não sabemos qual id_empresa filtrar
-/// (o Supabase guarda os dados de todas as empresas na mesma tabela).
+/// Carrega os dados que as telas usam (clientes, veículos, locações em
+/// andamento e manutenções). Só pode ser chamado DEPOIS do login: sem
+/// login, o banco não entrega nada (cada pessoa só vê o que as
+/// permissões dela deixam).
 ///
-/// Cada área carrega de forma independente: se uma falhar (por
-/// exemplo, a tabela `laudos_manutencao` ainda não existir porque a
-/// migração SQL não foi rodada), as outras continuam funcionando
-/// normalmente e o login não trava por completo.
-Future<void> carregarDadosDaEmpresa(int idEmpresa) async {
+/// Cada área carrega de forma independente: se uma falhar, as outras
+/// continuam funcionando e o login não trava por completo.
+Future<void> carregarDados() async {
   await Future.wait([
-    _carregarComTolerancia('clientes', () => clienteController.carregarClientes(idEmpresa)),
-    _carregarComTolerancia('veículos', () => frotaController.carregarVeiculos(idEmpresa)),
-    _carregarComTolerancia('locações', () => locacaoController.carregarAtivas(idEmpresa)),
-    _carregarComTolerancia('laudos de manutenção', () => manutencaoController.carregarLaudos(idEmpresa)),
+    _carregarComTolerancia('clientes', clienteController.carregarClientes),
+    _carregarComTolerancia('veículos', frotaController.carregarVeiculos),
+    _carregarComTolerancia('locações', locacaoController.carregarAtivas),
+    _carregarComTolerancia('manutenções', manutencaoController.carregarLaudos),
   ]);
 }
 

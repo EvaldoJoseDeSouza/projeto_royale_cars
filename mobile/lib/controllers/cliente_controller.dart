@@ -10,35 +10,35 @@ class ClienteController extends ChangeNotifier {
   List<Cliente> get clientes => List.unmodifiable(_clientes);
   List<Cliente> get clientesArquivados => List.unmodifiable(_clientesArquivados);
 
-  Future<void> carregarClientes(int idEmpresa) async {
+  Future<void> carregarClientes() async {
     isLoading = true;
     notifyListeners();
     try {
-      _clientes = await SupabaseService.instance.buscarClientes(idEmpresa);
+      _clientes = await SupabaseService.instance.buscarClientes();
     } finally {
       isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> carregarClientesArquivados(int idEmpresa) async {
-    _clientesArquivados = await SupabaseService.instance.buscarClientesArquivados(idEmpresa);
+  Future<void> carregarClientesArquivados() async {
+    _clientesArquivados = await SupabaseService.instance.buscarClientesArquivados();
     notifyListeners();
   }
 
-  Future<void> salvarCliente(Cliente cliente, int idEmpresa) async {
-    await SupabaseService.instance.salvarCliente(cliente, idEmpresa);
-    await carregarClientes(idEmpresa);
+  Future<void> salvarCliente(Cliente cliente) async {
+    await SupabaseService.instance.salvarCliente(cliente);
+    await carregarClientes();
   }
 
-  Future<void> arquivarCliente(int idCliente, int idEmpresa) async {
+  Future<void> arquivarCliente(int idCliente) async {
     await SupabaseService.instance.arquivarCliente(idCliente);
-    await carregarClientes(idEmpresa);
+    await carregarClientes();
   }
 
-  Future<void> reativarCliente(int idCliente, int idEmpresa) async {
+  Future<void> reativarCliente(int idCliente) async {
     await SupabaseService.instance.reativarCliente(idCliente);
-    await carregarClientesArquivados(idEmpresa);
-    await carregarClientes(idEmpresa);
+    await carregarClientesArquivados();
+    await carregarClientes();
   }
 }

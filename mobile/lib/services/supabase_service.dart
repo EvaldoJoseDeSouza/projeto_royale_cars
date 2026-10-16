@@ -1,4 +1,3 @@
-import 'package:bcrypt/bcrypt.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,159 +6,197 @@ import '../models/laudo_manutencao.dart';
 import '../models/locacao.dart';
 import '../models/usuario.dart';
 import '../models/veiculo.dart';
+import 'erros_banco.dart';
 
-/// Camada única de acesso ao banco de dados: fala com o MESMO projeto
-/// Supabase que o app desktop do Caio usa (rhdmiqcfksekmrtgnjgo), nas
-/// mesmas tabelas (usuarios, clientes, veiculos, locacoes) — assim os
-/// dois apps compartilham dados de verdade.
+/// Camada única de acesso ao banco: fala com o MESMO projeto Supabase
+/// que a web e o desktop usam. As regras (validação, permissões,
+/// cálculo do aluguel, histórico) ficam no banco; o app cuida da tela.
 ///
-/// A conexão em si (URL + chave) é configurada uma única vez, em
-/// main.dart, através de `Supabase.initialize(...)`. Aqui a gente só
-/// pega o client já pronto com `Supabase.instance.client` — nunca
-/// chame `createClient` aqui, isso é sintaxe JavaScript (do desktop),
-/// não existe em Dart.
-///
-/// A lógica aqui replica exatamente o que está em
-/// `royale-cars-desktop/src/main/index.js` (os handlers do Electron),
-/// só que em Dart: mesmo esquema multi-tenant por `id_empresa`, mesma
-/// forma de logar (e-mail OU username + senha com hash bcrypt).
+/// A conexão em si (URL + chave pública) é configurada uma única vez,
+/// em main.dart, através de `Supabase.initialize(...)`. Aqui a gente só
+/// pega o client já pronto com `Supabase.instance.client`.
 class SupabaseService {
   SupabaseService._interno();
   static final SupabaseService instance = SupabaseService._interno();
 
   SupabaseClient get _db => Supabase.instance.client;
 
+  static const _plataforma = 'mobile';
+
   // ---------------------------------------------------------------------
-  // AUTENTICAÇÃO
+  // LOGIN — o MESMO roteiro da web e do desktop:
+  //   1. Pergunta ao banco se o e-mail está bloqueado (5 erros em 15 min)
+  //   2. Tenta entrar pelo Supabase Auth (e-mail + senha)
+  //   3. Registra a tentativa (certa ou errada) para o painel do chefe
+  //   4. Pede ao banco o perfil e as permissões (iniciar_sessao)
+  //      - se a pessoa estiver desativada, o banco recusa e saímos
+  //
+  // Quem confere a senha é o Supabase, não o app.
   // ---------------------------------------------------------------------
 
-  /// Faz login por e-mail OU username, comparando a senha com o hash
-  /// bcrypt salvo no banco (mesma lógica do desktop). Se a senha ainda
-  /// estiver em texto puro (contas antigas), migra pra hash automaticamente.
-  Future<Usuario> login(String loginOuEmail, String senha) async {
-    final resposta = await _db
-        .from('usuarios')
-        .select()
-        .or('email.eq.$loginOuEmail,username.eq.$loginOuEmail');
-
-    // 🌟 LOG TEMPORÁRIO DE DIAGNÓSTICO — remover depois que o login
-    // estiver funcionando. Aparece no terminal onde você rodou
-    // `flutter run`.
-    debugPrint('[LOGIN] linhas encontradas para "$loginOuEmail": ${resposta.length}');
-
-    if (resposta.isEmpty) {
-      debugPrint('[LOGIN] nenhuma linha encontrada — verifique se o e-mail/username bate exatamente com o do Supabase.');
-      throw Exception('Usuário ou senha incorretos.');
-    }
-
-    final dados = resposta.first;
-    final senhaSalva = dados['senha'] as String;
-    debugPrint('[LOGIN] usuário encontrado: id=${dados['id']}, id_empresa=${dados['id_empresa']}');
-    debugPrint('[LOGIN] prefixo do hash salvo: ${senhaSalva.substring(0, senhaSalva.length > 7 ? 7 : senhaSalva.length)}');
-
-    final jaEmHash = senhaSalva.startsWith('\$2a\$') ||
-        senhaSalva.startsWith('\$2b\$') ||
-        senhaSalva.startsWith('\$2y\$');
-
-    bool senhaCorreta;
-    if (jaEmHash) {
-      senhaCorreta = BCrypt.checkpw(senha, senhaSalva);
-      debugPrint('[LOGIN] comparação bcrypt (hash existente) => $senhaCorreta');
-    } else {
-      senhaCorreta = senha == senhaSalva;
-      debugPrint('[LOGIN] senha salva NÃO está em hash — comparação em texto puro => $senhaCorreta');
-      if (senhaCorreta) {
-        final novoHash = BCrypt.hashpw(senha, BCrypt.gensalt());
-        await _db.from('usuarios').update({'senha': novoHash}).eq('id', dados['id']);
-        dados['senha'] = novoHash;
+  Future<Usuario> entrar(String email, String senha) async {
+    try {
+      // 1. Bloqueado por muitas tentativas?
+      final bloqueado = await _db.rpc('login_bloqueado', params: {'p_email': email});
+      if (bloqueado == true) {
+        throw Exception('Muitas tentativas erradas. Aguarde 15 minutos ou peça ao responsável para redefinir sua senha.');
       }
-    }
 
-    if (!senhaCorreta) {
-      throw Exception('Usuário ou senha incorretos.');
-    }
+      // 2. Entrar pelo Supabase Auth
+      try {
+        await _db.auth.signInWithPassword(email: email, password: senha);
+      } on AuthRetryableFetchException {
+        rethrow; // sem internet: cai no "catch" de fora
+      } on AuthException catch (erro) {
+        // 3a. Errou: registra a tentativa
+        await _registrarTentativa(email, false, erro.message);
 
-    return Usuario.fromMap(dados);
+        // Conta desativada pelo chefe: o Supabase responde "user_banned"
+        if (erro.code == 'user_banned') {
+          throw Exception('Seu acesso está desativado. Fale com o responsável pela locadora.');
+        }
+
+        // A mesma frase para e-mail que não existe e senha errada:
+        // assim ninguém descobre quais e-mails estão cadastrados.
+        throw Exception('E-mail ou senha incorretos.');
+      }
+
+      // 3b. Acertou
+      await _registrarTentativa(email, true, null);
+
+      // 4. Perfil e permissões
+      return await carregarSessao();
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro));
+    }
   }
 
-  /// Cria uma nova conta/empresa (mesmo fluxo "Proprietário" do desktop):
-  /// insere o usuário, descobre o id gerado, e usa esse mesmo id como
-  /// id_empresa (a empresa "é" o usuário que a criou).
-  Future<void> criarConta({
-    required String username,
-    required String email,
-    required String senha,
-  }) async {
-    final existente = await _db
-        .from('usuarios')
-        .select('id')
-        .or('email.eq.$email,username.eq.$username');
-
-    if (existente.isNotEmpty) {
-      throw Exception('Este e-mail ou nome de usuário já está sendo utilizado.');
+  /// Pede ao banco o perfil e as permissões de quem está logado.
+  /// Usada no login e quando o app abre com a sessão já salva no aparelho.
+  /// Se a pessoa foi desativada, o banco recusa: saímos e avisamos.
+  Future<Usuario> carregarSessao() async {
+    try {
+      final dados = await _db.rpc('iniciar_sessao', params: {'p_plataforma': _plataforma});
+      return Usuario.fromSessao(Map<String, dynamic>.from(dados as Map));
+    } on PostgrestException catch (erro) {
+      // O banco recusou (desativado, sem perfil, sessão vencida): sai da conta
+      await sair();
+      throw Exception(erro.code == 'P0001' ? erro.message : 'Sua sessão terminou. Entre novamente.');
+    } catch (erro) {
+      // Sem internet: NÃO sai da conta (a sessão continua salva para a próxima vez)
+      throw Exception(mensagemSemConexao);
     }
-
-    final senhaHash = BCrypt.hashpw(senha, BCrypt.gensalt());
-
-    final inserido = await _db
-        .from('usuarios')
-        .insert({'username': username, 'email': email, 'senha': senhaHash})
-        .select('id')
-        .single();
-
-    final idGerado = inserido['id'];
-    await _db.from('usuarios').update({'id_empresa': idGerado}).eq('id', idGerado);
   }
 
+  /// Existe uma sessão guardada no aparelho (de um login anterior)?
+  bool get temSessaoSalva => _db.auth.currentSession != null;
+
+  /// Grava a tentativa no banco. Se falhar, só avisa no terminal:
+  /// não pode impedir a pessoa de entrar por causa do registro.
+  Future<void> _registrarTentativa(String email, bool sucesso, String? motivo) async {
+    try {
+      await _db.rpc('registrar_tentativa_login', params: {
+        'p_email': email,
+        'p_sucesso': sucesso,
+        'p_motivo': motivo,
+        'p_plataforma': _plataforma,
+      });
+    } catch (erro) {
+      debugPrint('[LOGIN] Erro ao registrar tentativa: $erro');
+    }
+  }
+
+  Future<void> sair() async {
+    try {
+      await _db.auth.signOut();
+    } catch (erro) {
+      // Sem internet, o signOut pode falhar no servidor, mas a sessão
+      // guardada no aparelho é apagada do mesmo jeito.
+      debugPrint('[SAIR] $erro');
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // SENHA
+  // ---------------------------------------------------------------------
+
+  /// Troca normal: confere a senha atual tentando entrar com ela
+  /// (o Supabase não tem outro jeito de conferir) e grava a nova.
   Future<void> trocarSenha({
-    required Usuario usuarioLogado,
+    required String email,
     required String senhaAtual,
     required String novaSenha,
   }) async {
-    final jaEmHash = usuarioLogado.senha.startsWith('\$2a\$') ||
-        usuarioLogado.senha.startsWith('\$2b\$') ||
-        usuarioLogado.senha.startsWith('\$2y\$');
-    final senhaAtualCorreta = jaEmHash
-        ? BCrypt.checkpw(senhaAtual, usuarioLogado.senha)
-        : senhaAtual == usuarioLogado.senha;
-
-    if (!senhaAtualCorreta) {
+    try {
+      await _db.auth.signInWithPassword(email: email, password: senhaAtual);
+    } on AuthRetryableFetchException {
+      throw Exception(mensagemSemConexao);
+    } on AuthException {
       throw Exception('A senha atual informada está incorreta.');
     }
 
-    final novoHash = BCrypt.hashpw(novaSenha, BCrypt.gensalt());
-    await _db.from('usuarios').update({'senha': novoHash}).eq('id', usuarioLogado.id as Object);
+    await gravarNovaSenha(novaSenha);
   }
+
+  /// Grava a senha nova no Supabase Auth e avisa o banco (tira a marca de
+  /// "trocar senha" e grava no histórico). Usada pela troca normal e pela
+  /// obrigatória (senha temporária).
+  Future<void> gravarNovaSenha(String novaSenha) async {
+    try {
+      await _db.auth.updateUser(UserAttributes(password: novaSenha));
+    } on AuthRetryableFetchException {
+      throw Exception(mensagemSemConexao);
+    } on AuthException catch (erro) {
+      if (erro.code == 'same_password') {
+        throw Exception('A nova senha precisa ser diferente da atual.');
+      }
+      if (erro.code == 'weak_password') {
+        throw Exception(regraSenha);
+      }
+      throw Exception('Não foi possível trocar sua senha. Tente novamente.');
+    }
+
+    try {
+      await _db.rpc('senha_trocada');
+    } catch (erro) {
+      // A senha já mudou. Se só a marca falhar, no próximo login ele pede de novo.
+      debugPrint('[SENHA] Erro ao avisar senha_trocada: $erro');
+    }
+  }
+
+  /// Mesma regra de senha das 3 plataformas: 8+ caracteres, com letra e número.
+  static const regraSenha = 'A senha precisa ter pelo menos 8 caracteres, com letras e números.';
+
+  static bool senhaForte(String senha) =>
+      senha.length >= 8 && RegExp(r'[A-Za-z]').hasMatch(senha) && RegExp(r'\d').hasMatch(senha);
 
   // ---------------------------------------------------------------------
   // FROTA (veículos)
   // ---------------------------------------------------------------------
 
-  Future<List<Veiculo>> buscarFrota(int idEmpresa) async {
+  Future<List<Veiculo>> buscarFrota() async {
     final dados = await _db
         .from('veiculos')
         .select()
-        .eq('id_empresa', idEmpresa)
         .eq('ativo', true)
         .order('id');
     return dados.map((m) => Veiculo.fromMap(m)).toList();
   }
 
-  Future<List<Veiculo>> buscarFrotaArquivada(int idEmpresa) async {
+  Future<List<Veiculo>> buscarFrotaArquivada() async {
     final dados = await _db
         .from('veiculos')
         .select()
-        .eq('id_empresa', idEmpresa)
         .eq('ativo', false)
         .order('id');
     return dados.map((m) => Veiculo.fromMap(m)).toList();
   }
 
-  Future<void> salvarVeiculo(Veiculo veiculo, int idEmpresa) async {
+  Future<void> salvarVeiculo(Veiculo veiculo) async {
     if (veiculo.id != null) {
       await _db.from('veiculos').update(veiculo.toMap()).eq('id', veiculo.id as Object);
     } else {
-      await _db.from('veiculos').insert({...veiculo.toMap(), 'id_empresa': idEmpresa});
+      await _db.from('veiculos').insert(veiculo.toMap());
     }
   }
 
@@ -184,31 +221,29 @@ class SupabaseService {
   // CLIENTES
   // ---------------------------------------------------------------------
 
-  Future<List<Cliente>> buscarClientes(int idEmpresa) async {
+  Future<List<Cliente>> buscarClientes() async {
     final dados = await _db
         .from('clientes')
         .select()
-        .eq('id_empresa', idEmpresa)
         .eq('ativo', true)
         .order('nome');
     return dados.map((m) => Cliente.fromMap(m)).toList();
   }
 
-  Future<List<Cliente>> buscarClientesArquivados(int idEmpresa) async {
+  Future<List<Cliente>> buscarClientesArquivados() async {
     final dados = await _db
         .from('clientes')
         .select()
-        .eq('id_empresa', idEmpresa)
         .eq('ativo', false)
         .order('nome');
     return dados.map((m) => Cliente.fromMap(m)).toList();
   }
 
-  Future<void> salvarCliente(Cliente cliente, int idEmpresa) async {
+  Future<void> salvarCliente(Cliente cliente) async {
     if (cliente.id != null) {
       await _db.from('clientes').update(cliente.toMap()).eq('id', cliente.id as Object);
     } else {
-      await _db.from('clientes').insert({...cliente.toMap(), 'id_empresa': idEmpresa});
+      await _db.from('clientes').insert(cliente.toMap());
     }
   }
 
@@ -234,24 +269,22 @@ class SupabaseService {
   // ---------------------------------------------------------------------
 
   static const _selectComJoin =
-      'id, id_empresa, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status, km_saida, km_retorno, assinatura_base64, clientes(nome), veiculos(modelo, placa)';
+      'id, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status, km_saida, km_retorno, assinatura_base64, clientes(nome), veiculos(modelo, placa)';
 
-  Future<List<Locacao>> buscarLocacoesAtivas(int idEmpresa) async {
+  Future<List<Locacao>> buscarLocacoesAtivas() async {
     final dados = await _db
         .from('locacoes')
         .select(_selectComJoin)
         .eq('status', Locacao.statusAtivo)
-        .eq('id_empresa', idEmpresa)
         .order('id', ascending: false);
     return dados.map((m) => Locacao.fromMap(m)).toList();
   }
 
-  Future<List<Locacao>> buscarLocacoesHistorico(int idEmpresa) async {
+  Future<List<Locacao>> buscarLocacoesHistorico() async {
     final dados = await _db
         .from('locacoes')
         .select(_selectComJoin)
         .eq('status', Locacao.statusConcluido)
-        .eq('id_empresa', idEmpresa)
         .order('data_fim', ascending: false);
     return dados.map((m) => Locacao.fromMap(m)).toList();
   }
@@ -259,7 +292,7 @@ class SupabaseService {
   /// Registra a locação, confirma que o veículo ainda está disponível
   /// (evita corrida entre dois usuários alugando o mesmo carro) e marca
   /// o veículo como Alugado — igual ao desktop.
-  Future<void> salvarLocacao(Locacao locacao, int idEmpresa) async {
+  Future<void> salvarLocacao(Locacao locacao) async {
     final veiculoAtual = await _db
         .from('veiculos')
         .select('status')
@@ -271,7 +304,7 @@ class SupabaseService {
           'Este veículo não está mais disponível (status atual: ${veiculoAtual['status']}). Atualize a lista e escolha outro.');
     }
 
-    await _db.from('locacoes').insert({...locacao.toMap(), 'id_empresa': idEmpresa});
+    await _db.from('locacoes').insert(locacao.toMap());
     await _db.from('veiculos').update({'status': Veiculo.statusAlugado}).eq('id', locacao.idVeiculo);
   }
 
@@ -304,11 +337,10 @@ class SupabaseService {
   // MANUTENÇÃO (laudos) — exclusivo do app Flutter
   // ---------------------------------------------------------------------
 
-  Future<List<LaudoManutencao>> buscarLaudos(int idEmpresa) async {
+  Future<List<LaudoManutencao>> buscarLaudos() async {
     final dados = await _db
         .from('laudos_manutencao')
         .select()
-        .eq('id_empresa', idEmpresa)
         .order('data_registro', ascending: false);
     return dados.map((m) => LaudoManutencao.fromMap(m)).toList();
   }
@@ -316,8 +348,8 @@ class SupabaseService {
   /// Salva o laudo e marca o veículo como "Em Manutenção" — assim o
   /// status do veículo fica consistente com o mesmo campo que o
   /// desktop usa (veiculos.status).
-  Future<void> salvarLaudo(LaudoManutencao laudo, int idEmpresa) async {
-    await _db.from('laudos_manutencao').insert({...laudo.toMap(), 'id_empresa': idEmpresa});
+  Future<void> salvarLaudo(LaudoManutencao laudo) async {
+    await _db.from('laudos_manutencao').insert(laudo.toMap());
     await _db
         .from('veiculos')
         .update({'status': Veiculo.statusManutencao}).eq('id', laudo.idVeiculo);
@@ -335,11 +367,10 @@ class SupabaseService {
   /// Réplica do cálculo financeiro do desktop: faturamento do mês
   /// atual x anterior, variação percentual, ticket médio e recebimento
   /// projetado das locações ainda ativas.
-  Future<Map<String, dynamic>> buscarDadosFinanceiros(int idEmpresa) async {
+  Future<Map<String, dynamic>> buscarDadosFinanceiros() async {
     final todasLocacoes = await _db
         .from('locacoes')
         .select('id, data_fim, valor_total, status, clientes(nome), veiculos(modelo, placa)')
-        .eq('id_empresa', idEmpresa)
         .order('data_fim', ascending: false);
 
     final agora = DateTime.now();

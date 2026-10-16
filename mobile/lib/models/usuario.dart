@@ -1,40 +1,61 @@
-/// Usuário do sistema. Segue exatamente a tabela `usuarios` do Supabase
-/// já usada pelo app desktop: cada conta representa uma empresa
-/// (multi-tenant), identificada por `idEmpresa` — que é o próprio `id`
-/// do usuário "Proprietário" que criou a conta.
+/// Quem está usando o app. Os dados vêm prontos da função
+/// `iniciar_sessao` do banco (a mesma que a web e o desktop chamam logo
+/// depois do login): perfil + lista de permissões.
+///
+/// A senha NÃO fica aqui: quem guarda e confere a senha é o Supabase
+/// Auth. O app nunca vê nem o hash.
 class Usuario {
-  final int? id;
-  final String username;
+  final String id; // uuid do Supabase Auth (ex.: "3f2a...-...")
+  final String nome;
   final String email;
-  final String senha; // hash bcrypt, como vem do banco
-  final int? idEmpresa;
+  final String cargo; // 'chefe' | 'gerente' | 'funcionario'
+  final bool trocarSenha; // true = senha temporária, precisa criar uma nova
+  final Set<String> permissoes; // ex.: {'clientes_ver', 'locacoes_gerenciar'}
 
-  Usuario({
-    this.id,
-    required this.username,
+  const Usuario({
+    required this.id,
+    required this.nome,
     required this.email,
-    required this.senha,
-    this.idEmpresa,
+    required this.cargo,
+    required this.trocarSenha,
+    required this.permissoes,
   });
 
-  factory Usuario.fromMap(Map<String, dynamic> map) {
+  bool get ehChefe => cargo == 'chefe';
+
+  /// O usuário tem a permissão? (o chefe tem todas)
+  bool pode(String permissao) => ehChefe || permissoes.contains(permissao);
+
+  /// Nome do cargo para mostrar na tela.
+  String get cargoTexto => switch (cargo) {
+        'chefe' => 'Chefe',
+        'gerente' => 'Gerente',
+        _ => 'Funcionário',
+      };
+
+  /// Monta o usuário a partir da resposta de `iniciar_sessao`:
+  /// {"id": "...", "nome": "...", "email": "...", "cargo": "gerente",
+  ///  "trocar_senha": false, "permissoes": ["clientes_ver", ...]}
+  factory Usuario.fromSessao(Map<String, dynamic> dados) {
+    final lista = dados['permissoes'];
+
     return Usuario(
-      id: map['id'] is int ? map['id'] as int : int.tryParse('${map['id']}'),
-      username: map['username'] ?? '',
-      email: map['email'] ?? '',
-      senha: map['senha'] ?? '',
-      idEmpresa: map['id_empresa'] is int
-          ? map['id_empresa'] as int
-          : int.tryParse('${map['id_empresa']}'),
+      id: '${dados['id']}',
+      nome: '${dados['nome'] ?? ''}',
+      email: '${dados['email'] ?? ''}',
+      cargo: '${dados['cargo'] ?? 'funcionario'}',
+      trocarSenha: dados['trocar_senha'] == true,
+      permissoes: lista is List ? lista.map((p) => '$p').toSet() : <String>{},
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'username': username,
-      'email': email,
-      'senha': senha,
-      if (idEmpresa != null) 'id_empresa': idEmpresa,
-    };
-  }
+  /// Cópia com a marca de "trocar senha" desligada (depois da troca).
+  Usuario semTrocaDeSenha() => Usuario(
+        id: id,
+        nome: nome,
+        email: email,
+        cargo: cargo,
+        trocarSenha: false,
+        permissoes: permissoes,
+      );
 }

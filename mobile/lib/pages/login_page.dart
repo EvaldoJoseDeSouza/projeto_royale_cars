@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import '../dependencies.dart';
 import '../theme/colors.dart';
 import '../widgets/logo_widget.dart';
-import 'cadastro_empresa_page.dart';
 import 'main_dashboard_page.dart';
+import 'trocar_senha_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  /// Recado para mostrar assim que a tela abrir (ex.: "Sua sessão terminou").
+  final String? aviso;
+
+  const LoginPage({super.key, this.aviso});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -20,6 +23,23 @@ class _LoginPageState extends State<LoginPage> {
   bool _senhaVisivel = false;
 
   @override
+  void initState() {
+    super.initState();
+    final aviso = widget.aviso;
+    if (aviso != null) {
+      // Espera a tela terminar de desenhar para poder mostrar o recado
+      WidgetsBinding.instance.addPostFrameCallback((_) => _mostrarErro(aviso));
+    }
+  }
+
+  void _mostrarErro(String mensagem) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: RoyaleColors.statusAlugado, content: Text(mensagem)),
+    );
+  }
+
+  @override
   void dispose() {
     _loginController.dispose();
     _senhaController.dispose();
@@ -31,26 +51,27 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _carregando = true);
 
     try {
-      await authController.login(_loginController.text.trim(), _senhaController.text);
+      await authController.entrar(_loginController.text, _senhaController.text);
+      if (!mounted) return;
 
-      final idEmpresa = authController.idEmpresa;
-      if (idEmpresa != null) {
-        await carregarDadosDaEmpresa(idEmpresa);
-      }
-
-      if (mounted) {
+      // Senha temporária (o chefe acabou de criar a conta ou redefinir):
+      // antes de entrar no sistema, a pessoa cria a própria senha.
+      if (authController.usuario!.trocarSenha) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const MainDashboardPage()),
+          MaterialPageRoute(builder: (context) => const TrocarSenhaPage(obrigatoria: true)),
         );
+        return;
       }
+
+      await carregarDados();
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainDashboardPage()),
+      );
     } catch (erro) {
-      final mensagem = erro.toString().replaceFirst('Exception: ', '');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: RoyaleColors.statusAlugado, content: Text(mensagem)),
-        );
-      }
+      _mostrarErro(erro.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _carregando = false);
     }
@@ -126,7 +147,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Clientes, frota, locações e contratos — tudo em um só lugar,\nsincronizado em tempo real com o painel desktop.',
+              'Clientes, frota, locações e contratos — tudo em um só lugar,\nos mesmos dados da web e do desktop.',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: compacto ? 12.5 : 14, height: 1.5),
             ),
           ],
@@ -153,18 +174,24 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Entre com o e-mail ou usuário da sua conta',
+                'Entre com o e-mail da sua conta',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: RoyaleColors.textoMuted, fontSize: 13),
               ),
               const SizedBox(height: 28),
               TextFormField(
                 controller: _loginController,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
                 decoration: const InputDecoration(
-                  labelText: 'E-mail ou usuário',
-                  prefixIcon: Icon(Icons.person_outline),
+                  labelText: 'E-mail',
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Informe seu e-mail ou usuário' : null,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Informe seu e-mail';
+                  if (!v.contains('@')) return 'Entre com o seu e-mail de acesso';
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -186,14 +213,12 @@ class _LoginPageState extends State<LoginPage> {
                   ? const Center(child: CircularProgressIndicator(color: RoyaleColors.azulMarinho))
                   : ElevatedButton(onPressed: _efetuarLogin, child: const Text('ENTRAR')),
               const SizedBox(height: 20),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CadastroEmpresaPage()),
-                  );
-                },
-                child: const Text('Ainda não tem conta? Criar conta da locadora'),
+              // Não existe "criar conta" nem "esqueci a senha" pelo app:
+              // quem cadastra a equipe e redefine senhas é o chefe.
+              const Text(
+                'Esqueceu a senha? Peça ao responsável pela locadora para redefinir.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: RoyaleColors.textoMuted, fontSize: 12.5),
               ),
             ],
           ),

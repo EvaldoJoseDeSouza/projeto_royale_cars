@@ -42,8 +42,6 @@ class _CadastroVeiculoPageState extends State<CadastroVeiculoPage> {
 
   Future<void> _salvarVeiculo() async {
     if (!_formKey.currentState!.validate()) return;
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
 
     setState(() => _salvando = true);
     try {
@@ -58,7 +56,7 @@ class _CadastroVeiculoPageState extends State<CadastroVeiculoPage> {
         quilometragem: int.tryParse(_quilometragemController.text) ?? 0,
       );
 
-      await frotaController.salvarVeiculo(veiculo, idEmpresa);
+      await frotaController.salvarVeiculo(veiculo);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

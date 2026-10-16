@@ -19,8 +19,6 @@ class _ClientesPageState extends State<ClientesPage> {
   String _busca = '';
 
   Future<void> _arquivar(BuildContext context, int idCliente) async {
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -35,7 +33,7 @@ class _ClientesPageState extends State<ClientesPage> {
     if (confirmar != true) return;
 
     try {
-      await clienteController.arquivarCliente(idCliente, idEmpresa);
+      await clienteController.arquivarCliente(idCliente);
     } catch (erro) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

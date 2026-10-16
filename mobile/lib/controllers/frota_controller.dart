@@ -12,39 +12,39 @@ class FrotaController extends ChangeNotifier {
   List<Veiculo> get veiculosDisponiveis =>
       _veiculos.where((v) => v.status == Veiculo.statusDisponivel).toList();
 
-  Future<void> carregarVeiculos(int idEmpresa) async {
+  Future<void> carregarVeiculos() async {
     isLoading = true;
     notifyListeners();
     try {
-      _veiculos = await SupabaseService.instance.buscarFrota(idEmpresa);
+      _veiculos = await SupabaseService.instance.buscarFrota();
     } finally {
       isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> carregarVeiculosArquivados(int idEmpresa) async {
-    _veiculosArquivados = await SupabaseService.instance.buscarFrotaArquivada(idEmpresa);
+  Future<void> carregarVeiculosArquivados() async {
+    _veiculosArquivados = await SupabaseService.instance.buscarFrotaArquivada();
     notifyListeners();
   }
 
-  Future<void> salvarVeiculo(Veiculo veiculo, int idEmpresa) async {
-    await SupabaseService.instance.salvarVeiculo(veiculo, idEmpresa);
-    await carregarVeiculos(idEmpresa);
+  Future<void> salvarVeiculo(Veiculo veiculo) async {
+    await SupabaseService.instance.salvarVeiculo(veiculo);
+    await carregarVeiculos();
   }
 
-  Future<void> arquivarVeiculo(int idVeiculo, int idEmpresa) async {
+  Future<void> arquivarVeiculo(int idVeiculo) async {
     await SupabaseService.instance.arquivarVeiculo(idVeiculo);
-    await carregarVeiculos(idEmpresa);
+    await carregarVeiculos();
   }
 
-  Future<void> reativarVeiculo(int idVeiculo, int idEmpresa) async {
+  Future<void> reativarVeiculo(int idVeiculo) async {
     await SupabaseService.instance.reativarVeiculo(idVeiculo);
-    await carregarVeiculosArquivados(idEmpresa);
-    await carregarVeiculos(idEmpresa);
+    await carregarVeiculosArquivados();
+    await carregarVeiculos();
   }
 
   /// Recarrega a frota silenciosamente (usado depois de registrar uma
   /// locação/devolução/manutenção, pra refletir a mudança de status).
-  Future<void> recarregar(int idEmpresa) => carregarVeiculos(idEmpresa);
+  Future<void> recarregar() => carregarVeiculos();
 }

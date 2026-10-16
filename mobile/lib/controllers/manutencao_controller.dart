@@ -8,24 +8,24 @@ class ManutencaoController extends ChangeNotifier {
 
   List<LaudoManutencao> get laudos => List.unmodifiable(_laudos);
 
-  Future<void> carregarLaudos(int idEmpresa) async {
+  Future<void> carregarLaudos() async {
     isLoading = true;
     notifyListeners();
     try {
-      _laudos = await SupabaseService.instance.buscarLaudos(idEmpresa);
+      _laudos = await SupabaseService.instance.buscarLaudos();
     } finally {
       isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> salvarLaudo(LaudoManutencao laudo, int idEmpresa) async {
-    await SupabaseService.instance.salvarLaudo(laudo, idEmpresa);
-    await carregarLaudos(idEmpresa);
+  Future<void> salvarLaudo(LaudoManutencao laudo) async {
+    await SupabaseService.instance.salvarLaudo(laudo);
+    await carregarLaudos();
   }
 
-  Future<void> concluirManutencao(int idVeiculo, int idEmpresa) async {
+  Future<void> concluirManutencao(int idVeiculo) async {
     await SupabaseService.instance.concluirManutencao(idVeiculo);
-    await carregarLaudos(idEmpresa);
+    await carregarLaudos();
   }
 }

@@ -56,8 +56,6 @@ class _DevolucaoPageState extends State<DevolucaoPage> {
     if (!_formKey.currentState!.validate() || _veiculoSelecionadoId == null || _locacaoAtiva == null) {
       return;
     }
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
 
     setState(() => _salvando = true);
     try {
@@ -65,11 +63,10 @@ class _DevolucaoPageState extends State<DevolucaoPage> {
       await locacaoController.finalizarLocacao(
         idLocacao: _locacaoAtiva!.id!,
         idVeiculo: _veiculoSelecionadoId!,
-        idEmpresa: idEmpresa,
         kmRetorno: kmRetorno,
         novoValorTotal: _valorTotalFechamento,
       );
-      await frotaController.recarregar(idEmpresa);
+      await frotaController.recarregar();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -30,8 +30,7 @@ class _ManutencaoPageState extends State<ManutencaoPage> {
   }
 
   Future<void> _salvarLaudo() async {
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null || _veiculoSelecionado == null) return;
+    if (_veiculoSelecionado == null) return;
 
     setState(() => _salvando = true);
     try {
@@ -46,8 +45,8 @@ class _ManutencaoPageState extends State<ManutencaoPage> {
         dataRegistro: DateTime.now(),
       );
 
-      await manutencaoController.salvarLaudo(novoLaudo, idEmpresa);
-      await frotaController.recarregar(idEmpresa);
+      await manutencaoController.salvarLaudo(novoLaudo);
+      await frotaController.recarregar();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

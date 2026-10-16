@@ -21,8 +21,6 @@ class FrotaPage extends StatelessWidget {
   }
 
   Future<void> _arquivar(BuildContext context, Veiculo veiculo) async {
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa == null) return;
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -37,7 +35,7 @@ class FrotaPage extends StatelessWidget {
     if (confirmar != true) return;
 
     try {
-      await frotaController.arquivarVeiculo(veiculo.id!, idEmpresa);
+      await frotaController.arquivarVeiculo(veiculo.id!);
     } catch (erro) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -23,9 +23,8 @@ class _RelatorioPageState extends State<RelatorioPage> {
   @override
   void initState() {
     super.initState();
-    final idEmpresa = authController.idEmpresa;
-    if (idEmpresa != null && widget.titulo == 'Relatório de Devoluções') {
-      locacaoController.carregarHistorico(idEmpresa);
+    if (widget.titulo == 'Relatório de Devoluções') {
+      locacaoController.carregarHistorico();
     }
   }
 

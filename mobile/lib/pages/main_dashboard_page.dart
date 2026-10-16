@@ -14,6 +14,7 @@ import 'login_page.dart';
 import 'manutencao_page.dart';
 import 'menu_relatorios_page.dart';
 import 'sobre_nos_page.dart';
+import 'trocar_senha_page.dart';
 
 class MainDashboardPage extends StatefulWidget {
   const MainDashboardPage({super.key});
@@ -104,8 +105,10 @@ class _MainDashboardPageState extends State<MainDashboardPage> {
           children: [
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: RoyaleColors.azulMarinho),
-              accountName: Text(authController.usuarioLogado?.username ?? "Usuário"),
-              accountEmail: Text(authController.usuarioLogado?.email ?? ""),
+              accountName: Text(authController.usuario?.nome ?? "Usuário"),
+              accountEmail: Text(
+                "${authController.usuario?.email ?? ""} · ${authController.usuario?.cargoTexto ?? ""}",
+              ),
               currentAccountPicture: const CircleAvatar(
                 backgroundColor: RoyaleColors.dourado,
                 child: Icon(Icons.person, color: RoyaleColors.azulMarinho),
@@ -129,10 +132,19 @@ class _MainDashboardPageState extends State<MainDashboardPage> {
             ),
             const Divider(),
             ListTile(
+              leading: const Icon(Icons.lock_outline, color: RoyaleColors.azulMarinho),
+              title: const Text("Trocar minha senha"),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const TrocarSenhaPage()));
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text("Sair da Conta"),
-              onTap: () {
-                authController.logout();
+              onTap: () async {
+                await authController.sair();
+                if (!context.mounted) return;
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginPage()),

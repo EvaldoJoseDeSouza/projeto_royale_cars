@@ -3,12 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pages/splash_page.dart';
 import 'theme/app_theme.dart';
 
-// 🌟 MESMO projeto Supabase que o app desktop do Caio já usa — os dois
-// apps compartilham o banco de dados de verdade (tabelas usuarios,
-// clientes, veiculos, locacoes). Nunca coloque a chave "service_role"
-// aqui, só a "publishable"/"anon" — essa é segura de embutir no app.
-const _supabaseUrl = 'https://rhdmiqcfksekmrtgnjgo.supabase.co';
-const _supabasePublishableKey = 'sb_publishable_CJtd4q_aCbOMKkxQ45w5mg_mZ_Rf1ys';
+// O MESMO projeto Supabase da web e do desktop ("royale-cars-final"):
+// as três plataformas usam o mesmo banco, com as mesmas regras.
+// Aqui fica só a chave PÚBLICA ("publishable"), que pode ir no app: quem
+// protege os dados são as regras do banco (RLS). Nunca coloque aqui a
+// chave de serviço ("secret"/"service_role").
+const _supabaseUrl = 'https://saggupyjutibjruajwms.supabase.co';
+const _supabasePublishableKey = 'sb_publishable_IfgXLkrumbCFJ_UswbOwyQ_JNaMKoDN';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
