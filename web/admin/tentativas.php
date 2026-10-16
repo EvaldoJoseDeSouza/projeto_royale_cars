@@ -15,37 +15,41 @@ exigir_chefe();
 $soFalhas = !empty($_GET['falhas']);
 $email = trim((string) ($_GET['email'] ?? ''));
 
-$where = ['1 = 1'];
-$p = [];
+$filtros = [];
 
 if ($soFalhas) {
-    $where[] = 't.sucesso = 0';
+    $filtros['sucesso'] = 'eq.false';
 }
 
 if ($email !== '') {
-    $where[] = 't.email LIKE ?';
-    $p[] = "%{$email}%";
+    $filtros['email'] = 'ilike.*' . trim(str_replace([',', '(', ')', '*', '"', '\\'], ' ', $email)) . '*';
 }
 
-$sqlWhere = implode(' AND ', $where);
-$total = (int) db_valor("SELECT COUNT(*) FROM login_tentativas t WHERE {$sqlWhere}", $p);
+$total = sb_contar('login_tentativas', $filtros);
 [$limite, $offset, $pagina, $totalPaginas] = paginar($total, 30);
 
-$tentativas = db_todos(
-    "SELECT t.* FROM login_tentativas t WHERE {$sqlWhere} ORDER BY t.id DESC LIMIT {$limite} OFFSET {$offset}",
-    $p
-);
+$tentativas = sb_select('login_tentativas', $filtros + [
+    'select' => 'id,email,ip,sucesso,motivo,plataforma,criado_em',
+    'order'  => 'id.desc',
+    'limit'  => $limite,
+    'offset' => $offset,
+]);
 
-// IPs com mais falhas nos últimos 7 dias
-$suspeitos = db_todos(
-    'SELECT ip, COUNT(*) AS falhas, COUNT(DISTINCT email) AS emails, MAX(criado_em) AS ultima
-     FROM login_tentativas
-     WHERE sucesso = 0 AND criado_em > DATE_SUB(NOW(), INTERVAL 7 DAY)
-     GROUP BY ip
-     HAVING falhas >= 3
-     ORDER BY falhas DESC
-     LIMIT 10'
-);
+// IPs com 3 ou mais falhas nos últimos 7 dias (agrupados aqui no PHP)
+$porIp = [];
+
+foreach (sb_select('login_tentativas', ['select' => 'ip,email,criado_em', 'sucesso' => 'eq.false',
+                                        'criado_em' => 'gte.' . date('c', time() - 7 * 86400)]) as $t) {
+    $ip = $t['ip'] ?? '?';
+    $porIp[$ip]['ip'] = $ip;
+    $porIp[$ip]['falhas'] = ($porIp[$ip]['falhas'] ?? 0) + 1;
+    $porIp[$ip]['emails'][$t['email']] = true;
+    $porIp[$ip]['ultima'] = max($porIp[$ip]['ultima'] ?? '', $t['criado_em']);
+}
+
+$suspeitos = array_filter($porIp, fn ($s) => $s['falhas'] >= 3);
+usort($suspeitos, fn ($a, $b) => $b['falhas'] <=> $a['falhas']);
+$suspeitos = array_slice($suspeitos, 0, 10);
 
 $titulo = 'Tentativas de login';
 $subtitulo = 'Painel Administrativo';
@@ -72,7 +76,7 @@ require RAIZ . '/includes/cabecalho.php';
                         <tr class="linha-alerta">
                             <td><?= e($s['ip']) ?></td>
                             <td class="numero"><?= (int) $s['falhas'] ?></td>
-                            <td class="numero"><?= (int) $s['emails'] ?></td>
+                            <td class="numero"><?= count($s['emails']) ?></td>
                             <td><?= data_hora_br($s['ultima']) ?></td>
                         </tr>
                     <?php endforeach; ?>
@@ -96,13 +100,14 @@ require RAIZ . '/includes/cabecalho.php';
 <div class="table-container">
     <table>
         <thead>
-            <tr><th>Data e hora</th><th>E-mail digitado</th><th>IP</th><th>Resultado</th><th>Motivo</th></tr>
+            <tr><th>Data e hora</th><th>E-mail digitado</th><th>Onde</th><th>IP</th><th>Resultado</th><th>Motivo</th></tr>
         </thead>
         <tbody>
             <?php foreach ($tentativas as $t): ?>
                 <tr>
                     <td><?= data_hora_br($t['criado_em']) ?></td>
                     <td><?= e($t['email']) ?></td>
+                    <td><?= e(ucfirst($t['plataforma'] ?? '—')) ?></td>
                     <td><?= e($t['ip']) ?></td>
                     <td><?= $t['sucesso'] ? '<span class="status status-verde">Entrou</span>' : '<span class="status status-vermelho">Recusado</span>' ?></td>
                     <td><?= e($t['motivo'] ?? '—') ?></td>
@@ -110,7 +115,7 @@ require RAIZ . '/includes/cabecalho.php';
             <?php endforeach; ?>
 
             <?php if (!$tentativas): ?>
-                <tr><td colspan="5" class="empty">Nenhuma tentativa registrada.</td></tr>
+                <tr><td colspan="6" class="empty">Nenhuma tentativa registrada.</td></tr>
             <?php endif; ?>
         </tbody>
     </table>

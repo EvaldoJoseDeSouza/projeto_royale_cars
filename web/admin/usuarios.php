@@ -7,33 +7,26 @@
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/usuarios.php';
 
 exigir_chefe();
 
 $cargo = $_GET['cargo'] ?? '';
 $situacao = $_GET['situacao'] ?? '';
 
-$where = ['1 = 1'];
-$p = [];
+$filtros = [];
 
 if (isset(CARGOS[$cargo])) {
-    $where[] = 'u.cargo = ?';
-    $p[] = $cargo;
+    $filtros['cargo'] = 'eq.' . $cargo;
 }
 
 if ($situacao === 'ativos') {
-    $where[] = 'u.ativo = 1';
+    $filtros['ativo'] = 'eq.true';
 } elseif ($situacao === 'inativos') {
-    $where[] = 'u.ativo = 0';
+    $filtros['ativo'] = 'eq.false';
 }
 
-$usuarios = db_todos(
-    'SELECT u.*, (SELECT COUNT(*) FROM usuario_permissoes p WHERE p.usuario_id = u.id) AS total_permissoes
-     FROM usuarios u
-     WHERE ' . implode(' AND ', $where) . "
-     ORDER BY u.ativo DESC, FIELD(u.cargo, 'chefe', 'gerente', 'funcionario'), u.nome",
-    $p
-);
+$usuarios = listar_equipe($filtros);
 
 // Senha temporária recém-criada (aparece uma única vez)
 $senhaNova = $_SESSION['senha_temporaria'] ?? null;
@@ -113,7 +106,7 @@ require RAIZ . '/includes/cabecalho.php';
                     </td>
                     <td><?= e($u['email']) ?></td>
                     <td><?= e(CARGOS[$u['cargo']]) ?></td>
-                    <td><?= $ehChefe ? 'Acesso total' : (int) $u['total_permissoes'] . ' de ' . $totalPermissoes ?></td>
+                    <td><?= $ehChefe ? 'Acesso total' : count($u['permissoes']) . ' de ' . $totalPermissoes ?></td>
                     <td><?= data_hora_br($u['ultimo_acesso']) ?></td>
                     <td><?= badge_status($u['ativo'] ? 'Ativo' : 'Inativo') ?></td>
                     <td>

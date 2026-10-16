@@ -1,31 +1,33 @@
 <?php
 /*
-| Ativar ou desativar o acesso de um funcionário/gerente.
-| Quem é desativado perde o acesso na hora (mesmo que esteja logado).
+| Ativar ou desativar o acesso de um funcionário/gerente (Edge Function).
+| Quem é desativado perde o acesso na hora, mesmo que esteja logado: o
+| banco para de entregar os dados e o login fica bloqueado.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
+require RAIZ . '/includes/usuarios.php';
 
 exigir_chefe();
 exigir_post();
 
-$id = (int) ($_POST['id'] ?? 0);
-$ativo = (int) ($_POST['ativo'] ?? 0) === 1 ? 1 : 0;
+$usuario = buscar_colaborador((string) ($_POST['id'] ?? ''));
+$ativar = (int) ($_POST['ativo'] ?? 0) === 1;
 
-$usuario = db_linha('SELECT id, nome, cargo FROM usuarios WHERE id = ?', [$id]);
-
-if (!$usuario || $usuario['cargo'] === 'chefe' || $id === (int) $_SESSION['usuario_id']) {
+// buscar_colaborador nunca devolve o chefe: ninguém desativa o chefe por aqui
+if (!$usuario) {
     flash('erro', 'Não é possível alterar o acesso deste usuário.');
     redirecionar('admin/usuarios.php');
 }
 
-db_executar('UPDATE usuarios SET ativo = ? WHERE id = ?', [$ativo, $id]);
+[, $erro] = chamar_admin(['acao' => $ativar ? 'ativar' : 'desativar', 'usuario_id' => $usuario['id']]);
 
-registrar_log('usuarios', $ativo ? 'ativar' : 'desativar', $id,
-    ($ativo ? 'Reativou' : 'Desativou') . " o acesso de {$usuario['nome']}.");
-
-flash('sucesso', $ativo
-    ? "Acesso de {$usuario['nome']} reativado."
-    : "Acesso de {$usuario['nome']} desativado. Ele não consegue mais entrar no sistema.");
+if ($erro) {
+    flash('erro', $erro);
+} else {
+    flash('sucesso', $ativar
+        ? "Acesso de {$usuario['nome']} reativado."
+        : "Acesso de {$usuario['nome']} desativado. Ele não consegue mais entrar no sistema.");
+}
 
 redirecionar('admin/usuarios.php');

@@ -18,7 +18,8 @@
 */
 
 const MINUTOS_INATIVIDADE = 30; // Sai sozinho depois de 30 min parado
-const MINUTOS_BLOQUEIO    = 15; // O banco bloqueia o e-mail por 15 min após 5 erros
+const MAX_FALHAS_EMAIL    = 5;  // O banco bloqueia o e-mail após 5 senhas erradas...
+const MINUTOS_BLOQUEIO    = 15; // ...por 15 minutos (regra de login_bloqueado, no banco)
 const PLATAFORMA          = 'web';
 
 /** Mesma regra de senha das 3 plataformas: 8+ caracteres, com letra e número. */
@@ -154,8 +155,7 @@ function exigir_chefe(): void
 
 function acesso_negado(): void
 {
-    registrar_log('seguranca', 'acesso_negado', null,
-        'Tentou abrir uma página sem permissão: ' . ($_SERVER['REQUEST_URI'] ?? '?'));
+    anotar_no_servidor('Tentou abrir uma página sem permissão: ' . ($_SERVER['REQUEST_URI'] ?? '?'));
 
     http_response_code(403);
 
@@ -274,27 +274,9 @@ function entrar_no_sistema(string $email, string $senha): ?string
     // O "crachá" do Supabase já está em $_SESSION['supabase'] (sb_entrar guardou).
     session_regenerate_id(true);
     $_SESSION['ultima_atividade'] = time();
-    ponte_mysql($email);
 
     return null;
 }
-
-/**
- * PONTE TEMPORÁRIA (sai no pacote 3.8).
- * As telas que ainda não mudaram para o Supabase gravam no MySQL quem fez
- * cada coisa, usando o número do usuário de lá. Procuramos esse número pelo
- * e-mail. Se não existir no MySQL, fica vazio (as colunas aceitam).
- */
-function ponte_mysql(string $email): void
-{
-    try {
-        $id = db_valor('SELECT id FROM usuarios WHERE email = ?', [$email]);
-        $_SESSION['usuario_id'] = $id ? (int) $id : null;
-    } catch (Throwable $e) {
-        $_SESSION['usuario_id'] = null;
-    }
-}
-
 
 /* ========================================================================
    SENHA

@@ -7,28 +7,33 @@
 
 require __DIR__ . '/../includes/bootstrap.php';
 
+require RAIZ . '/includes/usuarios.php';
+
 exigir_chefe();
 
-$usuariosAtivos = (int) db_valor("SELECT COUNT(*) FROM usuarios WHERE ativo = 1 AND cargo <> 'chefe'");
-$usuariosInativos = (int) db_valor('SELECT COUNT(*) FROM usuarios WHERE ativo = 0');
-$acoesHoje = (int) db_valor('SELECT COUNT(*) FROM logs WHERE criado_em >= CURDATE()');
-$falhas24h = (int) db_valor('SELECT COUNT(*) FROM login_tentativas WHERE sucesso = 0 AND criado_em > DATE_SUB(NOW(), INTERVAL 24 HOUR)');
+$equipe = listar_equipe();
+$usuariosAtivos = count(array_filter($equipe, fn ($u) => $u['ativo'] && $u['cargo'] !== 'chefe'));
+$usuariosInativos = count(array_filter($equipe, fn ($u) => !$u['ativo']));
 
-$ultimasAcoes = db_todos(
-    'SELECT l.*, u.nome AS usuario
-     FROM logs l
-     LEFT JOIN usuarios u ON u.id = l.usuario_id
-     WHERE l.modulo <> \'seguranca\' OR l.acao NOT IN (\'login\', \'logout\')
-     ORDER BY l.id DESC
-     LIMIT 10'
-);
+// Horários do banco com o fuso de Brasília (-03:00), para "hoje" e "24 h" baterem com o relógio daqui
+$inicioDeHoje = date('Y-m-d') . 'T00:00:00-03:00';
+$acoesHoje = sb_contar('logs', ['criado_em' => 'gte.' . $inicioDeHoje]);
+$falhas24h = sb_contar('login_tentativas', ['sucesso' => 'eq.false', 'criado_em' => 'gte.' . date('c', time() - 86400)]);
 
-$equipe = db_todos(
-    "SELECT u.id, u.nome, u.cargo, u.ativo, u.ultimo_acesso,
-            (SELECT COUNT(*) FROM logs l WHERE l.usuario_id = u.id AND l.criado_em > DATE_SUB(NOW(), INTERVAL 30 DAY)) AS acoes_30d
-     FROM usuarios u
-     ORDER BY u.ativo DESC, FIELD(u.cargo, 'chefe', 'gerente', 'funcionario'), u.nome"
-);
+// As 10 últimas ações, sem as entradas no sistema (que são muitas)
+$ultimasAcoes = sb_select('logs', [
+    'select' => 'id,descricao,criado_em,perfis(nome)',
+    'or'     => '(modulo.neq.seguranca,acao.neq.login)',
+    'order'  => 'id.desc',
+    'limit'  => 10,
+]);
+
+// Quantas ações cada pessoa fez nos últimos 30 dias
+$acoes30d = [];
+
+foreach (sb_select('logs', ['select' => 'usuario_id', 'criado_em' => 'gte.' . date('c', time() - 30 * 86400)]) as $l) {
+    $acoes30d[$l['usuario_id']] = ($acoes30d[$l['usuario_id']] ?? 0) + 1;
+}
 
 $titulo = 'Painel Administrativo';
 $subtitulo = 'Equipe, permissões e auditoria';
@@ -79,7 +84,7 @@ require RAIZ . '/includes/cabecalho.php';
                     <div>
                         <strong><?= e($u['nome']) ?></strong> · <?= e(CARGOS[$u['cargo']]) ?><br>
                         <span class="texto-fraco">
-                            Último acesso: <?= data_hora_br($u['ultimo_acesso']) ?> · <?= (int) $u['acoes_30d'] ?> ação(ões) em 30 dias
+                            Último acesso: <?= data_hora_br($u['ultimo_acesso']) ?> · <?= $acoes30d[$u['id']] ?? 0 ?> ação(ões) em 30 dias
                         </span>
                     </div>
                     <?= badge_status($u['ativo'] ? 'Ativo' : 'Inativo') ?>
@@ -98,7 +103,7 @@ require RAIZ . '/includes/cabecalho.php';
             <?php foreach ($ultimasAcoes as $a): ?>
                 <li>
                     <div>
-                        <strong><?= e($a['usuario'] ?? 'Sistema') ?></strong>
+                        <strong><?= e($a['perfis']['nome'] ?? 'Sistema') ?></strong>
                         <span class="texto-fraco">· <?= data_hora_br($a['criado_em']) ?></span><br>
                         <?= e($a['descricao']) ?>
                     </div>

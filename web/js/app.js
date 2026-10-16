@@ -340,13 +340,13 @@
 
 
     /* ----------------------------------------------------------------
-       PERMISSÕES: sugestão por cargo e dependências
+       PERMISSÕES: modelos (Gerente, Vendedor...) e dependências
        ---------------------------------------------------------------- */
 
     var areaPermissoes = document.querySelector('[data-permissoes]');
 
     if (areaPermissoes) {
-        var padroes = JSON.parse(areaPermissoes.dataset.padroes || '{}');
+        var modelos = JSON.parse(areaPermissoes.dataset.modelos || '{}');
         var dependencias = JSON.parse(areaPermissoes.dataset.dependencias || '{}');
         var caixas = areaPermissoes.querySelectorAll('input[name="permissoes[]"]');
 
@@ -366,10 +366,14 @@
             });
         });
 
-        document.querySelectorAll('[data-aplicar-cargo]').forEach(function (botao) {
-            botao.addEventListener('click', function () {
-                var cargo = document.getElementById('cargo').value;
-                var lista = padroes[cargo] || [];
+        // Escolher um modelo marca exatamente as permissões dele
+        document.querySelectorAll('[data-aplicar-modelo]').forEach(function (seletor) {
+            seletor.addEventListener('change', function () {
+                var lista = modelos[seletor.value];
+
+                if (!lista) {
+                    return;
+                }
 
                 caixas.forEach(function (caixa) {
                     caixa.checked = lista.indexOf(caixa.value) !== -1;

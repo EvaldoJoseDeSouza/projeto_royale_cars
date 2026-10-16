@@ -40,21 +40,6 @@ const PERMISSOES = [
     ],
 ];
 
-/** Sugestão de permissões ao escolher o cargo (o chefe pode ajustar). */
-const PERMISSOES_PADRAO = [
-    'gerente' => [
-        'clientes_ver', 'clientes_gerenciar', 'clientes_arquivar',
-        'veiculos_ver', 'veiculos_gerenciar', 'veiculos_arquivar',
-        'locacoes_ver', 'locacoes_gerenciar', 'locacoes_cancelar',
-        'manutencoes', 'financeiro', 'relatorios', 'relatorios_financeiros',
-    ],
-    'funcionario' => [
-        'clientes_ver', 'clientes_gerenciar',
-        'veiculos_ver',
-        'locacoes_ver', 'locacoes_gerenciar',
-    ],
-];
-
 /**
  * Quem pode fazer algo também precisa poder ver.
  * Ex.: marcar "cadastrar clientes" adiciona "ver clientes" automaticamente.

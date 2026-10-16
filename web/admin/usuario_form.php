@@ -3,8 +3,14 @@
 |--------------------------------------------------------------------------
 | CADASTRAR / EDITAR FUNCIONÁRIO OU GERENTE (exclusivo do chefe)
 |--------------------------------------------------------------------------
-| No cadastro, o sistema gera uma senha temporária que aparece uma única
-| vez. No primeiro login a pessoa é obrigada a criar a própria senha.
+| Cadastrar: tudo pela Edge Function (ela cria o login, o perfil e as
+| permissões, e devolve a senha temporária, que aparece uma única vez).
+| No primeiro login a pessoa é obrigada a criar a própria senha.
+|
+| Editar (igual ao desktop):
+|  1) e-mail mudou → Edge Function (mexe no login);
+|  2) nome e cargo → direto na tabela perfis (o banco confere se é o chefe);
+|  3) permissões   → tira as desmarcadas, coloca as novas.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -12,23 +18,24 @@ require RAIZ . '/includes/usuarios.php';
 
 exigir_chefe();
 
-$id = (int) ($_GET['id'] ?? 0);
-$editando = $id > 0;
+$id = (string) ($_GET['id'] ?? '');
+$editando = $id !== '';
 $erros = [];
 
 if ($editando) {
-    $usuario = db_linha('SELECT * FROM usuarios WHERE id = ?', [$id]);
+    $usuario = buscar_colaborador($id);
 
-    if (!$usuario || $usuario['cargo'] === 'chefe') {
+    if (!$usuario) {
         flash('erro', 'Usuário não encontrado. (Os dados do chefe são alterados em "Minha conta".)');
         redirecionar('admin/usuarios.php');
     }
 
-    $permissoesAntes = array_column(db_todos('SELECT permissao FROM usuario_permissoes WHERE usuario_id = ?', [$id]), 'permissao');
-    $dados = $usuario + ['permissoes' => $permissoesAntes];
+    $dados = $usuario;
 } else {
-    $dados = ['nome' => '', 'email' => '', 'cargo' => 'funcionario', 'ativo' => 1, 'permissoes' => PERMISSOES_PADRAO['funcionario']];
+    $dados = ['nome' => '', 'email' => '', 'cargo' => 'funcionario', 'permissoes' => []];
 }
+
+$modelos = modelos_permissao();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
@@ -44,70 +51,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!validar_email($dados['email'])) {
         $erros['email'] = 'Digite um e-mail válido.';
-    } elseif (db_valor('SELECT id FROM usuarios WHERE email = ? AND id <> ?', [$dados['email'], $id])) {
-        $erros['email'] = 'Já existe um usuário com este e-mail.';
     }
 
-    // O cargo de chefe não pode ser dado por aqui
+    // O cargo de chefe não pode ser dado por aqui (o banco também barra)
     if (!in_array($dados['cargo'], ['gerente', 'funcionario'], true)) {
         $erros['cargo'] = 'Escolha o cargo.';
     }
 
     if (!$dados['permissoes']) {
-        $erros['permissoes'] = 'Marque pelo menos uma permissão.';
+        $erros['permissoes'] = 'Marque pelo menos uma permissão (ou escolha um modelo).';
     }
 
-    if (!$erros) {
-        $conexao->begin_transaction();
+    if (!$erros && !$editando) {
+        [$criado, $erro] = chamar_admin([
+            'acao'       => 'criar',
+            'nome'       => $dados['nome'],
+            'email'      => $dados['email'],
+            'cargo'      => $dados['cargo'],
+            'permissoes' => $dados['permissoes'],
+        ]);
 
-        try {
-            if ($editando) {
-                db_executar('UPDATE usuarios SET nome = ?, email = ?, cargo = ? WHERE id = ?',
-                    [$dados['nome'], $dados['email'], $dados['cargo'], $id]);
-
-                salvar_permissoes($id, $dados['permissoes']);
-
-                $mudancas = [];
-
-                if ($usuario['nome'] !== $dados['nome']) { $mudancas[] = "nome: {$usuario['nome']} → {$dados['nome']}"; }
-                if ($usuario['email'] !== $dados['email']) { $mudancas[] = "e-mail: {$usuario['email']} → {$dados['email']}"; }
-                if ($usuario['cargo'] !== $dados['cargo']) { $mudancas[] = 'cargo: ' . CARGOS[$usuario['cargo']] . ' → ' . CARGOS[$dados['cargo']]; }
-                if ($p = descrever_mudanca_permissoes($permissoesAntes, $dados['permissoes'])) { $mudancas[] = $p; }
-
-                registrar_log('usuarios', 'editar', $id,
-                    "Editou o acesso de {$dados['nome']}: " . ($mudancas ? implode('; ', $mudancas) : 'nenhuma alteração') . '.');
-
-                $conexao->commit();
-                flash('sucesso', "Acesso de {$dados['nome']} atualizado. As mudanças valem a partir da próxima página que ele abrir.");
-            } else {
-                $senha = gerar_senha_temporaria();
-
-                db_executar(
-                    'INSERT INTO usuarios (nome, email, senha, cargo, ativo, trocar_senha) VALUES (?, ?, ?, ?, 1, 1)',
-                    [$dados['nome'], $dados['email'], password_hash($senha, PASSWORD_DEFAULT), $dados['cargo']]
-                );
-
-                $id = db_ultimo_id();
-                salvar_permissoes($id, $dados['permissoes']);
-
-                registrar_log('usuarios', 'cadastrar', $id,
-                    'Cadastrou ' . mb_strtolower(CARGOS[$dados['cargo']]) . " {$dados['nome']} ({$dados['email']}) com "
-                    . count($dados['permissoes']) . ' permissão(ões).');
-
-                $conexao->commit();
-
-                $_SESSION['senha_temporaria'] = ['nome' => $dados['nome'], 'senha' => $senha];
-                flash('sucesso', "{$dados['nome']} cadastrado(a). Login: {$dados['email']}");
-            }
-
+        if ($erro) {
+            $erros[str_contains($erro, 'e-mail') ? 'email' : 'geral'] = $erro;
+        } else {
+            // A senha aparece uma única vez, na lista (depois some da sessão)
+            $_SESSION['senha_temporaria'] = ['nome' => $dados['nome'], 'senha' => $criado['senha_temporaria']];
+            flash('sucesso', "{$dados['nome']} cadastrado(a). Login: {$dados['email']}");
             redirecionar('admin/usuarios.php');
-        } catch (mysqli_sql_exception $e) {
-            $conexao->rollback();
+        }
+    }
 
-            if (campo_duplicado($e)) {
-                $erros['email'] = 'Já existe um usuário com este e-mail.';
-            } else {
-                throw $e;
+    if (!$erros && $editando) {
+        // 1) E-mail de login (mexe no Supabase Auth: Edge Function)
+        if ($dados['email'] !== $usuario['email']) {
+            [, $erro] = chamar_admin(['acao' => 'alterar_email', 'usuario_id' => $id, 'email' => $dados['email']]);
+
+            if ($erro) {
+                $erros['email'] = $erro;
+            }
+        }
+
+        if (!$erros) {
+            try {
+                // 2) Nome e cargo  3) Permissões (o banco anota tudo no histórico)
+                sb_atualizar('perfis', ['id' => 'eq.' . $id], ['nome' => $dados['nome'], 'cargo' => $dados['cargo']]);
+                salvar_permissoes($id, $usuario['permissoes'], $dados['permissoes']);
+
+                flash('sucesso', "Acesso de {$dados['nome']} atualizado. As mudanças valem a partir da próxima página que ele abrir.");
+                redirecionar('admin/usuarios.php');
+            } catch (SupabaseErro $e) {
+                $erros['geral'] = sb_mensagem_erro($e);
             }
         }
     }
@@ -165,14 +158,19 @@ require RAIZ . '/includes/cabecalho.php';
         <h3 class="secao-form">Permissões</h3>
 
         <p class="texto-fraco" style="margin-bottom: 12px;">
-            Marque o que esta pessoa pode fazer.
-            <button type="button" class="btn-small btn-claro" data-aplicar-cargo>Usar sugestão do cargo</button>
+            Marque o que esta pessoa pode fazer, ou comece por um modelo:
+            <select data-aplicar-modelo aria-label="Usar modelo de permissões">
+                <option value="">Usar modelo...</option>
+                <?php foreach (array_keys($modelos) as $nomeModelo): ?>
+                    <option value="<?= e($nomeModelo) ?>"><?= e($nomeModelo) ?> (<?= count($modelos[$nomeModelo]) ?> permissões)</option>
+                <?php endforeach; ?>
+            </select>
         </p>
 
         <?= erro_campo($erros, 'permissoes') ?>
 
         <div class="permissoes-grupos" data-permissoes
-             data-padroes="<?= e(json_encode(PERMISSOES_PADRAO)) ?>"
+             data-modelos="<?= e(json_encode($modelos)) ?>"
              data-dependencias="<?= e(json_encode(PERMISSOES_DEPENDENTES)) ?>">
             <?php foreach (PERMISSOES as $grupo => $lista): ?>
                 <div class="permissoes-grupo">

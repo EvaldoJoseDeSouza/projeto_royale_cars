@@ -5,7 +5,8 @@
 |--------------------------------------------------------------------------
 | Quem cadastrou um cliente, mudou o preço de um carro, arquivou um
 | cadastro, finalizou um aluguel... com data, hora e IP.
-| O histórico não pode ser editado nem apagado pelo sistema.
+| Quem escreve o histórico é o próprio banco (nenhum aplicativo consegue
+| escrever, editar ou apagar): é o mesmo histórico do desktop e do celular.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -22,39 +23,44 @@ $modulos = [
     'seguranca'   => 'Segurança e acessos',
 ];
 
+$usuarioId = (string) ($_GET['usuario_id'] ?? '');
+
 $f = [
-    'usuario_id' => (int) ($_GET['usuario_id'] ?? 0),
+    'usuario_id' => preg_match('/^[0-9a-f-]{36}$/', $usuarioId) ? $usuarioId : '',
     'modulo'     => isset($modulos[$_GET['modulo'] ?? '']) ? $_GET['modulo'] : '',
     'de'         => validar_data($_GET['de'] ?? '') ? $_GET['de'] : '',
     'ate'        => validar_data($_GET['ate'] ?? '') ? $_GET['ate'] : '',
     'busca'      => trim((string) ($_GET['busca'] ?? '')),
 ];
 
-$where = ['1 = 1'];
-$p = [];
+$filtros = [];
 
-if ($f['usuario_id']) { $where[] = 'l.usuario_id = ?'; $p[] = $f['usuario_id']; }
-if ($f['modulo']) { $where[] = 'l.modulo = ?'; $p[] = $f['modulo']; }
-if ($f['de']) { $where[] = 'l.criado_em >= ?'; $p[] = $f['de'] . ' 00:00:00'; }
-if ($f['ate']) { $where[] = 'l.criado_em <= ?'; $p[] = $f['ate'] . ' 23:59:59'; }
-if ($f['busca'] !== '') { $where[] = 'l.descricao LIKE ?'; $p[] = '%' . $f['busca'] . '%'; }
+if ($f['usuario_id']) { $filtros['usuario_id'] = 'eq.' . $f['usuario_id']; }
+if ($f['modulo']) { $filtros['modulo'] = 'eq.' . $f['modulo']; }
 
-$sqlWhere = implode(' AND ', $where);
+// Período no fuso de Brasília: "até 15/10" vai até o fim do dia 15
+$periodo = [];
+if ($f['de']) { $periodo[] = 'criado_em.gte.' . $f['de'] . 'T00:00:00-03:00'; }
+if ($f['ate']) { $periodo[] = 'criado_em.lt.' . date('Y-m-d', strtotime($f['ate'] . ' +1 day')) . 'T00:00:00-03:00'; }
+if ($periodo) { $filtros['and'] = '(' . implode(',', $periodo) . ')'; }
 
-$total = (int) db_valor("SELECT COUNT(*) FROM logs l WHERE {$sqlWhere}", $p);
+if ($f['busca'] !== '') {
+    // Tira a "pontuação de comando" do filtro (ver filtro_clientes)
+    $texto = trim(str_replace([',', '(', ')', '*', '"', '\\'], ' ', $f['busca']));
+    $filtros['descricao'] = 'ilike.*' . $texto . '*';
+}
+
+$total = sb_contar('logs', $filtros);
 [$limite, $offset, $pagina, $totalPaginas] = paginar($total, 30);
 
-$registros = db_todos(
-    "SELECT l.*, u.nome AS usuario, u.cargo
-     FROM logs l
-     LEFT JOIN usuarios u ON u.id = l.usuario_id
-     WHERE {$sqlWhere}
-     ORDER BY l.id DESC
-     LIMIT {$limite} OFFSET {$offset}",
-    $p
-);
+$registros = sb_select('logs', $filtros + [
+    'select' => 'id,modulo,acao,descricao,ip,criado_em,perfis(nome,cargo)',
+    'order'  => 'id.desc',
+    'limit'  => $limite,
+    'offset' => $offset,
+]);
 
-$usuarios = db_todos('SELECT id, nome FROM usuarios ORDER BY nome');
+$usuarios = sb_select('perfis', ['select' => 'id,nome', 'order' => 'nome.asc']);
 
 $nomesAcoes = [
     'cadastrar' => 'Cadastro', 'editar' => 'Edição', 'arquivar' => 'Arquivamento', 'reativar' => 'Reativação',
@@ -89,7 +95,7 @@ require RAIZ . '/includes/cabecalho.php';
         <select id="usuario_id" name="usuario_id">
             <option value="">Todos</option>
             <?php foreach ($usuarios as $u): ?>
-                <option value="<?= $u['id'] ?>" <?= $f['usuario_id'] === (int) $u['id'] ? 'selected' : '' ?>><?= e($u['nome']) ?></option>
+                <option value="<?= e($u['id']) ?>" <?= $f['usuario_id'] === $u['id'] ? 'selected' : '' ?>><?= e($u['nome']) ?></option>
             <?php endforeach; ?>
         </select>
     </div>
@@ -134,8 +140,8 @@ require RAIZ . '/includes/cabecalho.php';
                 <tr class="<?= in_array($r['acao'], $alertaAcoes, true) ? 'linha-alerta' : '' ?>">
                     <td style="white-space: nowrap;"><?= data_hora_br($r['criado_em']) ?></td>
                     <td>
-                        <?= e($r['usuario'] ?? '—') ?>
-                        <?php if ($r['cargo']): ?><br><small class="texto-fraco"><?= e(CARGOS[$r['cargo']]) ?></small><?php endif; ?>
+                        <?= e($r['perfis']['nome'] ?? '—') ?>
+                        <?php if (!empty($r['perfis']['cargo'])): ?><br><small class="texto-fraco"><?= e(CARGOS[$r['perfis']['cargo']]) ?></small><?php endif; ?>
                     </td>
                     <td><?= e($modulos[$r['modulo']] ?? $r['modulo']) ?></td>
                     <td><?= e($nomesAcoes[$r['acao']] ?? $r['acao']) ?></td>

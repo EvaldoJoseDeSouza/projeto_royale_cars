@@ -4,9 +4,8 @@
 | INICIALIZAÇÃO
 |--------------------------------------------------------------------------
 | Toda página começa com:  require __DIR__ . '/../includes/bootstrap.php';
-| Isso abre a sessão, conecta ao banco e carrega as funções do sistema.
-| Durante a mudança para o Supabase (pacotes 3.1 a 3.8) as duas ligações
-| convivem: cada pacote passa um pedaço do sistema para o Supabase.
+| Isso abre a sessão e carrega as funções do sistema. O banco é o
+| Supabase (o mesmo do desktop e do celular): não precisa de MySQL.
 */
 
 date_default_timezone_set('America/Sao_Paulo');
@@ -32,7 +31,6 @@ header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 
-require RAIZ . '/config/database.php';      // MySQL antigo: sai no pacote 3.8, quando tudo estiver no Supabase
 require RAIZ . '/includes/supabase.php';     // Supabase: a ponte entre o PHP e o banco unificado
 require RAIZ . '/includes/validacoes.php';
 require RAIZ . '/includes/funcoes.php';
