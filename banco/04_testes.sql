@@ -60,6 +60,24 @@ end $$;
 
 grant execute on function pg_temp.como(text), pg_temp.espera_erro(text, text, text), pg_temp.confere(text, boolean) to authenticated;
 
+-- CPF e CNH do cliente de teste: sorteados até achar um número VÁLIDO que
+-- ainda NÃO existe no banco. (Antes era um CPF fixo; se alguém do grupo
+-- cadastrasse um cliente com ele, o teste quebrava com "CPF repetido".)
+create function pg_temp.documento_livre(p_tipo text) returns text language plpgsql as $$
+declare numero text;
+begin
+    loop
+        numero := lpad((random() * 1e11)::bigint::text, 11, '0');
+        exit when (p_tipo = 'cpf' and validar_cpf(numero) and not exists (select 1 from clientes where cpf = numero))
+               or (p_tipo = 'cnh' and validar_cnh(numero) and not exists (select 1 from clientes where cnh = numero));
+    end loop;
+    return numero;
+end $$;
+
+create temp table dados_teste as
+select pg_temp.documento_livre('cpf') as cpf, pg_temp.documento_livre('cnh') as cnh;
+grant select on dados_teste to authenticated;
+
 
 -- ---------------------------------------------------------------------
 -- 1. Login e permissões
@@ -93,10 +111,13 @@ select pg_temp.confere('Chefe recebe as 13 permissões',
 
 select pg_temp.como('lucas@royalecars.com.br');
 insert into clientes (nome, cpf, cnh, cnh_validade, email, telefone, endereco)
-values ('Teste  Unificado', '529.982.247-25', '3141 5926 507', current_date + 400,
-        ' Teste@Royale.COM ', '(19) 99876-5432', '  Rua   do Teste, 10 ');
+select 'Teste  Unificado',
+       fmt_cpf(cpf),                                                      -- ex.: "123.456.789-09"
+       substr(cnh, 1, 4) || ' ' || substr(cnh, 5, 4) || ' ' || substr(cnh, 9), -- ex.: "1234 5678 901"
+       current_date + 400, ' Teste@Royale.COM ', '(19) 99876-5432', '  Rua   do Teste, 10 '
+from dados_teste;
 select pg_temp.confere('CPF, CNH, telefone e e-mail gravados sem máscara',
-    (select cpf = '52998224725' and cnh = '31415926507' and telefone = '19998765432'
+    (select cpf = (select cpf from dados_teste) and cnh = (select cnh from dados_teste) and telefone = '19998765432'
             and email = 'teste@royale.com' and endereco = 'Rua do Teste, 10'
      from clientes where email = 'teste@royale.com'));
 select pg_temp.espera_erro('CPF com dígito errado é recusado',
@@ -105,7 +126,7 @@ select pg_temp.espera_erro('CPF com dígito errado é recusado',
     'clientes_cpf_check');
 select pg_temp.espera_erro('CPF repetido é recusado',
     $$insert into clientes (nome, cpf, cnh, cnh_validade, email, telefone)
-      values ('Outra Pessoa', '52998224725', '96001338941', current_date + 400, 'outra@t.com', '19998765432')$$,
+      select 'Outra Pessoa', cpf, '96001338941', current_date + 400, 'outra@t.com', '19998765432' from dados_teste$$,
     'duplicate key');
 select pg_temp.espera_erro('Funcionário sem clientes_arquivar não arquiva',
     $$update clientes set arquivado = true where email = 'teste@royale.com'$$, 'não tem permissão');
@@ -203,7 +224,10 @@ select pg_temp.confere('Manutenção concluída e carro volta a Disponível',
 select pg_temp.como('gabriel@royalecars.com.br');
 select pg_temp.confere('Histórico registrou cadastro, aluguel, devolução e manutenção com o nome de quem fez',
     (select count(distinct modulo || acao) >= 5 and bool_and(usuario_id is not null)
-     from logs where modulo in ('clientes', 'veiculos', 'locacoes', 'manutencoes')));
+     from logs where modulo in ('clientes', 'veiculos', 'locacoes', 'manutencoes')
+       -- só o que ESTE teste gravou: dentro da transação, now() é sempre o
+       -- horário em que ela começou (o resto do histórico do banco não importa aqui)
+       and criado_em >= now()));
 
 -- ---------------------------------------------------------------------
 -- 7. Foto do veículo (correção de 15/10: trocar a foto dava erro)
@@ -234,7 +258,7 @@ select pg_temp.confere('Só com "relatorios" lê clientes, veículos, aluguéis 
     and (select count(*) > 0 from locacoes) and (select count(*) > 0 from manutencoes));
 select pg_temp.espera_erro('Só com "relatorios" não cadastra cliente',
     $$insert into clientes (nome, cpf, cnh, cnh_validade, email, telefone)
-      values ('Teste Relatorio', '52998224725', '96001338941', current_date + 100, 'rel@teste.com', '19999998888')$$,
+      select 'Teste Relatorio', cpf, cnh, current_date + 100, 'rel@teste.com', '19999998888' from dados_teste$$,
     'row-level security');
 select pg_temp.espera_erro('Só com "relatorios" não registra aluguel',
     $$select registrar_aluguel(1, 4, current_date, current_date + 2)$$, 'não tem permissão');
