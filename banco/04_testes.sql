@@ -220,6 +220,26 @@ select pg_temp.confere('Trocar e tirar a foto ficam no histórico ("trocou a fot
      from logs where modulo = 'veiculos' and acao = 'editar' and descricao like '%TST1A23%'));
 
 -- ---------------------------------------------------------------------
+-- 8. Permissão "relatorios" lê tudo, mas não altera nada (06, de 16/10)
+-- ---------------------------------------------------------------------
+
+-- O chefe deixa o Lucas só com "relatorios" (dentro do teste: no fim, tudo é desfeito)
+select pg_temp.como('gabriel@royalecars.com.br');
+delete from usuario_permissoes where usuario_id = (select id from perfis where email = 'lucas@royalecars.com.br');
+insert into usuario_permissoes select id, 'relatorios' from perfis where email = 'lucas@royalecars.com.br';
+
+select pg_temp.como('lucas@royalecars.com.br');
+select pg_temp.confere('Só com "relatorios" lê clientes, veículos, aluguéis e manutenções',
+    (select count(*) > 0 from clientes) and (select count(*) > 0 from veiculos)
+    and (select count(*) > 0 from locacoes) and (select count(*) > 0 from manutencoes));
+select pg_temp.espera_erro('Só com "relatorios" não cadastra cliente',
+    $$insert into clientes (nome, cpf, cnh, cnh_validade, email, telefone)
+      values ('Teste Relatorio', '52998224725', '96001338941', current_date + 100, 'rel@teste.com', '19999998888')$$,
+    'row-level security');
+select pg_temp.espera_erro('Só com "relatorios" não registra aluguel',
+    $$select registrar_aluguel(1, 4, current_date, current_date + 2)$$, 'não tem permissão');
+
+-- ---------------------------------------------------------------------
 -- Fim. A mensagem abaixo aparece em VERMELHO, como erro, de propósito:
 -- é o erro que faz o banco desfazer tudo que o teste gravou.
 -- ---------------------------------------------------------------------

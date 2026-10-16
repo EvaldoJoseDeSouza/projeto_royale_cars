@@ -6,6 +6,11 @@
 | Tipos: clientes, veículos, aluguéis, manutenções e faturamento.
 | - "relatorios" libera os relatórios operacionais.
 | - "relatorios_financeiros" libera o faturamento e as colunas de valores.
+| O banco deixa quem tem essas permissões LER clientes, veículos, aluguéis
+| e manutenções (script banco/06, decisão do grupo de 16/10) — só ler.
+|
+| Os dados vêm do Supabase. As somas (aluguéis por cliente, faturado por
+| carro...) são feitas aqui no PHP: a frota de uma locadora é pequena.
 | O CSV usa ";" e acentos UTF-8, para abrir certinho no Excel em português.
 */
 
@@ -37,18 +42,50 @@ if (!isset($tipos[$tipo])) {
 }
 
 // ---------- Filtros comuns ----------
+// O funcionário agora é um código uuid do Supabase (ex.: "3f2a...-..."), não um número
+$usuarioId = (string) ($_GET['usuario_id'] ?? '');
+
 $f = [
     'de'         => validar_data($_GET['de'] ?? '') ? $_GET['de'] : '',
     'ate'        => validar_data($_GET['ate'] ?? '') ? $_GET['ate'] : '',
     'status'     => (string) ($_GET['status'] ?? ''),
     'cliente_id' => (int) ($_GET['cliente_id'] ?? 0),
     'veiculo_id' => (int) ($_GET['veiculo_id'] ?? 0),
-    'usuario_id' => (int) ($_GET['usuario_id'] ?? 0),
+    'usuario_id' => preg_match('/^[0-9a-f-]{36}$/', $usuarioId) ? $usuarioId : '',
 ];
 
 if ($tipo === 'faturamento' && $f['de'] === '' && $f['ate'] === '' && !isset($_GET['de'])) {
     $f['de'] = date('Y-m-01');
     $f['ate'] = date('Y-m-d');
+}
+
+/** Filtro de período do Supabase: and=(coluna.gte.de,coluna.lte.ate) */
+function filtro_periodo(string $coluna, string $de, string $ate, bool $comHora = false): array
+{
+    $partes = [];
+
+    if ($de) {
+        $partes[] = "{$coluna}.gte.{$de}";
+    }
+
+    if ($ate) {
+        // Coluna com hora (ex.: criado_em): "até 15/10" vai até o fim do dia 15
+        $partes[] = $comHora ? "{$coluna}.lt." . date('Y-m-d', strtotime($ate . ' +1 day')) : "{$coluna}.lte.{$ate}";
+    }
+
+    return $partes ? ['and' => '(' . implode(',', $partes) . ')'] : [];
+}
+
+/** Soma um campo por grupo: [id => total]. Ex.: faturado por carro. */
+function somar_por(array $linhas, string $grupo, ?string $campo = null): array
+{
+    $totais = [];
+
+    foreach ($linhas as $l) {
+        $totais[$l[$grupo]] = ($totais[$l[$grupo]] ?? 0) + ($campo === null ? 1 : (float) $l[$campo]);
+    }
+
+    return $totais;
 }
 
 /*
@@ -60,30 +97,26 @@ if ($tipo === 'faturamento' && $f['de'] === '' && $f['ate'] === '' && !isset($_G
 $colunas = [];
 $linhas = [];
 $resumo = [];
-$where = ['1 = 1'];
-$p = [];
 
 switch ($tipo) {
 
     case 'clientes':
+        $filtros = ['select' => '*', 'order' => 'nome.asc'] + filtro_periodo('criado_em', $f['de'], $f['ate'], true);
+
         if ($f['status'] === 'ativos') {
-            $where[] = 'c.arquivado = 0';
+            $filtros['arquivado'] = 'eq.false';
         } elseif ($f['status'] === 'arquivados') {
-            $where[] = 'c.arquivado = 1';
+            $filtros['arquivado'] = 'eq.true';
         } elseif ($f['status'] === 'cnh') {
-            $where[] = 'c.cnh_validade <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)';
+            $filtros['cnh_validade'] = 'lte.' . date('Y-m-d', strtotime('+' . DIAS_AVISO_CNH . ' days'));
         }
 
-        if ($f['de']) { $where[] = 'DATE(c.criado_em) >= ?'; $p[] = $f['de']; }
-        if ($f['ate']) { $where[] = 'DATE(c.criado_em) <= ?'; $p[] = $f['ate']; }
+        $dados = sb_select('clientes', $filtros);
 
-        $dados = db_todos(
-            'SELECT c.*,
-                    (SELECT COUNT(*) FROM locacoes l WHERE l.cliente_id = c.id) AS alugueis,
-                    (SELECT COALESCE(SUM(valor_total), 0) FROM locacoes l WHERE l.cliente_id = c.id AND l.status = \'Finalizada\') AS gasto
-             FROM clientes c WHERE ' . implode(' AND ', $where) . ' ORDER BY c.nome',
-            $p
-        );
+        // Quantos aluguéis cada cliente fez e quanto pagou (só os finalizados contam como pago)
+        $locacoes = sb_select('locacoes', ['select' => 'cliente_id,status,valor_total']);
+        $alugueis = somar_por($locacoes, 'cliente_id');
+        $gasto = somar_por(array_filter($locacoes, fn ($l) => $l['status'] === 'Finalizada'), 'cliente_id', 'valor_total');
 
         $colunas = [['Nome', 'texto'], ['CPF', 'texto'], ['Telefone', 'texto'], ['E-mail', 'texto'],
                     ['CNH', 'texto'], ['Validade CNH', 'data'], ['Situação', 'status'], ['Aluguéis', 'numero'], ['Cadastro', 'data']];
@@ -92,12 +125,16 @@ switch ($tipo) {
             $colunas[] = ['Total pago', 'moeda'];
         }
 
+        $totalPago = 0;
+
         foreach ($dados as $d) {
             $linha = [$d['nome'], formatar_cpf($d['cpf']), formatar_telefone($d['telefone']), $d['email'],
-                      $d['cnh'], $d['cnh_validade'], $d['arquivado'] ? 'Arquivado' : 'Ativo', (int) $d['alugueis'], $d['criado_em']];
+                      $d['cnh'], $d['cnh_validade'], $d['arquivado'] ? 'Arquivado' : 'Ativo',
+                      (int) ($alugueis[$d['id']] ?? 0), $d['criado_em']];
 
             if ($verValores) {
-                $linha[] = $d['gasto'];
+                $linha[] = $gasto[$d['id']] ?? 0;
+                $totalPago += $gasto[$d['id']] ?? 0;
             }
 
             $linhas[] = $linha;
@@ -106,33 +143,37 @@ switch ($tipo) {
         $resumo['Clientes'] = count($dados);
 
         if ($verValores) {
-            $resumo['Total pago pelos clientes listados'] = moeda(array_sum(array_column($dados, 'gasto')));
+            $resumo['Total pago pelos clientes listados'] = moeda($totalPago);
         }
         break;
 
     case 'veiculos':
+        $filtros = ['select' => '*', 'order' => 'marca.asc,modelo.asc'];
+
         if (in_array($f['status'], ['Disponível', 'Alugado', 'Em manutenção'], true)) {
-            $where[] = 'v.status = ? AND v.arquivado = 0';
-            $p[] = $f['status'];
+            $filtros['status'] = 'eq.' . $f['status'];
+            $filtros['arquivado'] = 'eq.false';
         } elseif ($f['status'] === 'arquivados') {
-            $where[] = 'v.arquivado = 1';
+            $filtros['arquivado'] = 'eq.true';
         } else {
-            $where[] = 'v.arquivado = 0';
+            $filtros['arquivado'] = 'eq.false';
         }
 
-        $dados = db_todos(
-            "SELECT v.*,
-                    (SELECT COUNT(*) FROM locacoes l WHERE l.veiculo_id = v.id AND l.status = 'Finalizada') AS alugueis,
-                    (SELECT COALESCE(SUM(GREATEST(1, DATEDIFF(l.data_devolucao, l.data_retirada))), 0)
-                       FROM locacoes l WHERE l.veiculo_id = v.id AND l.status = 'Finalizada') AS diarias,
-                    (SELECT COALESCE(SUM(valor_total), 0) FROM locacoes l WHERE l.veiculo_id = v.id AND l.status = 'Finalizada') AS faturado,
-                    (SELECT COALESCE(SUM(custo), 0) FROM manutencoes m WHERE m.veiculo_id = v.id) AS custo
-             FROM veiculos v WHERE " . implode(' AND ', $where) . ' ORDER BY v.marca, v.modelo',
-            $p
-        );
+        $dados = sb_select('veiculos', $filtros);
+
+        $finalizadas = sb_select('locacoes', ['select' => 'veiculo_id,data_retirada,data_devolucao,valor_total', 'status' => 'eq.Finalizada']);
+        $alugueis = somar_por($finalizadas, 'veiculo_id');
+        $faturado = somar_por($finalizadas, 'veiculo_id', 'valor_total');
+        $diarias = [];
+
+        foreach ($finalizadas as $l) {
+            $diarias[$l['veiculo_id']] = ($diarias[$l['veiculo_id']] ?? 0) + max(1, dias_entre($l['data_retirada'], $l['data_devolucao']));
+        }
+
+        $custo = somar_por(sb_select('manutencoes', ['select' => 'veiculo_id,custo', 'custo' => 'not.is.null']), 'veiculo_id', 'custo');
 
         $colunas = [['Veículo', 'texto'], ['Ano', 'numero'], ['Placa', 'texto'], ['Chassi', 'texto'],
-                    ['Diária', 'moeda'], ['Status', 'status'], ['Aluguéis', 'numero'], ['Diárias vendidas', 'numero']];
+                    ['Diária', 'moeda'], ['Km', 'numero'], ['Status', 'status'], ['Aluguéis', 'numero'], ['Diárias vendidas', 'numero']];
 
         if ($verValores) {
             $colunas[] = ['Faturado', 'moeda'];
@@ -140,12 +181,20 @@ switch ($tipo) {
             $colunas[] = ['Resultado', 'moeda'];
         }
 
+        $somaFaturado = 0;
+        $somaCusto = 0;
+
         foreach ($dados as $d) {
             $linha = [nome_veiculo($d), (int) $d['ano'], formatar_placa($d['placa']), $d['chassi'],
-                      $d['valor_diaria'], $d['arquivado'] ? 'Arquivado' : $d['status'], (int) $d['alugueis'], (int) $d['diarias']];
+                      $d['valor_diaria'], (int) $d['quilometragem'], $d['arquivado'] ? 'Arquivado' : $d['status'],
+                      (int) ($alugueis[$d['id']] ?? 0), (int) ($diarias[$d['id']] ?? 0)];
 
             if ($verValores) {
-                array_push($linha, $d['faturado'], $d['custo'], $d['faturado'] - $d['custo']);
+                $fat = $faturado[$d['id']] ?? 0;
+                $cus = $custo[$d['id']] ?? 0;
+                array_push($linha, $fat, $cus, $fat - $cus);
+                $somaFaturado += $fat;
+                $somaCusto += $cus;
             }
 
             $linhas[] = $linha;
@@ -154,40 +203,34 @@ switch ($tipo) {
         $resumo['Veículos'] = count($dados);
 
         if ($verValores) {
-            $resumo['Faturado'] = moeda(array_sum(array_column($dados, 'faturado')));
-            $resumo['Gasto com manutenção'] = moeda(array_sum(array_column($dados, 'custo')));
+            $resumo['Faturado'] = moeda($somaFaturado);
+            $resumo['Gasto com manutenção'] = moeda($somaCusto);
         }
         break;
 
     case 'locacoes':
     case 'faturamento':
-        $campoData = $tipo === 'faturamento' ? 'l.data_devolucao' : 'l.data_retirada';
+        // A visão vw_locacoes já traz cliente, veículo, atraso e quem registrou
+        $campoData = $tipo === 'faturamento' ? 'data_devolucao' : 'data_retirada';
+        $filtros = [
+            'select' => 'id,cliente_nome,marca,modelo,placa,data_retirada,data_prevista,data_devolucao,dias_atraso,'
+                      . 'dias_atraso_atual,valor_atraso,taxas_extras,valor_diaria,valor_total,status,status_exibicao,registrado_por',
+            'order'  => "{$campoData}.desc,id.desc",
+        ] + filtro_periodo($campoData, $f['de'], $f['ate']);
 
         if ($tipo === 'faturamento') {
-            $where[] = "l.status = 'Finalizada'";
+            $filtros['status'] = 'eq.Finalizada';
         } elseif ($f['status'] === 'atrasadas') {
-            $where[] = "l.status = 'Em andamento' AND l.data_prevista < CURDATE()";
+            $filtros['status_exibicao'] = 'eq.Atrasada';
         } elseif (in_array($f['status'], ['Em andamento', 'Finalizada', 'Cancelada'], true)) {
-            $where[] = 'l.status = ?';
-            $p[] = $f['status'];
+            $filtros['status'] = 'eq.' . $f['status'];
         }
 
-        if ($f['de']) { $where[] = "{$campoData} >= ?"; $p[] = $f['de']; }
-        if ($f['ate']) { $where[] = "{$campoData} <= ?"; $p[] = $f['ate']; }
-        if ($f['cliente_id']) { $where[] = 'l.cliente_id = ?'; $p[] = $f['cliente_id']; }
-        if ($f['veiculo_id']) { $where[] = 'l.veiculo_id = ?'; $p[] = $f['veiculo_id']; }
-        if ($f['usuario_id']) { $where[] = 'l.usuario_id = ?'; $p[] = $f['usuario_id']; }
+        if ($f['cliente_id']) { $filtros['cliente_id'] = 'eq.' . $f['cliente_id']; }
+        if ($f['veiculo_id']) { $filtros['veiculo_id'] = 'eq.' . $f['veiculo_id']; }
+        if ($f['usuario_id']) { $filtros['usuario_id'] = 'eq.' . $f['usuario_id']; }
 
-        $dados = db_todos(
-            'SELECT l.*, c.nome AS cliente, v.marca, v.modelo, v.placa, u.nome AS funcionario
-             FROM locacoes l
-             JOIN clientes c ON c.id = l.cliente_id
-             JOIN veiculos v ON v.id = l.veiculo_id
-             LEFT JOIN usuarios u ON u.id = l.usuario_id
-             WHERE ' . implode(' AND ', $where) . "
-             ORDER BY {$campoData} DESC, l.id DESC",
-            $p
-        );
+        $dados = sb_select('vw_locacoes', $filtros);
 
         $colunas = [['#', 'numero'], ['Cliente', 'texto'], ['Veículo', 'texto'], ['Placa', 'texto'],
                     ['Retirada', 'data'], ['Prevista', 'data'], ['Devolução', 'data'],
@@ -195,24 +238,29 @@ switch ($tipo) {
 
         if ($verValores) {
             $colunas[] = ['Diária', 'moeda'];
+            $colunas[] = ['Taxas extras', 'moeda'];
             $colunas[] = ['Valor', 'moeda'];
         }
 
         $porFuncionario = [];
 
         foreach ($dados as $d) {
-            $linha = [(int) $d['id'], $d['cliente'], nome_veiculo($d), formatar_placa($d['placa']),
+            // Em andamento mostra o atraso de hoje; finalizado, o atraso cobrado
+            $atraso = $d['status'] === 'Em andamento' ? $d['dias_atraso_atual'] : $d['dias_atraso'];
+
+            $linha = [(int) $d['id'], $d['cliente_nome'], nome_veiculo($d), formatar_placa($d['placa']),
                       $d['data_retirada'], $d['data_prevista'], $d['data_devolucao'],
-                      (int) $d['dias_atraso'], status_locacao($d), $d['funcionario'] ?? '—'];
+                      (int) $atraso, $d['status_exibicao'], $d['registrado_por'] ?? '—'];
 
             if ($verValores) {
                 $linha[] = $d['valor_diaria'];
+                $linha[] = $d['taxas_extras'];
                 $linha[] = $d['status'] === 'Cancelada' ? 0 : $d['valor_total'];
             }
 
             $linhas[] = $linha;
 
-            $nome = $d['funcionario'] ?? '—';
+            $nome = $d['registrado_por'] ?? '—';
             $porFuncionario[$nome] = ($porFuncionario[$nome] ?? 0) + ($d['status'] === 'Finalizada' ? $d['valor_total'] : 0);
         }
 
@@ -224,6 +272,7 @@ switch ($tipo) {
 
             $resumo['Faturado (finalizados)'] = moeda($total);
             $resumo['Diárias de atraso'] = moeda(array_sum(array_column($finalizadas, 'valor_atraso')));
+            $resumo['Taxas extras'] = moeda(array_sum(array_column($finalizadas, 'taxas_extras')));
             $resumo['Ticket médio'] = moeda($finalizadas ? $total / count($finalizadas) : 0);
 
             if ($tipo === 'faturamento') {
@@ -237,25 +286,19 @@ switch ($tipo) {
         break;
 
     case 'manutencoes':
+        $filtros = [
+            'select' => '*,veiculos(marca,modelo,placa),abriu:perfis!manutencoes_usuario_id_fkey(nome)',
+            'order'  => 'data_entrada.desc,id.desc',
+        ] + filtro_periodo('data_entrada', $f['de'], $f['ate']);
+
         if (in_array($f['status'], ['Em andamento', 'Concluída'], true)) {
-            $where[] = 'm.status = ?';
-            $p[] = $f['status'];
+            $filtros['status'] = 'eq.' . $f['status'];
         }
 
-        if ($f['de']) { $where[] = 'm.data_entrada >= ?'; $p[] = $f['de']; }
-        if ($f['ate']) { $where[] = 'm.data_entrada <= ?'; $p[] = $f['ate']; }
-        if ($f['veiculo_id']) { $where[] = 'm.veiculo_id = ?'; $p[] = $f['veiculo_id']; }
-        if ($f['usuario_id']) { $where[] = 'm.usuario_id = ?'; $p[] = $f['usuario_id']; }
+        if ($f['veiculo_id']) { $filtros['veiculo_id'] = 'eq.' . $f['veiculo_id']; }
+        if ($f['usuario_id']) { $filtros['usuario_id'] = 'eq.' . $f['usuario_id']; }
 
-        $dados = db_todos(
-            'SELECT m.*, v.marca, v.modelo, v.placa, u.nome AS funcionario,
-                    DATEDIFF(COALESCE(m.data_liberacao, CURDATE()), m.data_entrada) AS dias
-             FROM manutencoes m
-             JOIN veiculos v ON v.id = m.veiculo_id
-             LEFT JOIN usuarios u ON u.id = m.usuario_id
-             WHERE ' . implode(' AND ', $where) . ' ORDER BY m.data_entrada DESC',
-            $p
-        );
+        $dados = sb_select('manutencoes', $filtros);
 
         $colunas = [['Veículo', 'texto'], ['Placa', 'texto'], ['Defeito', 'texto'], ['Serviço', 'texto'], ['Oficina', 'texto'],
                     ['Entrada', 'data'], ['Liberação', 'data'], ['Dias parado', 'numero'], ['Status', 'status'], ['Aberto por', 'texto']];
@@ -264,9 +307,15 @@ switch ($tipo) {
             $colunas[] = ['Custo', 'moeda'];
         }
 
+        $somaDias = 0;
+
         foreach ($dados as $d) {
-            $linha = [nome_veiculo($d), formatar_placa($d['placa']), $d['defeito'], $d['servico_realizado'] ?? '', $d['oficina'] ?? '',
-                      $d['data_entrada'], $d['data_liberacao'], (int) $d['dias'], $d['status'], $d['funcionario'] ?? '—'];
+            $v = $d['veiculos'] ?? [];
+            $dias = dias_entre($d['data_entrada'], $d['data_liberacao'] ?? date('Y-m-d'));
+            $somaDias += $dias;
+
+            $linha = [nome_veiculo($v), formatar_placa($v['placa'] ?? ''), $d['defeito'], $d['servico_realizado'] ?? '', $d['oficina'] ?? '',
+                      $d['data_entrada'], $d['data_liberacao'], $dias, $d['status'], $d['abriu']['nome'] ?? '—'];
 
             if ($verValores) {
                 $linha[] = $d['custo'];
@@ -276,7 +325,7 @@ switch ($tipo) {
         }
 
         $resumo['Manutenções'] = count($dados);
-        $resumo['Dias parados (soma)'] = array_sum(array_column($dados, 'dias'));
+        $resumo['Dias parados (soma)'] = $somaDias;
 
         if ($verValores) {
             $resumo['Custo total'] = moeda(array_sum(array_column($dados, 'custo')));
@@ -288,8 +337,6 @@ switch ($tipo) {
 /* ---------- Exportar CSV ---------- */
 
 if (($_GET['formato'] ?? '') === 'csv') {
-    registrar_log('relatorios', 'exportar', null, "Exportou o relatório de {$tipos[$tipo]} em CSV (" . count($linhas) . ' linhas).');
-
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="royale-cars-' . $tipo . '-' . date('Y-m-d') . '.csv"');
 
@@ -322,9 +369,9 @@ if (($_GET['formato'] ?? '') === 'csv') {
 
 /* ---------- Tela ---------- */
 
-$clientes = db_todos('SELECT id, nome FROM clientes ORDER BY nome');
-$veiculos = db_todos('SELECT id, marca, modelo, placa FROM veiculos ORDER BY marca, modelo');
-$usuarios = db_todos('SELECT id, nome FROM usuarios ORDER BY nome');
+$clientes = sb_select('clientes', ['select' => 'id,nome', 'order' => 'nome.asc']);
+$veiculos = sb_select('veiculos', ['select' => 'id,marca,modelo,placa', 'order' => 'marca.asc,modelo.asc']);
+$usuarios = sb_select('perfis', ['select' => 'id,nome', 'order' => 'nome.asc']);
 
 $opcoesStatus = [
     'clientes'    => ['' => 'Todos', 'ativos' => 'Ativos', 'arquivados' => 'Arquivados', 'cnh' => 'CNH vencida/vencendo'],
@@ -419,7 +466,7 @@ require RAIZ . '/includes/cabecalho.php';
             <select id="usuario_id" name="usuario_id">
                 <option value="">Todos</option>
                 <?php foreach ($usuarios as $u): ?>
-                    <option value="<?= $u['id'] ?>" <?= $f['usuario_id'] === (int) $u['id'] ? 'selected' : '' ?>><?= e($u['nome']) ?></option>
+                    <option value="<?= e($u['id']) ?>" <?= $f['usuario_id'] === $u['id'] ? 'selected' : '' ?>><?= e($u['nome']) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
