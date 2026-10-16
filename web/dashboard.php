@@ -15,35 +15,36 @@ $usuario = exigir_login();
 $verFinanceiro = pode('financeiro');
 $verLocacoes = pode('locacoes_ver');
 
+$hoje = date('Y-m-d');
+
 $frota = situacao_frota();
 $totalFrota = array_sum($frota);
 $ocupacao = $totalFrota ? round($frota['Alugado'] / $totalFrota * 100) : 0;
 
-$alugueisAtivos = (int) db_valor("SELECT COUNT(*) FROM locacoes WHERE status = 'Em andamento'");
-$atrasados = (int) db_valor("SELECT COUNT(*) FROM locacoes WHERE status = 'Em andamento' AND data_prevista < CURDATE()");
-$devolucoesHoje = (int) db_valor("SELECT COUNT(*) FROM locacoes WHERE status = 'Em andamento' AND data_prevista = CURDATE()");
-$clientesAtivos = (int) db_valor('SELECT COUNT(*) FROM clientes WHERE arquivado = 0');
-$clientesNovosMes = (int) db_valor("SELECT COUNT(*) FROM clientes WHERE criado_em >= DATE_FORMAT(CURDATE(), '%Y-%m-01')");
+// Contagens: o banco devolve só o número (não baixa as linhas)
+$alugueisAtivos = sb_contar('locacoes', ['status' => 'eq.Em andamento']);
+$atrasados = sb_contar('locacoes', ['status' => 'eq.Em andamento', 'data_prevista' => 'lt.' . $hoje]);
+$devolucoesHoje = sb_contar('locacoes', ['status' => 'eq.Em andamento', 'data_prevista' => 'eq.' . $hoje]);
+$clientesAtivos = sb_contar('clientes', ['arquivado' => 'eq.false']);
+$clientesNovosMes = sb_contar('clientes', ['criado_em' => 'gte.' . date('Y-m-01')]);
+
+if ($verFinanceiro || $verLocacoes) {
+    $mensal = dados_mensais(6);
+}
 
 if ($verFinanceiro) {
-    $mensal = dados_mensais(6);
     $mesAtual = $mensal[date('Y-m')]['faturamento'];
     $mesAnterior = $mensal[date('Y-m', strtotime('first day of last month'))]['faturamento'] ?? 0;
     $variacao = $mesAnterior > 0 ? round(($mesAtual - $mesAnterior) / $mesAnterior * 100) : null;
-} elseif ($verLocacoes) {
-    $mensal = dados_mensais(6);
 }
 
 $alertas = buscar_alertas();
 
-$ultimas = $verLocacoes ? db_todos(
-    'SELECT l.*, c.nome AS cliente, v.marca, v.modelo, v.placa
-     FROM locacoes l
-     JOIN clientes c ON c.id = l.cliente_id
-     JOIN veiculos v ON v.id = l.veiculo_id
-     ORDER BY l.id DESC
-     LIMIT 6'
-) : [];
+$ultimas = $verLocacoes ? sb_select('vw_locacoes', [
+    'select' => 'id,cliente_nome,marca,modelo,placa,data_retirada,data_prevista,data_devolucao,valor_total,status_exibicao',
+    'order'  => 'id.desc',
+    'limit'  => 6,
+]) : [];
 
 $titulo = 'Dashboard';
 $subtitulo = 'Visão geral da Royale Cars';
@@ -138,21 +139,12 @@ $primeiroNome = explode(' ', $usuario['nome'])[0];
         </div>
 
         <ul class="lista-alertas">
-            <?php if ($alertas['atrasadas']): ?>
-                <li><span><span class="status status-vermelho">Atraso</span> <?= count($alertas['atrasadas']) ?> aluguel(éis) com devolução atrasada</span></li>
-            <?php endif; ?>
-            <?php if ($alertas['devolucoes_proximas']): ?>
-                <li><span><span class="status status-azul">Devolução</span> <?= count($alertas['devolucoes_proximas']) ?> devolução(ões) nos próximos <?= DIAS_AVISO_DEVOLUCAO ?> dias</span></li>
-            <?php endif; ?>
-            <?php if ($alertas['em_manutencao']): ?>
-                <li><span><span class="status status-laranja">Oficina</span> <?= count($alertas['em_manutencao']) ?> veículo(s) na oficina</span></li>
-            <?php endif; ?>
-            <?php if ($alertas['cnh']): ?>
-                <li><span><span class="status status-laranja">Documento</span> <?= count($alertas['cnh']) ?> cliente(s) com CNH vencida ou vencendo</span></li>
-            <?php endif; ?>
-            <?php if ($alertas['login_suspeito']): ?>
-                <li><span><span class="status status-vermelho">Segurança</span> <?= count($alertas['login_suspeito']) ?> tentativa(s) suspeita(s) de login nas últimas 24h</span></li>
-            <?php endif; ?>
+            <?php foreach (TIPOS_ALERTA as $tipo => $info): ?>
+                <?php if ($alertas[$tipo]): ?>
+                    <li><span><span class="status <?= $info['cor'] ?>"><?= e($info['etiqueta']) ?></span>
+                        <?= count($alertas[$tipo]) ?> · <?= e($info['titulo']) ?></span></li>
+                <?php endif; ?>
+            <?php endforeach; ?>
             <?php if (!array_filter($alertas)): ?>
                 <li><span class="texto-fraco">Tudo em dia. Nenhum alerta no momento.</span></li>
             <?php endif; ?>
@@ -191,11 +183,11 @@ $primeiroNome = explode(' ', $usuario['nome'])[0];
                     <?php foreach ($ultimas as $l): ?>
                         <tr>
                             <td><a href="<?= e(url('locacoes/ver.php?id=' . $l['id'])) ?>">#<?= $l['id'] ?></a></td>
-                            <td><?= e($l['cliente']) ?></td>
+                            <td><?= e($l['cliente_nome']) ?></td>
                             <td><?= e(nome_veiculo($l)) ?> <span class="texto-fraco"><?= e(formatar_placa($l['placa'])) ?></span></td>
                             <td><?= data_br($l['data_retirada']) ?> a <?= data_br($l['data_devolucao'] ?? $l['data_prevista']) ?></td>
                             <td class="numero"><?= moeda($l['valor_total']) ?></td>
-                            <td><?= badge_status(status_locacao($l)) ?></td>
+                            <td><?= badge_status($l['status_exibicao']) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if (!$ultimas): ?>

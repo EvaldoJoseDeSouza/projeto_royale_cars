@@ -14,41 +14,51 @@ exigir_permissao('financeiro');
 $mensal = dados_mensais(12);
 $mesAtual = $mensal[date('Y-m')];
 
-$faturamentoAno = (float) db_valor(
-    "SELECT COALESCE(SUM(valor_total), 0) FROM locacoes
-     WHERE status = 'Finalizada' AND YEAR(data_devolucao) = YEAR(CURDATE())"
-);
+// Todos os aluguéis finalizados, com cliente e carro "pendurados".
+// Uma pergunta só ao banco: dela saem os totais e os dois rankings.
+// (Quem só tem a permissão financeiro pode não ver nomes de clientes
+//  ou carros — regra do banco. Nesse caso aparece "—", mas os valores sim.)
+$finalizadas = sb_select('locacoes', [
+    'select' => 'cliente_id,veiculo_id,data_devolucao,valor_total,valor_atraso,clientes(nome),veiculos(marca,modelo,placa)',
+    'status' => 'eq.Finalizada',
+]);
 
-$totais = db_linha(
-    "SELECT COALESCE(SUM(valor_total), 0) AS faturamento,
-            COUNT(*) AS quantidade,
-            COALESCE(SUM(valor_atraso), 0) AS atrasos
-     FROM locacoes WHERE status = 'Finalizada'"
-);
+$anoAtual = date('Y');
+$faturamentoAno = 0.0;
+$totais = ['faturamento' => 0.0, 'quantidade' => count($finalizadas), 'atrasos' => 0.0];
+$porVeiculo = [];
+$porCliente = [];
 
-$aReceber = (float) db_valor("SELECT COALESCE(SUM(valor_previsto), 0) FROM locacoes WHERE status = 'Em andamento'");
+foreach ($finalizadas as $l) {
+    $valor = (float) $l['valor_total'];
+    $totais['faturamento'] += $valor;
+    $totais['atrasos'] += (float) $l['valor_atraso'];
+
+    if (str_starts_with($l['data_devolucao'], $anoAtual)) {
+        $faturamentoAno += $valor;
+    }
+
+    // Soma por carro e por cliente (para os rankings)
+    $porVeiculo[$l['veiculo_id']] ??= ($l['veiculos'] ?? ['marca' => '—', 'modelo' => '', 'placa' => '']) + ['alugueis' => 0, 'faturado' => 0.0];
+    $porVeiculo[$l['veiculo_id']]['alugueis']++;
+    $porVeiculo[$l['veiculo_id']]['faturado'] += $valor;
+
+    $porCliente[$l['cliente_id']] ??= ['nome' => $l['clientes']['nome'] ?? '—', 'alugueis' => 0, 'gasto' => 0.0];
+    $porCliente[$l['cliente_id']]['alugueis']++;
+    $porCliente[$l['cliente_id']]['gasto'] += $valor;
+}
+
+// Os 5 maiores (usort: ordena do maior para o menor)
+usort($porVeiculo, fn ($a, $b) => $b['faturado'] <=> $a['faturado']);
+usort($porCliente, fn ($a, $b) => $b['gasto'] <=> $a['gasto']);
+$rankingVeiculos = array_slice($porVeiculo, 0, 5);
+$rankingClientes = array_slice($porCliente, 0, 5);
+
+$emAndamento = sb_select('locacoes', ['select' => 'valor_previsto', 'status' => 'eq.Em andamento']);
+$aReceber = (float) array_sum(array_column($emAndamento, 'valor_previsto'));
+
 $ticketMedio = $totais['quantidade'] > 0 ? $totais['faturamento'] / $totais['quantidade'] : 0;
 $resultadoMes = $mesAtual['faturamento'] - $mesAtual['manutencao'];
-
-$rankingVeiculos = db_todos(
-    "SELECT v.id, v.marca, v.modelo, v.placa, COUNT(l.id) AS alugueis, SUM(l.valor_total) AS faturado
-     FROM locacoes l
-     JOIN veiculos v ON v.id = l.veiculo_id
-     WHERE l.status = 'Finalizada'
-     GROUP BY v.id
-     ORDER BY faturado DESC
-     LIMIT 5"
-);
-
-$rankingClientes = db_todos(
-    "SELECT c.id, c.nome, COUNT(l.id) AS alugueis, SUM(l.valor_total) AS gasto
-     FROM locacoes l
-     JOIN clientes c ON c.id = l.cliente_id
-     WHERE l.status = 'Finalizada'
-     GROUP BY c.id
-     ORDER BY gasto DESC
-     LIMIT 5"
-);
 
 $titulo = 'Financeiro';
 $subtitulo = 'Faturamento, custos e resultados';

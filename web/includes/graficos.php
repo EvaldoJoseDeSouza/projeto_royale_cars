@@ -6,10 +6,19 @@
 | O gráfico é feito só com HTML e CSS (sem biblioteca externa), então
 | funciona mesmo sem internet na hora da apresentação.
 |
+| Os números vêm das visões do banco, as mesmas do desktop:
+|   vw_faturamento_mensal → faturamento, aluguéis e manutenção, mês a mês
+|                           (só aparece para quem tem a permissão financeiro)
+|   vw_situacao_frota     → quantos carros em cada situação
+|
 | O faturamento entra no mês em que o carro foi DEVOLVIDO (quando o valor
 | final é conhecido). O custo de manutenção entra no mês da liberação.
 */
 
+/**
+ * Últimos $meses meses: ['2026-05' => ['faturamento' =>, 'alugueis' =>, 'manutencao' =>], ...]
+ * Quem não tem "financeiro" recebe só a quantidade de aluguéis (sem valores).
+ */
 function dados_mensais(int $meses = 6): array
 {
     $inicio = date('Y-m-01', strtotime('-' . ($meses - 1) . ' months', strtotime(date('Y-m-01'))));
@@ -20,33 +29,33 @@ function dados_mensais(int $meses = 6): array
         $dados[$chave] = ['faturamento' => 0.0, 'alugueis' => 0, 'manutencao' => 0.0];
     }
 
-    $linhas = db_todos(
-        "SELECT DATE_FORMAT(data_devolucao, '%Y-%m') AS mes,
-                SUM(valor_total) AS faturamento, COUNT(*) AS alugueis
-         FROM locacoes
-         WHERE status = 'Finalizada' AND data_devolucao >= ?
-         GROUP BY mes",
-        [$inicio]
-    );
+    if (pode('financeiro')) {
+        // A visão já soma tudo: só copiamos os meses que interessam
+        foreach (sb_select('vw_faturamento_mensal', ['select' => 'mes,faturamento,alugueis,manutencao']) as $linha) {
+            $chave = substr($linha['mes'], 0, 7);
 
-    foreach ($linhas as $linha) {
-        if (isset($dados[$linha['mes']])) {
-            $dados[$linha['mes']]['faturamento'] = (float) $linha['faturamento'];
-            $dados[$linha['mes']]['alugueis'] = (int) $linha['alugueis'];
+            if (isset($dados[$chave])) {
+                $dados[$chave] = [
+                    'faturamento' => (float) $linha['faturamento'],
+                    'alugueis'    => (int) $linha['alugueis'],
+                    'manutencao'  => (float) $linha['manutencao'],
+                ];
+            }
         }
-    }
+    } else {
+        // Sem financeiro: contamos só as devoluções de cada mês (sem valores)
+        $devolvidas = sb_select('locacoes', [
+            'select'         => 'data_devolucao',
+            'status'         => 'eq.Finalizada',
+            'data_devolucao' => 'gte.' . $inicio,
+        ]);
 
-    $custos = db_todos(
-        "SELECT DATE_FORMAT(data_liberacao, '%Y-%m') AS mes, SUM(custo) AS total
-         FROM manutencoes
-         WHERE status = 'Concluída' AND data_liberacao >= ?
-         GROUP BY mes",
-        [$inicio]
-    );
+        foreach ($devolvidas as $l) {
+            $chave = substr($l['data_devolucao'], 0, 7);
 
-    foreach ($custos as $linha) {
-        if (isset($dados[$linha['mes']])) {
-            $dados[$linha['mes']]['manutencao'] = (float) $linha['total'];
+            if (isset($dados[$chave])) {
+                $dados[$chave]['alugueis']++;
+            }
         }
     }
 
@@ -103,16 +112,16 @@ function grafico_barras(array $valores, bool $dinheiro = true): string
          . '<div class="grafico-rotulos">' . $rotulos . '</div>';
 }
 
-/** Situação da frota agora (só veículos não arquivados). */
+/** Situação da frota agora (só veículos não arquivados), pela visão do banco. */
 function situacao_frota(): array
 {
-    $frota = ['Disponível' => 0, 'Alugado' => 0, 'Em manutenção' => 0];
+    $v = sb_linha('vw_situacao_frota') ?? [];
 
-    foreach (db_todos('SELECT status, COUNT(*) AS total FROM veiculos WHERE arquivado = 0 GROUP BY status') as $linha) {
-        $frota[$linha['status']] = (int) $linha['total'];
-    }
-
-    return $frota;
+    return [
+        'Disponível'    => (int) ($v['disponiveis'] ?? 0),
+        'Alugado'       => (int) ($v['alugados'] ?? 0),
+        'Em manutenção' => (int) ($v['em_manutencao'] ?? 0),
+    ];
 }
 
 function barra_frota(array $frota): string
