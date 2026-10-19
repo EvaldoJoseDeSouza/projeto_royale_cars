@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cliente.dart';
 import '../models/locacao.dart';
 import '../models/manutencao.dart';
+import '../models/painel.dart';
 import '../models/usuario.dart';
 import '../models/veiculo.dart';
 import '../utils/validadores.dart';
@@ -603,66 +604,89 @@ class SupabaseService {
   }
 
   // ---------------------------------------------------------------------
-  // FINANÇAS
+  // PAINEL E FINANCEIRO — pelas VISÕES do banco (as mesmas da web e do
+  // desktop). Antes o celular baixava todas as locações e somava aqui;
+  // agora quem soma é o banco, e os números batem nas 3 plataformas.
   // ---------------------------------------------------------------------
 
-  /// Réplica do cálculo financeiro do desktop: faturamento do mês
-  /// atual x anterior, variação percentual, ticket médio e recebimento
-  /// projetado das locações ainda ativas.
-  Future<Map<String, dynamic>> buscarDadosFinanceiros() async {
-    final todasLocacoes = await _db
-        .from('locacoes')
-        .select('id, data_devolucao, valor_total, status, clientes(nome), veiculos(modelo, placa)')
-        .order('data_devolucao', ascending: false);
+  Future<SituacaoFrota> buscarSituacaoFrota() async {
+    final dados = await _db.from('vw_situacao_frota').select().maybeSingle();
+    return dados == null ? const SituacaoFrota() : SituacaoFrota.fromMap(dados);
+  }
 
-    final agora = DateTime.now();
-    final mesAtual = agora.month;
-    final anoAtual = agora.year;
-    final mesPassadoData = DateTime(anoAtual, mesAtual - 1, 1);
+  /// Os alertas que esta pessoa pode ver (a visão respeita as permissões).
+  Future<List<Alerta>> buscarAlertas() async {
+    final dados = await _db
+        .from('vw_alertas')
+        .select('tipo, referencia_id, titulo, detalhe, data')
+        .order('data')
+        .limit(50);
+    return dados.map((m) => Alerta.fromMap(m)).toList();
+  }
 
-    double faturamentoMesAtual = 0;
-    double faturamentoMesAnterior = 0;
-    double recebimentoProjetado = 0;
-    int totalConcluidos = 0;
-    final fluxoCaixa = <Map<String, dynamic>>[];
+  /// Os últimos 12 meses (vazio para quem não tem a permissão financeiro).
+  Future<List<MesFinanceiro>> buscarMeses() async {
+    final dados = await _db
+        .from('vw_faturamento_mensal')
+        .select('mes, faturamento, alugueis, manutencao')
+        .order('mes');
+    return dados.map((m) => MesFinanceiro.fromMap(m)).toList();
+  }
 
-    for (final loc in todasLocacoes) {
-      final valor = (loc['valor_total'] is num)
-          ? (loc['valor_total'] as num).toDouble()
-          : double.tryParse('${loc['valor_total']}') ?? 0;
+  /// O Financeiro de um período: a MESMA conta do desktop (painel.js).
+  Future<ResumoFinanceiro> buscarFinanceiro(DateTime inicio, DateTime fim) async {
+    final de = dataParaBanco(inicio);
+    final ate = dataParaBanco(fim);
 
-      if (loc['status'] == Locacao.statusFinalizada) {
-        totalConcluidos++;
-        fluxoCaixa.add(loc);
-        final dataFim = DateTime.tryParse('${loc['data_devolucao']}');
-        if (dataFim != null) {
-          if (dataFim.month == mesAtual && dataFim.year == anoAtual) {
-            faturamentoMesAtual += valor;
-          } else if (dataFim.month == mesPassadoData.month && dataFim.year == mesPassadoData.year) {
-            faturamentoMesAnterior += valor;
-          }
-        }
-      } else if (loc['status'] == Locacao.statusEmAndamento) {
-        recebimentoProjetado += valor;
-      }
+    // Future.wait: faz as 4 perguntas ao banco AO MESMO TEMPO
+    final respostas = await Future.wait<dynamic>([
+      // Aluguéis finalizados no período, com cliente e carro "pendurados"
+      _db
+          .from('locacoes')
+          .select('id, data_devolucao, valor_total, taxas_extras, dias_atraso, clientes(nome), veiculos(marca, modelo, placa)')
+          .eq('status', Locacao.statusFinalizada)
+          .gte('data_devolucao', de)
+          .lte('data_devolucao', ate)
+          .order('data_devolucao', ascending: false),
+      // Manutenções concluídas (pagas) no período
+      _db
+          .from('manutencoes')
+          .select('custo')
+          .eq('status', Manutencao.statusConcluida)
+          .gte('data_liberacao', de)
+          .lte('data_liberacao', ate),
+      // O que ainda vai entrar: aluguéis que estão na rua agora
+      _db.from('locacoes').select('valor_previsto').eq('status', Locacao.statusEmAndamento),
+      buscarMeses(),
+    ]);
+
+    double soma(List lista, String campo) =>
+        lista.fold<double>(0, (total, linha) => total + ((linha[campo] as num?)?.toDouble() ?? 0));
+
+    final entradas = List<Map<String, dynamic>>.from(respostas[0] as List);
+
+    return ResumoFinanceiro(
+      faturamento: soma(entradas, 'valor_total'),
+      alugueis: entradas.length,
+      gastoManutencao: soma(respostas[1] as List, 'custo'),
+      aReceber: soma(respostas[2] as List, 'valor_previsto'),
+      entradas: entradas,
+      meses: respostas[3] as List<MesFinanceiro>,
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // MINHA CONTA — cada pessoa muda só o próprio NOME. Cargo, e-mail e
+  // permissões só o chefe muda (o banco garante: tg_perfis_antes).
+  // ---------------------------------------------------------------------
+
+  Future<void> salvarMeuNome(String usuarioId, String nome) async {
+    try {
+      await _db.from('perfis').update({'nome': nome}).eq('id', usuarioId);
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro, {
+        'perfis_nome_check': 'O nome precisa ter entre 3 e 100 caracteres.',
+      }));
     }
-
-    double variacaoPercentual = 0;
-    if (faturamentoMesAnterior > 0) {
-      variacaoPercentual =
-          ((faturamentoMesAtual - faturamentoMesAnterior) / faturamentoMesAnterior) * 100;
-    } else if (faturamentoMesAtual > 0) {
-      variacaoPercentual = 100;
-    }
-
-    final ticketMedio = totalConcluidos > 0 ? (faturamentoMesAtual / totalConcluidos) : 0.0;
-
-    return {
-      'faturamentoTotal': faturamentoMesAtual,
-      'recebimentoProjetado': recebimentoProjetado,
-      'ticketMedio': ticketMedio,
-      'variacaoPercentual': double.parse(variacaoPercentual.toStringAsFixed(1)),
-      'fluxoCaixa': fluxoCaixa,
-    };
   }
 }

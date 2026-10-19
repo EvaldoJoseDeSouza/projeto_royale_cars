@@ -49,6 +49,16 @@ class Usuario {
     );
   }
 
+  /// Cópia com o nome novo (depois de salvar em Minha conta).
+  Usuario comNome(String novoNome) => Usuario(
+        id: id,
+        nome: novoNome,
+        email: email,
+        cargo: cargo,
+        trocarSenha: trocarSenha,
+        permissoes: permissoes,
+      );
+
   /// Cópia com a marca de "trocar senha" desligada (depois da troca).
   Usuario semTrocaDeSenha() => Usuario(
         id: id,

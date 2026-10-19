@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../dependencies.dart';
+import '../models/painel.dart';
+import '../services/supabase_service.dart';
 import '../theme/colors.dart';
 import '../utils/permissoes.dart';
+import '../utils/validadores.dart';
 import '../widgets/animated_golden_title.dart';
 import '../widgets/royale_footer.dart';
+import 'alertas_page.dart';
 import 'cadastro_veiculo_page.dart';
 import 'clientes_page.dart';
 import 'financas_page.dart';
@@ -13,8 +17,8 @@ import 'locacoes_page.dart';
 import 'login_page.dart';
 import 'manutencao_page.dart';
 import 'menu_relatorios_page.dart';
+import 'minha_conta_page.dart';
 import 'sobre_nos_page.dart';
-import 'trocar_senha_page.dart';
 
 class MainDashboardPage extends StatefulWidget {
   const MainDashboardPage({super.key});
@@ -23,11 +27,59 @@ class MainDashboardPage extends StatefulWidget {
   State<MainDashboardPage> createState() => _MainDashboardPageState();
 }
 
+/// O resumo do topo do painel: frota, alertas e faturamento do mês.
+/// Vem das visões do banco, as MESMAS do Dashboard da web e do desktop.
+class _ResumoPainel {
+  final SituacaoFrota frota;
+  final List<Alerta> alertas;
+  final MesFinanceiro? esteMes; // null para quem não pode ver o financeiro
+
+  const _ResumoPainel(this.frota, this.alertas, this.esteMes);
+}
+
 class _MainDashboardPageState extends State<MainDashboardPage> {
+  late Future<_ResumoPainel> _resumo = _buscarResumo();
+
   @override
   void initState() {
     super.initState();
     authController.addListener(_atualizarTela);
+  }
+
+  /// As 3 perguntas ao banco AO MESMO TEMPO (Future.wait), igual ao desktop.
+  Future<_ResumoPainel> _buscarResumo() async {
+    final servico = SupabaseService.instance;
+    final podeFinanceiro = authController.pode(Permissao.financeiro);
+
+    final respostas = await Future.wait<dynamic>([
+      servico.buscarSituacaoFrota(),
+      servico.buscarAlertas(),
+      podeFinanceiro ? servico.buscarMeses() : Future.value(<MesFinanceiro>[]),
+    ]);
+
+    final meses = respostas[2] as List<MesFinanceiro>;
+    return _ResumoPainel(
+      respostas[0] as SituacaoFrota,
+      respostas[1] as List<Alerta>,
+      meses.isEmpty ? null : meses.last, // a lista vem do mês mais velho para o mais novo
+    );
+  }
+
+  /// Busca o resumo de novo (ao voltar de outra tela ou ao puxar para baixo).
+  Future<void> _recarregar() async {
+    final novo = _buscarResumo();
+    setState(() => _resumo = novo);
+    try {
+      await novo;
+    } catch (_) {
+      // o erro aparece no próprio quadro do resumo
+    }
+  }
+
+  /// Abre uma tela e, ao voltar, atualiza os números do painel.
+  Future<void> _abrir(Widget tela) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => tela));
+    if (mounted) _recarregar();
   }
 
   @override
@@ -111,6 +163,23 @@ class _MainDashboardPageState extends State<MainDashboardPage> {
       backgroundColor: RoyaleColors.fundoApp,
       appBar: AppBar(
         title: const AnimatedGoldenTitle("ROYALE CARS", fontSize: 24),
+        actions: [
+          FutureBuilder<_ResumoPainel>(
+            future: _resumo,
+            builder: (context, snapshot) {
+              final total = snapshot.data?.alertas.length ?? 0;
+              return IconButton(
+                tooltip: 'Alertas',
+                onPressed: () => _abrir(const AlertasPage()),
+                icon: Badge(
+                  isLabelVisible: total > 0,
+                  label: Text('$total'),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       drawer: Drawer(
         child: ListView(
@@ -137,11 +206,11 @@ class _MainDashboardPageState extends State<MainDashboardPage> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.lock_outline, color: RoyaleColors.azulMarinho),
-              title: const Text("Trocar minha senha"),
+              leading: const Icon(Icons.manage_accounts, color: RoyaleColors.azulMarinho),
+              title: const Text("Minha conta"),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const TrocarSenhaPage()));
+                _abrir(const MinhaContaPage());
               },
             ),
             ListTile(
@@ -162,36 +231,151 @@ class _MainDashboardPageState extends State<MainDashboardPage> {
       ),
       body: menuItems.isEmpty
           ? _semAcesso()
-          : GridView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: menuItems.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.1,
-            ),
-            itemBuilder: (context, index) {
-              final item = menuItems[index];
-              return Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => item["page"])),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(item["icon"], size: 45, color: item["color"]),
-                      const SizedBox(height: 10),
-                      Text(item["title"], style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
+          : RefreshIndicator(
+              onRefresh: _recarregar,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _quadroResumo(),
+                  const SizedBox(height: 16),
+                  GridView.builder(
+                    shrinkWrap: true, // a grade fica do tamanho dela, dentro da lista
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: menuItems.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1.3,
+                    ),
+                    itemBuilder: (context, index) {
+                      final item = menuItems[index];
+                      return Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => _abrir(item["page"]),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(item["icon"], size: 40, color: item["color"]),
+                              const SizedBox(height: 8),
+                              Text(item["title"], style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ),
-              );
-            },
-          ),
+                ],
+              ),
+            ),
       bottomNavigationBar: const RoyaleFooter(),
+    );
+  }
+
+  /// Um número do resumo (ex.: "5 disponíveis").
+  Widget _numero(String valor, String rotulo, Color cor) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(valor, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cor)),
+          Text(rotulo, style: const TextStyle(fontSize: 12, color: RoyaleColors.textoMuted)),
+        ],
+      ),
+    );
+  }
+
+  /// O topo do painel: frota, faturamento do mês e os primeiros alertas.
+  Widget _quadroResumo() {
+    return FutureBuilder<_ResumoPainel>(
+      future: _resumo,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator(color: RoyaleColors.azulMarinho)),
+          );
+        }
+        if (snapshot.hasError) {
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.wifi_off, color: RoyaleColors.statusAlugado),
+              title: const Text('Não foi possível carregar o resumo.'),
+              subtitle: const Text('Puxe a tela para baixo para tentar de novo.'),
+              onTap: _recarregar,
+            ),
+          );
+        }
+
+        final r = snapshot.data!;
+        final nome = authController.usuario?.nome.split(' ').first ?? '';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Olá, $nome!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: RoyaleColors.azulMarinho)),
+            const SizedBox(height: 10),
+
+            // ----- A frota agora -----
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Row(
+                  children: [
+                    _numero('${r.frota.disponiveis}', 'disponíveis', RoyaleColors.statusDisponivel),
+                    _numero('${r.frota.alugados}', 'alugados', RoyaleColors.statusAlugado),
+                    _numero('${r.frota.emManutencao}', 'na oficina', RoyaleColors.statusManutencao),
+                  ],
+                ),
+              ),
+            ),
+
+            // ----- Faturamento do mês (só para quem pode ver o financeiro) -----
+            if (r.esteMes != null)
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.trending_up, color: RoyaleColors.statusDisponivel),
+                  title: Text('Faturamento do mês: ${moeda(r.esteMes!.faturamento)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${r.esteMes!.alugueis} aluguel(éis) finalizado(s) • '
+                      'manutenção ${moeda(r.esteMes!.manutencao)}'),
+                ),
+              ),
+
+            // ----- Os primeiros alertas -----
+            if (r.alertas.isNotEmpty)
+              Card(
+                child: Column(
+                  children: [
+                    for (final alerta in r.alertas.take(3))
+                      ListTile(
+                        dense: true,
+                        leading: Icon(AlertasPage.visual(alerta.tipo).$2, color: AlertasPage.visual(alerta.tipo).$1),
+                        title: Text(alerta.titulo, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(alerta.detalhe, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        onTap: () async {
+                          if (await AlertasPage.abrir(context, alerta)) _recarregar();
+                        },
+                      ),
+                    TextButton(
+                      onPressed: () => _abrir(const AlertasPage()),
+                      child: Text('Ver todos os alertas (${r.alertas.length})'),
+                    ),
+                  ],
+                ),
+              )
+            else
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.check_circle, color: RoyaleColors.statusDisponivel),
+                  title: Text('Nenhum alerta. Está tudo em dia!'),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 

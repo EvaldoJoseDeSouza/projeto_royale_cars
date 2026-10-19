@@ -54,6 +54,21 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Minha conta: a pessoa muda o próprio nome (o resto só o chefe muda).
+  Future<void> salvarNome(String nome) async {
+    final usuario = _usuario;
+    if (usuario == null) throw Exception('Sua sessão terminou. Entre novamente.');
+
+    final nomeLimpo = nome.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (nomeLimpo.length < 3 || nomeLimpo.length > 100) {
+      throw Exception('O nome precisa ter entre 3 e 100 caracteres.');
+    }
+
+    await SupabaseService.instance.salvarMeuNome(usuario.id, nomeLimpo);
+    _usuario = usuario.comNome(nomeLimpo);
+    notifyListeners();
+  }
+
   Future<void> sair() async {
     await SupabaseService.instance.sair();
     _usuario = null;
