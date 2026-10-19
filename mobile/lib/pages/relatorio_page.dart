@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../dependencies.dart';
 import '../models/veiculo.dart';
 import '../theme/colors.dart';
+import '../utils/validadores.dart';
 import '../widgets/animated_golden_title.dart';
 import '../widgets/royale_footer.dart';
 
@@ -79,7 +80,7 @@ class _RelatorioPageState extends State<RelatorioPage> {
             ),
             title: Text(cliente.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(
-              'CPF: ${cliente.cpf}  •  CNH: ${cliente.cnh}\nTel: ${cliente.telefone}${cliente.email != null ? '  •  ${cliente.email}' : ''}',
+              'CPF: ${cliente.cpfFormatado}  •  CNH: ${cliente.cnh} (validade ${dataBr(cliente.cnhValidade)})\nTel: ${cliente.telefoneFormatado}  •  ${cliente.email}',
             ),
             isThreeLine: true,
           ),

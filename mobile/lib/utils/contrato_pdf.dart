@@ -53,9 +53,9 @@ class ContratoPdf {
 
               _secao('DADOS DO CLIENTE'),
               _linha('Nome', cliente.nome),
-              _linha('CPF', cliente.cpf),
+              _linha('CPF', cliente.cpfFormatado),
               _linha('CNH', cliente.cnh),
-              _linha('Telefone', cliente.telefone),
+              _linha('Telefone', cliente.telefoneFormatado),
               if (cliente.endereco != null && cliente.endereco!.isNotEmpty)
                 _linha('Endereço', cliente.endereco!),
               pw.SizedBox(height: 16),

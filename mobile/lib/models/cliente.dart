@@ -1,80 +1,78 @@
-/// Cliente da locadora. Segue a tabela `clientes` do Supabase (mesma
-/// usada pelo desktop): nome, cpf, cnh, telefone, email, endereço —
-/// mais o multi-tenant `idEmpresa` e a flag `ativo` (exclusão lógica,
-/// usada pelo botão "Arquivar" tanto no desktop quanto aqui).
+import '../utils/validadores.dart';
+
+/// Cliente da locadora. Segue a tabela `clientes` do banco unificado
+/// (a mesma da web e do desktop).
+///
+/// O banco guarda CPF, CNH e telefone SÓ COM NÚMEROS ("52998224725").
+/// A máscara (529.982.247-25) é só para mostrar na tela: veja os
+/// "get" cpfFormatado e telefoneFormatado lá embaixo.
 class Cliente {
-  final int? id;
-  final int? idEmpresa;
+  final int? id; // null = cliente novo, ainda não salvo
   final String nome;
   final String cpf;
   final String cnh;
+  final DateTime cnhValidade;
+  final String email;
   final String telefone;
-  final String? email;
-  final String? endereco;
-  final bool ativo;
+  final String? endereco; // opcional
+  final bool arquivado; // "arquivar" esconde da lista sem apagar o histórico
 
-  Cliente({
+  /// As colunas que as telas usam (nunca "select *": só o que precisa)
+  static const colunas = 'id, nome, cpf, cnh, cnh_validade, email, telefone, endereco, arquivado';
+
+  const Cliente({
     this.id,
-    this.idEmpresa,
     required this.nome,
     required this.cpf,
     required this.cnh,
+    required this.cnhValidade,
+    required this.email,
     required this.telefone,
-    this.email,
     this.endereco,
-    this.ativo = true,
+    this.arquivado = false,
   });
 
-  Cliente copyWith({
-    int? id,
-    int? idEmpresa,
-    String? nome,
-    String? cpf,
-    String? cnh,
-    String? telefone,
-    String? email,
-    String? endereco,
-    bool? ativo,
-  }) {
-    return Cliente(
-      id: id ?? this.id,
-      idEmpresa: idEmpresa ?? this.idEmpresa,
-      nome: nome ?? this.nome,
-      cpf: cpf ?? this.cpf,
-      cnh: cnh ?? this.cnh,
-      telefone: telefone ?? this.telefone,
-      email: email ?? this.email,
-      endereco: endereco ?? this.endereco,
-      ativo: ativo ?? this.ativo,
-    );
+  String get cpfFormatado => mascaraCpf(cpf);
+  String get telefoneFormatado => mascaraTelefone(telefone);
+
+  /// Quantos dias faltam para a CNH vencer (negativo = já venceu).
+  int get diasParaVencerCnh {
+    final agora = DateTime.now();
+    final hoje = DateTime(agora.year, agora.month, agora.day);
+    return cnhValidade.difference(hoje).inDays;
   }
 
+  bool get cnhVencida => diasParaVencerCnh < 0;
+
+  /// Lê uma linha que veio do banco.
   factory Cliente.fromMap(Map<String, dynamic> map) {
     return Cliente(
       id: map['id'] is int ? map['id'] as int : int.tryParse('${map['id']}'),
-      idEmpresa: map['id_empresa'] is int
-          ? map['id_empresa'] as int
-          : int.tryParse('${map['id_empresa']}'),
-      nome: map['nome'] ?? '',
-      cpf: map['cpf'] ?? '',
-      cnh: map['cnh'] ?? '',
-      telefone: map['telefone'] ?? '',
-      email: map['email'],
-      endereco: map['endereco'],
-      ativo: map['ativo'] is bool ? map['ativo'] as bool : (map['ativo'] == null ? true : map['ativo'].toString() == 'true'),
+      nome: '${map['nome'] ?? ''}',
+      cpf: '${map['cpf'] ?? ''}',
+      cnh: '${map['cnh'] ?? ''}',
+      cnhValidade: DateTime.tryParse('${map['cnh_validade']}') ?? DateTime.now(),
+      email: '${map['email'] ?? ''}',
+      telefone: '${map['telefone'] ?? ''}',
+      endereco: map['endereco'] as String?,
+      arquivado: map['arquivado'] == true,
     );
   }
 
-  /// Formato de envio para o Supabase (sem o id — o id_empresa é
-  /// adicionado pelo SupabaseService na hora de inserir).
+  /// O que vai para o banco ao cadastrar ou editar: os dados já
+  /// "limpos" (só números no CPF, CNH e telefone; e-mail minúsculo).
+  /// O banco limpa de novo e confere tudo; aqui é só para chegar certo.
   Map<String, dynamic> toMap() {
+    final enderecoLimpo = (endereco ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+
     return {
-      'nome': nome,
-      'cpf': cpf,
-      'cnh': cnh,
-      'telefone': telefone,
-      'email': email,
-      'endereco': endereco,
+      'nome': nome.trim().replaceAll(RegExp(r'\s+'), ' '),
+      'cpf': soDigitos(cpf),
+      'cnh': soDigitos(cnh),
+      'cnh_validade': dataParaBanco(cnhValidade),
+      'email': email.trim().toLowerCase(),
+      'telefone': soDigitos(telefone),
+      'endereco': enderecoLimpo.isEmpty ? null : enderecoLimpo,
     };
   }
 }

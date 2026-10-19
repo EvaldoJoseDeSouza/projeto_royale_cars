@@ -6,6 +6,17 @@
 /// e-mail, usados em todos os formulários de cadastro.
 library;
 
+/// Tira tudo que não é número: "529.982.247-25" → "52998224725".
+/// O banco guarda CPF, CNH e telefone assim (só números).
+String soDigitos(String valor) => valor.replaceAll(RegExp(r'\D'), '');
+
+/// Nome e sobrenome (a mesma regra do banco: pelo menos 2 palavras e
+/// entre 5 e 150 letras).
+bool nomeCompletoValido(String valor) {
+  final nome = valor.trim().replaceAll(RegExp(r'\s+'), ' ');
+  return nome.length >= 5 && nome.length <= 150 && nome.contains(' ');
+}
+
 /// Valida um CPF usando o algoritmo oficial de dígitos verificadores
 /// (não apenas o formato) — rejeita CPFs com todos os dígitos iguais
 /// (ex: 111.111.111-11) e dígitos verificadores incorretos.
@@ -75,10 +86,71 @@ String mascaraTelefone(String valorAtual) {
   return digitos;
 }
 
-/// Um telefone brasileiro válido tem 10 dígitos (fixo) ou 11 (celular com 9).
+/// DDDs que existem no Brasil (a mesma lista do banco: validar_telefone).
+const _dddsValidos = {
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38,
+  41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+  71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+};
+
+/// Telefone brasileiro, com a mesma regra do banco:
+///  - 11 números (celular): DDD + 9 + 8 números. Ex.: (19) 99999-9999
+///  - 10 números (fixo): DDD + número começando com 2, 3, 4 ou 5
 bool telefoneValido(String valor) {
-  final digitos = valor.replaceAll(RegExp(r'\D'), '');
-  return digitos.length == 10 || digitos.length == 11;
+  final digitos = soDigitos(valor);
+  if (digitos.length != 10 && digitos.length != 11) return false;
+  if (!_dddsValidos.contains(int.parse(digitos.substring(0, 2)))) return false;
+
+  final terceiro = digitos[2];
+  return digitos.length == 11 ? terceiro == '9' : '2345'.contains(terceiro);
+}
+
+/// CNH com os dígitos verificadores (a mesma conta do banco: validar_cnh).
+/// Existem 2 versões do cálculo em uso no país; vale se passar em uma delas.
+bool cnhValida(String valor) {
+  final cnh = soDigitos(valor);
+  if (cnh.length != 11 || RegExp(r'^(\d)\1{10}$').hasMatch(cnh)) return false;
+
+  // d[1] a d[11], igual ao banco (d[0] fica sem uso, só para os índices baterem)
+  final d = [0, ...cnh.split('').map(int.parse)];
+
+  // Versão 1
+  var soma = 0;
+  for (var i = 1; i <= 9; i++) {
+    soma += d[i] * (10 - i);
+  }
+  var dv1 = soma % 11;
+  var desconto = 0;
+  if (dv1 >= 10) {
+    dv1 = 0;
+    desconto = 2;
+  }
+
+  soma = 0;
+  for (var i = 1; i <= 9; i++) {
+    soma += d[i] * i;
+  }
+  var resto = soma % 11;
+  var dv2 = resto >= 10 ? 0 : resto - desconto;
+
+  if (dv1 == d[10] && dv2 == d[11]) return true;
+
+  // Versão 2 (Detran-PR)
+  soma = 0;
+  for (var i = 1; i <= 9; i++) {
+    soma += d[i] * (i + 1);
+  }
+  resto = soma % 11;
+  dv1 = resto <= 1 ? 0 : 11 - resto;
+
+  soma = dv1 * 2;
+  for (var i = 1; i <= 9; i++) {
+    soma += d[i] * (i + 2);
+  }
+  resto = soma % 11;
+  dv2 = resto <= 1 ? 0 : 11 - resto;
+
+  return dv1 == d[10] && dv2 == d[11];
 }
 
 /// Aplica a máscara de placa, aceitando tanto o padrão antigo
@@ -101,8 +173,24 @@ bool placaValida(String valor) {
   return padraoAntigo.hasMatch(v) || padraoMercosul.hasMatch(v);
 }
 
+/// A mesma regra do banco: algo@algo.algo, sem espaços.
+/// (A versão antiga recusava e-mails .com.br, como joao@empresa.com.br.)
 bool emailValido(String valor) {
-  return RegExp(r'^[\w\.\-]+@[\w\-]+\.[a-zA-Z]{2,}$').hasMatch(valor.trim());
+  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(valor.trim());
+}
+
+/// Data no formato que o banco entende: "2027-03-15".
+String dataParaBanco(DateTime data) {
+  final mes = data.month.toString().padLeft(2, '0');
+  final dia = data.day.toString().padLeft(2, '0');
+  return '${data.year}-$mes-$dia';
+}
+
+/// Data no formato brasileiro, para mostrar na tela: "15/03/2027".
+String dataBr(DateTime data) {
+  final mes = data.month.toString().padLeft(2, '0');
+  final dia = data.day.toString().padLeft(2, '0');
+  return '$dia/$mes/${data.year}';
 }
 
 /// Validador genérico de campo obrigatório, pronto pra usar em

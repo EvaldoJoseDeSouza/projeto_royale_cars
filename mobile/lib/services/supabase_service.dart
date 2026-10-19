@@ -218,50 +218,99 @@ class SupabaseService {
   }
 
   // ---------------------------------------------------------------------
-  // CLIENTES
+  // CLIENTES — as mesmas regras da web e do desktop:
+  //  - A TELA ajuda quem digita (máscaras) e confere o simples.
+  //  - O BANCO é o juiz final: dígitos do CPF e da CNH, DDD do telefone,
+  //    e-mail, duplicados e se dá para arquivar (não deixa arquivar quem
+  //    tem aluguel em andamento).
+  //  - Nada é apagado: "arquivar" só esconde o cliente das listas.
   // ---------------------------------------------------------------------
 
-  Future<List<Cliente>> buscarClientes() async {
+  /// Frases para cada regra do banco (nomes em banco/01 e banco/02)
+  static const _mensagensClientes = {
+    'clientes_nome_check': 'Informe o nome completo (nome e sobrenome).',
+    'clientes_cpf_check': 'CPF inválido. Confira os números digitados.',
+    'clientes_cnh_check': 'Número de CNH inválido. Confira os 11 números.',
+    'clientes_email_check': 'Digite um e-mail válido.',
+    'clientes_telefone_check': 'Telefone inválido. Informe DDD + número, ex.: (19) 99999-9999.',
+    'clientes_endereco_check': 'O endereço pode ter no máximo 200 caracteres.',
+  };
+
+  /// Para o aviso de duplicado: qual coluna cada regra UNIQUE protege
+  static const _duplicadosClientes = {
+    'clientes_cpf_key': ('cpf', 'Este CPF'),
+    'clientes_cnh_key': ('cnh', 'Esta CNH'),
+    'clientes_email_key': ('email', 'Este e-mail'),
+  };
+
+  Future<List<Cliente>> buscarClientes({bool arquivados = false}) async {
     final dados = await _db
         .from('clientes')
-        .select()
-        .eq('ativo', true)
+        .select(Cliente.colunas)
+        .eq('arquivado', arquivados)
         .order('nome');
     return dados.map((m) => Cliente.fromMap(m)).toList();
   }
 
-  Future<List<Cliente>> buscarClientesArquivados() async {
-    final dados = await _db
-        .from('clientes')
-        .select()
-        .eq('ativo', false)
-        .order('nome');
-    return dados.map((m) => Cliente.fromMap(m)).toList();
-  }
-
+  /// Cadastra (sem id) ou edita (com id). Se o banco recusar, devolve
+  /// uma frase em português dizendo o porquê.
   Future<void> salvarCliente(Cliente cliente) async {
-    if (cliente.id != null) {
-      await _db.from('clientes').update(cliente.toMap()).eq('id', cliente.id as Object);
-    } else {
-      await _db.from('clientes').insert(cliente.toMap());
+    final dados = cliente.toMap();
+
+    try {
+      if (cliente.id != null) {
+        await _db.from('clientes').update(dados).eq('id', cliente.id!);
+      } else {
+        await _db.from('clientes').insert(dados);
+      }
+    } on PostgrestException catch (erro) {
+      debugPrint('[CLIENTES] Banco recusou: ${erro.code} ${erro.message}');
+      final duplicado = _duplicadosClientes[nomeDaRegra(erro)];
+
+      if (duplicado != null) {
+        throw Exception(await _mensagemDeDuplicado(duplicado.$1, duplicado.$2, dados[duplicado.$1], cliente.id));
+      }
+      throw Exception(traduzirErroBanco(erro, _mensagensClientes));
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro));
     }
   }
 
-  Future<void> arquivarCliente(int idCliente) async {
-    final ativas = await _db
-        .from('locacoes')
-        .select('id')
-        .eq('id_cliente', idCliente)
-        .eq('status', Locacao.statusAtivo);
-    if (ativas.isNotEmpty) {
-      throw Exception(
-          'Este cliente possui uma locação ativa. Finalize a locação antes de arquivá-lo.');
+  /// CPF/CNH/e-mail repetido: diz DE QUEM é (igual à web e ao desktop).
+  /// Se o dono estiver arquivado, sugere reativar em vez de cadastrar de novo.
+  Future<String> _mensagemDeDuplicado(String coluna, String rotulo, Object? valor, int? idAtual) async {
+    try {
+      final dono = await _db
+          .from('clientes')
+          .select('nome, arquivado')
+          .eq(coluna, valor ?? '')
+          .neq('id', idAtual ?? 0)
+          .maybeSingle();
+
+      if (dono == null) return '$rotulo já está cadastrado.';
+      if (dono['arquivado'] == true) {
+        return '$rotulo pertence a ${dono['nome']}, que está arquivado. Reative esse cadastro em vez de criar outro.';
+      }
+      return '$rotulo já pertence ao cliente ${dono['nome']}.';
+    } catch (_) {
+      return '$rotulo já está cadastrado.';
     }
-    await _db.from('clientes').update({'ativo': false}).eq('id', idCliente);
   }
 
-  Future<void> reativarCliente(int idCliente) async {
-    await _db.from('clientes').update({'ativo': true}).eq('id', idCliente);
+  /// Arquiva ou reativa. Quem confere se o cliente tem aluguel em
+  /// andamento é o banco: se tiver, ele recusa com uma frase pronta.
+  Future<Cliente> mudarArquivadoCliente(int idCliente, bool arquivar) async {
+    try {
+      final dados = await _db
+          .from('clientes')
+          .update({'arquivado': arquivar})
+          .eq('id', idCliente)
+          .select(Cliente.colunas)
+          .single();
+      return Cliente.fromMap(dados);
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro, _mensagensClientes));
+    }
   }
 
   // ---------------------------------------------------------------------
