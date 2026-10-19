@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../dependencies.dart';
 import '../models/veiculo.dart';
 import '../theme/colors.dart';
+import '../utils/permissoes.dart';
 import '../widgets/animated_golden_title.dart';
 import '../widgets/royale_footer.dart';
 import 'cadastro_veiculo_page.dart';
@@ -55,6 +56,10 @@ class FrotaPage extends StatelessWidget {
       builder: (context, child) {
         final listaVeiculos = frotaController.veiculos;
 
+        // O que esta pessoa pode fazer aqui (o resto fica escondido)
+        final podeEditar = authController.pode(Permissao.veiculosGerenciar);
+        final podeArquivar = authController.pode(Permissao.veiculosArquivar);
+
         return Scaffold(
           appBar: AppBar(
             title: const AnimatedGoldenTitle("Frota", fontSize: 24),
@@ -68,15 +73,17 @@ class FrotaPage extends StatelessWidget {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: RoyaleColors.dourado,
-            foregroundColor: RoyaleColors.azulMarinho,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CadastroVeiculoPage()),
-            ),
-            child: const Icon(Icons.add),
-          ),
+          floatingActionButton: !podeEditar
+              ? null
+              : FloatingActionButton(
+                  backgroundColor: RoyaleColors.dourado,
+                  foregroundColor: RoyaleColors.azulMarinho,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CadastroVeiculoPage()),
+                  ),
+                  child: const Icon(Icons.add),
+                ),
           body: listaVeiculos.isEmpty
               ? const Center(
                   child: Column(
@@ -124,23 +131,24 @@ class FrotaPage extends StatelessWidget {
                               child: Text(veiculo.status,
                                   style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                             ),
-                            PopupMenuButton<String>(
-                              onSelected: (valor) {
-                                if (valor == 'editar') {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) => CadastroVeiculoPage(veiculoParaEditar: veiculo)),
-                                  );
-                                } else if (valor == 'arquivar') {
-                                  _arquivar(context, veiculo);
-                                }
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(value: 'editar', child: Text('Editar')),
-                                PopupMenuItem(value: 'arquivar', child: Text('Arquivar')),
-                              ],
-                            ),
+                            if (podeEditar || podeArquivar)
+                              PopupMenuButton<String>(
+                                onSelected: (valor) {
+                                  if (valor == 'editar') {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (context) => CadastroVeiculoPage(veiculoParaEditar: veiculo)),
+                                    );
+                                  } else if (valor == 'arquivar') {
+                                    _arquivar(context, veiculo);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  if (podeEditar) const PopupMenuItem(value: 'editar', child: Text('Editar')),
+                                  if (podeArquivar) const PopupMenuItem(value: 'arquivar', child: Text('Arquivar')),
+                                ],
+                              ),
                           ],
                         ),
                       ),

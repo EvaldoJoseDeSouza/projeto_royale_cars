@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../dependencies.dart';
+import '../utils/permissoes.dart';
 import 'relatorio_page.dart';
 import 'manutencao_page.dart';
 import 'historico_manutencao_page.dart';
@@ -10,52 +12,21 @@ class MenuRelatoriosPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Organizado por tipo para facilitar a renderização de ícones e navegação
-
+    // Cada item diz qual permissão é preciso ter para vê-lo. Antes havia
+    // um campo "restrito" que ninguém conferia; agora vale a permissão de
+    // verdade, a mesma da web e do desktop.
     final List<Map<String, dynamic>> todosItens = [
-      {
-        "titulo": "Relatório de Clientes",
-        "tipo": "relatorio",
-        "restrito": false,
-      },
-      {
-        "titulo": "Relatório de Veículos",
-        "tipo": "relatorio",
-        "restrito": false,
-      },
-      {
-        "titulo": "Relatório de Locações",
-        "tipo": "relatorio",
-        "restrito": false,
-      },
-      {
-        "titulo": "Relatório de Devoluções",
-        "tipo": "relatorio",
-        "restrito": false,
-      },
-
-      // Itens restritos que apenas Gerentes/Admins podem ver:
-      {
-        "titulo": "Relatório de Desempenho",
-        "tipo": "relatorio",
-        "restrito": true,
-      },
-      {
-        "titulo": "Emitir Laudo Técnico",
-        "tipo": "manutencao",
-        "restrito": true,
-      },
-      {
-        "titulo": "Histórico de Manutenções",
-        "tipo": "historico",
-        "restrito": true,
-      },
+      {"titulo": "Relatório de Clientes", "tipo": "relatorio", "permissao": Permissao.relatorios},
+      {"titulo": "Relatório de Veículos", "tipo": "relatorio", "permissao": Permissao.relatorios},
+      {"titulo": "Relatório de Locações", "tipo": "relatorio", "permissao": Permissao.relatorios},
+      {"titulo": "Relatório de Devoluções", "tipo": "relatorio", "permissao": Permissao.relatorios},
+      {"titulo": "Relatório de Desempenho", "tipo": "relatorio", "permissao": Permissao.relatorios},
+      // A manutenção também aparece aqui, para quem cuida da oficina
+      {"titulo": "Emitir Laudo Técnico", "tipo": "manutencao", "permissao": Permissao.manutencoes},
+      {"titulo": "Histórico de Manutenções", "tipo": "historico", "permissao": Permissao.manutencoes},
     ];
 
-    // Como agora cada conta representa uma empresa (sem papéis internos
-    // de admin/gerente/atendente, igual ao desktop), todos os relatórios
-    // ficam visíveis pra quem estiver logado.
-    final itensMenu = todosItens;
+    final itensMenu = todosItens.where((item) => authController.pode(item["permissao"])).toList();
 
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 245, 247, 245),

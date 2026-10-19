@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dependencies.dart';
 import '../theme/colors.dart';
+import '../utils/permissoes.dart';
 import '../widgets/animated_golden_title.dart';
 import '../widgets/royale_footer.dart';
 import 'cadastro_cliente_page.dart';
@@ -56,17 +57,23 @@ class _ClientesPageState extends State<ClientesPage> {
             .where((c) => c.nome.toLowerCase().contains(termo) || c.cpf.contains(termo))
             .toList();
 
+        // O que esta pessoa pode fazer aqui (o resto fica escondido)
+        final podeEditar = authController.pode(Permissao.clientesGerenciar);
+        final podeArquivar = authController.pode(Permissao.clientesArquivar);
+
         return Scaffold(
           appBar: AppBar(title: const AnimatedGoldenTitle('Clientes', fontSize: 24)),
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: RoyaleColors.dourado,
-            foregroundColor: RoyaleColors.azulMarinho,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CadastroClientePage()),
-            ),
-            child: const Icon(Icons.add),
-          ),
+          floatingActionButton: !podeEditar
+              ? null
+              : FloatingActionButton(
+                  backgroundColor: RoyaleColors.dourado,
+                  foregroundColor: RoyaleColors.azulMarinho,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CadastroClientePage()),
+                  ),
+                  child: const Icon(Icons.add),
+                ),
           body: Column(
             children: [
               Padding(
@@ -98,23 +105,25 @@ class _ClientesPageState extends State<ClientesPage> {
                               ),
                               title: Text(cliente.nome, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text('CPF: ${cliente.cpf}  •  ${cliente.telefone}'),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (valor) {
-                                  if (valor == 'editar') {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => CadastroClientePage(clienteParaEditar: cliente)),
-                                    );
-                                  } else if (valor == 'arquivar') {
-                                    _arquivar(context, cliente.id!);
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(value: 'editar', child: Text('Editar')),
-                                  PopupMenuItem(value: 'arquivar', child: Text('Arquivar')),
-                                ],
-                              ),
+                              trailing: !podeEditar && !podeArquivar
+                                  ? null
+                                  : PopupMenuButton<String>(
+                                    onSelected: (valor) {
+                                      if (valor == 'editar') {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) => CadastroClientePage(clienteParaEditar: cliente)),
+                                        );
+                                      } else if (valor == 'arquivar') {
+                                        _arquivar(context, cliente.id!);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      if (podeEditar) const PopupMenuItem(value: 'editar', child: Text('Editar')),
+                                      if (podeArquivar) const PopupMenuItem(value: 'arquivar', child: Text('Arquivar')),
+                                    ],
+                                  ),
                             ),
                           );
                         },
