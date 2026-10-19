@@ -1164,3 +1164,38 @@ button.alerta-item:hover { background: #f8fafc; }
 .grafico-tabela summary { cursor: pointer; font-size: 0.85rem; color: #3498db; font-weight: 600; }
 .grafico-tabela table { margin-top: 10px; }
 
+
+/* ============================ MANUTENÇÃO ============================ */
+.abas-manutencao { display: flex; gap: 8px; }
+/* (Classe própria: o Financeiro escuta todo botão .btn-periodo) */
+.aba-manutencao {
+  padding: 9px 14px;
+  border: 1px solid var(--border-color);
+  background: #f8fafc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.aba-manutencao:hover { border-color: var(--blue-dark); }
+.aba-manutencao.ativa { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
+.resumo-manutencao { color: var(--text-muted); font-size: 0.9rem; margin: -6px 0 16px; }
+.manutencao-defeito { font-size: 0.9rem; color: var(--text-main); }
+.manutencao-datas { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+.manutencao-datas .vencida { color: #e74c3c; font-weight: 700; }
+/* O checklist da vistoria numa linha: ✔ Motor ✔ Freios ✖ Pneus – Óleo */
+.checklist-vistoria { display: flex; flex-wrap: wrap; gap: 6px; }
+.item-vistoria { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; background: #eef2f1; color: #64748b; }
+.item-vistoria.ok { background: #e6f7ee; color: #198754; }
+.item-vistoria.problema { background: #fceae9; color: #e74c3c; }
+.btn-liberar {
+  align-self: stretch;
+  padding: 9px;
+  border: none;
+  border-radius: 6px;
+  background: #198754;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-liberar:hover { filter: brightness(1.1); }

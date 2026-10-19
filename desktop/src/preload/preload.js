@@ -45,6 +45,18 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     fecharModalCancelarLocacao: () => ipcRenderer.send('fechar-modal-cancelar-locacao'),
     cancelarLocacao: (dados) => ipcRenderer.invoke('cancelar-locacao', dados),
 
+    // ========================== MANUTENÇÃO ===========================
+    pedirManutencoes: (emAndamento) => ipcRenderer.invoke('buscar-manutencoes', emAndamento),
+    aoAtualizarManutencoes: (funcao) => ipcRenderer.on('manutencoes-atualizadas', () => funcao()),
+    // Enviar para a oficina
+    abrirModalManutencao: () => ipcRenderer.send('abrir-modal-manutencao'),
+    fecharModalManutencao: () => ipcRenderer.send('fechar-modal-manutencao'),
+    abrirManutencao: (dados) => ipcRenderer.invoke('abrir-manutencao', dados),
+    // Liberar
+    abrirModalLiberarManutencao: () => ipcRenderer.send('abrir-modal-liberar-manutencao'),
+    fecharModalLiberarManutencao: () => ipcRenderer.send('fechar-modal-liberar-manutencao'),
+    concluirManutencao: (dados) => ipcRenderer.invoke('concluir-manutencao', dados),
+
     // ============================ FINANÇAS ============================
     pedirResumoPainel: () => ipcRenderer.invoke('buscar-resumo-painel'),
     pedirFinanceiro: (periodo) => ipcRenderer.invoke('buscar-financeiro', periodo),

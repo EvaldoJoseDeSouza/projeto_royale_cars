@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
     esconderSe(pegar('.menu-item[data-target="view-frota"]'), !tem('veiculos_ver'));
     esconderSe(pegar('.menu-item[data-target="view-clientes"]'), !tem('clientes_ver'));
     esconderSe(pegar('.menu-item[data-target="view-financeiro"]'), !tem('financeiro'));
+    esconderSe(pegar('.menu-item[data-target="view-manutencao"]'), !tem('manutencoes'));
     const wrapLocacoes = document.getElementById('btn-locacoes-master')?.closest('.menu-dropdown-wrapper');
     esconderSe(wrapLocacoes, !tem('locacoes_ver'));
     const wrapAdmin = document.getElementById('btn-administracao-master')?.closest('.menu-dropdown-wrapper');
@@ -107,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     esconderSe(btnAbrirModal, !tem('veiculos_gerenciar'));
     esconderSe(btnAbrirModalCliente, !tem('clientes_gerenciar'));
     esconderSe(btnAbrirModalLocacao, !tem('locacoes_gerenciar'));
+    esconderSe(document.getElementById('btn-abrir-manutencao'), !tem('manutencoes'));
     esconderSe(btnAbrirCadastroColaborador, !tem('administracao'));
     esconderSe(btnAbrirModalGrupo, !tem('administracao'));
 
@@ -176,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const titulosPorView = {
     'view-resumo': 'Dashboard',
     'view-frota': 'Frota de Veículos',
+    'view-manutencao': 'Manutenção',
     'view-clientes': 'Gestão de Clientes',
     'view-locacoes-ativas': 'Locações em Andamento',
     'view-locacoes-historico': 'Histórico de Locações',
@@ -254,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const TIPOS_DE_ALERTA = {
     atraso: { icone: 'ri-alarm-warning-line', classe: 'alerta-critico', rotulo: 'Atraso', tela: 'view-locacoes-ativas' },
     devolucao_proxima: { icone: 'ri-calendar-event-line', classe: 'alerta-aviso', rotulo: 'Devolução próxima', tela: 'view-locacoes-ativas' },
-    manutencao: { icone: 'ri-tools-line', classe: 'alerta-aviso', rotulo: 'Na oficina', tela: 'view-frota' },
+    manutencao: { icone: 'ri-tools-line', classe: 'alerta-aviso', rotulo: 'Na oficina', tela: 'view-manutencao' },
     cnh: { icone: 'ri-id-card-line', classe: 'alerta-aviso', rotulo: 'CNH', tela: 'view-clientes' },
     login_suspeito: { icone: 'ri-shield-keyhole-line', classe: 'alerta-critico', rotulo: 'Login suspeito', tela: null },
   };
@@ -279,7 +282,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="alerta-titulo">${escaparHtml(alerta.titulo)}</span>
         <span class="alerta-detalhe">${escaparHtml(alerta.detalhe)}</span>
       `;
-      if (tipo.tela) item.addEventListener('click', () => switchView(tipo.tela));
+      // Sem a permissão de manutenção, o alerta "na oficina" leva para a Frota
+      const tela = alerta.tipo === 'manutencao' && !tem('manutencoes') ? 'view-frota' : tipo.tela;
+      if (tela) item.addEventListener('click', () => switchView(tela));
       caixa.appendChild(item);
     });
   }
@@ -361,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const dropdownHtml = modoArquivado
         ? `<button class="card-dropdown-item reativar-btn"><i class="ri-arrow-go-back-line"></i> Reativar</button>`
         : `<button class="card-dropdown-item edit-btn"><i class="ri-edit-line"></i> Editar</button>
+         ${carro.status === 'Disponível' ? '<button class="card-dropdown-item oficina-btn"><i class="ri-tools-line"></i> Enviar para oficina</button>' : ''}
          <button class="card-dropdown-item delete-item archive-btn"><i class="ri-archive-line"></i> Arquivar</button>`;
 
       // formatarPlaca, formatarDinheiro, formatarKm e escaparHtml vêm de
@@ -405,6 +411,15 @@ document.addEventListener('DOMContentLoaded', () => {
           window.apiAcesso.abrirModalCadastro();
         });
 
+        // Abre o modal da oficina já com este carro escolhido
+        const oficina = card.querySelector('.oficina-btn');
+        if (oficina) oficina.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.classList.remove('show');
+          localStorage.setItem('veiculoParaManutencao', JSON.stringify(carro));
+          window.apiAcesso.abrirModalManutencao();
+        });
+
         card.querySelector('.archive-btn').addEventListener('click', async (e) => {
           e.stopPropagation();
           dropdown.classList.remove('show');
@@ -424,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       aplicarPermissoesNoCard(card, {
         '.edit-btn': 'veiculos_gerenciar',
+        '.oficina-btn': 'manutencoes',
         '.archive-btn': 'veiculos_arquivar',
         '.reativar-btn': 'veiculos_arquivar'
       });
@@ -958,6 +974,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (erro) { console.error("Erro ao carregar histórico:", erro); }
       }
 
+      if (targetId === 'view-manutencao') {
+        carregarManutencoes();
+      }
+
       if (targetId === 'view-financeiro') {
         try {
           await carregarFinanceiro(periodoDoBotao('mes'));
@@ -984,6 +1004,140 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item.getAttribute('data-target') === targetId) item.classList.add('active');
       });
     }
+  }
+
+  // ============================== MANUTENÇÃO ==============================
+  // Duas abas: "Na oficina" (manutenções em andamento) e "Concluídas"
+  // (histórico). Os dados vêm de main/ipc/manutencoes.js.
+  const containerManutencao = document.getElementById('container-manutencao');
+  const resumoManutencao = document.getElementById('resumo-manutencao');
+  let abaManutencao = 'oficina';
+
+  // Os 4 itens da vistoria (os mesmos do modal, da web e do celular)
+  const ITENS_VISTORIA = [
+    { campo: 'motor_ok', nome: 'Motor' },
+    { campo: 'freios_ok', nome: 'Freios' },
+    { campo: 'pneus_ok', nome: 'Pneus' },
+    { campo: 'oleo_ok', nome: 'Óleo' },
+  ];
+
+  // true = OK, false = com problema, null = não conferido.
+  // Se ninguém fez a vistoria, não mostra nada.
+  function checklistHtml(m) {
+    if (ITENS_VISTORIA.every(({ campo }) => m[campo] === null || m[campo] === undefined)) return '';
+    const itens = ITENS_VISTORIA.map(({ campo, nome }) => {
+      if (m[campo] === true) return `<span class="item-vistoria ok">✔ ${nome}</span>`;
+      if (m[campo] === false) return `<span class="item-vistoria problema">✖ ${nome}</span>`;
+      return `<span class="item-vistoria">– ${nome}</span>`;
+    });
+    return `<div class="checklist-vistoria">${itens.join('')}</div>`;
+  }
+
+  function renderizarManutencoes(lista) {
+    if (!containerManutencao) return;
+    containerManutencao.innerHTML = '';
+    const naOficina = abaManutencao === 'oficina';
+
+    // Linha de resumo em cima dos cartões
+    if (naOficina) {
+      document.getElementById('contagem-oficina').textContent = lista.length ? `(${lista.length})` : '';
+      resumoManutencao.textContent = lista.length
+        ? `${lista.length} carro(s) na oficina agora, bloqueados para aluguel.`
+        : '';
+    } else {
+      const total = lista.reduce((soma, m) => soma + Number(m.custo || 0), 0);
+      resumoManutencao.textContent = lista.length
+        ? `${lista.length} manutenção(ões) concluída(s), custo total de ${formatarDinheiro(total)}.`
+        : '';
+    }
+
+    if (lista.length === 0) {
+      containerManutencao.innerHTML = naOficina
+        ? '<p style="color: var(--text-muted); padding: 20px;">Nenhum carro na oficina. 🎉</p>'
+        : '<p style="color: var(--text-muted); padding: 20px;">Nenhuma manutenção concluída ainda.</p>';
+      return;
+    }
+
+    const hoje = hojeTexto();
+    lista.forEach(m => {
+      const carro = m.veiculos || {};
+      const card = document.createElement('div');
+      card.className = 'vehicle-card';
+
+      // Previsão já passou e o carro ainda está lá? Fica em vermelho.
+      const vencida = naOficina && m.previsao_liberacao && m.previsao_liberacao < hoje;
+      const linhaPrevisao = m.previsao_liberacao
+        ? `<br><span class="${vencida ? 'vencida' : ''}">Previsão: ${formatarData(m.previsao_liberacao)}${vencida ? ' (atrasada)' : ''}</span>`
+        : '';
+
+      // Veio de uma devolução com defeito? Mostra de qual locação.
+      const origem = m.locacao_id ? `<br>Veio da devolução da locação #${m.locacao_id}` : '';
+
+      const datas = naOficina
+        ? `Entrou em ${formatarData(m.data_entrada)} (${diasEntre(m.data_entrada, hoje)} dia(s))${linhaPrevisao}${origem}`
+        : `${formatarData(m.data_entrada)} → ${formatarData(m.data_liberacao)}${origem}`;
+
+      // Quem enviou e quem liberou (os nomes vêm do banco: escaparHtml)
+      const pessoas = naOficina
+        ? (m.abriu ? `Enviado por ${escaparHtml(m.abriu.nome)}` : '')
+        : `${m.abriu ? escaparHtml(m.abriu.nome) : '?'} → ${m.concluiu ? escaparHtml(m.concluiu.nome) : '?'}`;
+
+      card.innerHTML = `
+        <span class="status-badge ${naOficina ? 'status-manutencao' : 'status-disponivel'}">${naOficina ? 'Na oficina' : 'Concluída'}</span>
+        <div class="vehicle-info">
+          <h4>${escaparHtml(carro.marca)} ${escaparHtml(carro.modelo)}</h4>
+          <p>${formatarPlaca(carro.placa)}${m.oficina ? ` · ${escaparHtml(m.oficina)}` : ''}</p>
+        </div>
+        <div class="manutencao-defeito"><strong>Defeito:</strong> ${escaparHtml(m.defeito)}</div>
+        ${naOficina ? '' : `<div class="manutencao-defeito"><strong>Serviço:</strong> ${escaparHtml(m.servico_realizado)}</div>`}
+        <div class="manutencao-datas">${datas}${pessoas ? `<br>${pessoas}` : ''}</div>
+        ${checklistHtml(m)}
+        <div class="vehicle-details">
+          ${naOficina
+            ? '<button class="btn-liberar"><i class="ri-checkbox-circle-line"></i> Liberar</button>'
+            : `<span class="vehicle-price">${formatarDinheiro(m.custo)}</span>`}
+        </div>
+      `;
+
+      const btnLiberar = card.querySelector('.btn-liberar');
+      if (btnLiberar) {
+        // Mesmo jeito dos outros modais: deixa os dados no localStorage e abre
+        btnLiberar.addEventListener('click', () => {
+          localStorage.setItem('manutencaoParaLiberar', JSON.stringify(m));
+          window.apiAcesso.abrirModalLiberarManutencao();
+        });
+      }
+
+      containerManutencao.appendChild(card);
+    });
+  }
+
+  async function carregarManutencoes() {
+    try {
+      const lista = await window.apiAcesso.pedirManutencoes(abaManutencao === 'oficina');
+      renderizarManutencoes(lista || []);
+    } catch (erro) {
+      console.error('Erro ao carregar manutenções:', erro);
+    }
+  }
+
+  // Troca de aba: pinta a escolhida e recarrega
+  document.querySelectorAll('.aba-manutencao').forEach(botao => {
+    botao.addEventListener('click', () => {
+      document.querySelectorAll('.aba-manutencao').forEach(b => b.classList.remove('ativa'));
+      botao.classList.add('ativa');
+      abaManutencao = botao.dataset.aba;
+      carregarManutencoes();
+    });
+  });
+
+  // Botão "Enviar para a oficina" do topo: abre sem carro escolhido
+  const btnAbrirManutencao = document.getElementById('btn-abrir-manutencao');
+  if (btnAbrirManutencao) {
+    btnAbrirManutencao.addEventListener('click', () => {
+      localStorage.removeItem('veiculoParaManutencao');
+      window.apiAcesso.abrirModalManutencao();
+    });
   }
 
   // ============================ COLABORADORES ============================
@@ -1398,6 +1552,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (erro) {
           console.error("Erro ao atualizar lista de clientes em tempo real:", erro);
         }
+      }
+    });
+  }
+
+  // Alguém enviou ou liberou um carro (aqui ou em outra janela)
+  if (window.apiAcesso && window.apiAcesso.aoAtualizarManutencoes) {
+    window.apiAcesso.aoAtualizarManutencoes(() => {
+      if (document.getElementById('view-manutencao')?.classList.contains('active')) {
+        carregarManutencoes();
       }
     });
   }

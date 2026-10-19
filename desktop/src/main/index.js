@@ -11,6 +11,7 @@ const { registrarIpcClientes } = require("./ipc/clientes");
 const { registrarIpcFrota } = require("./ipc/frota");
 const { registrarIpcLocacoes } = require("./ipc/locacoes");
 const { registrarIpcPainel } = require("./ipc/painel");
+const { registrarIpcManutencoes } = require("./ipc/manutencoes");
 
 // Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
@@ -494,6 +495,39 @@ registrarIpcLocacoes({
   obterJanelaLocacao: () => janelaModalLocacao,
   obterJanelaDevolucao: () => janelaModalDevolucao,
   obterJanelaCancelamento: () => janelaModalCancelamento,
+});
+
+// ============================== MANUTENÇÃO ==============================
+// Enviar para a oficina e liberar ficam em main/ipc/manutencoes.js (pelas
+// funções do banco). Aqui ficam só as duas janelas, no mesmo molde.
+let janelaModalManutencao;
+let janelaModalLiberarManutencao;
+
+ipcMain.on("abrir-modal-manutencao", (evento) => {
+  if (janelaModalManutencao) return janelaModalManutencao.focus();
+  janelaModalManutencao = criarJanelaModal(BrowserWindow.fromWebContents(evento.sender), "manutencao/modalManutencao.html", 560, 700);
+  janelaModalManutencao.on("closed", () => { janelaModalManutencao = null; });
+});
+
+ipcMain.on("fechar-modal-manutencao", () => {
+  if (janelaModalManutencao) janelaModalManutencao.close();
+});
+
+ipcMain.on("abrir-modal-liberar-manutencao", (evento) => {
+  if (janelaModalLiberarManutencao) return janelaModalLiberarManutencao.focus();
+  janelaModalLiberarManutencao = criarJanelaModal(
+    BrowserWindow.fromWebContents(evento.sender), "liberar-manutencao/modalLiberarManutencao.html", 520, 560);
+  janelaModalLiberarManutencao.on("closed", () => { janelaModalLiberarManutencao = null; });
+});
+
+ipcMain.on("fechar-modal-liberar-manutencao", () => {
+  if (janelaModalLiberarManutencao) janelaModalLiberarManutencao.close();
+});
+
+registrarIpcManutencoes({
+  mostrarAviso,
+  obterJanelaEnviar: () => janelaModalManutencao,
+  obterJanelaLiberar: () => janelaModalLiberarManutencao,
 });
 
 // ============================== PAINEL E FINANÇAS =======================

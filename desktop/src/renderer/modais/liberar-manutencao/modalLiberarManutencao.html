@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Liberar da oficina</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="../../estilos/modal.css" />
+    <style>
+      /* Estilos só desta janela */
+      .ficha-manutencao {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        color: #334155;
+        margin-bottom: 14px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-scroll-wrapper">
+      <div class="modal-header">
+        <h3>Liberar da oficina</h3>
+        <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+          <i class="ri-close-line" style="font-size: 1.2rem; display: block"></i>
+        </button>
+      </div>
+
+      <form id="form-liberar" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+        <div class="modal-scroll-body">
+          <!-- Dados da manutenção (preenchidos pelo JavaScript) -->
+          <div class="ficha-manutencao" id="ficha-manutencao"></div>
+
+          <div class="form-group">
+            <label for="servico">Serviço realizado *</label>
+            <textarea id="servico" rows="3" maxlength="1000" required
+              placeholder="Ex.: troca das pastilhas de freio dianteiras"></textarea>
+          </div>
+
+          <div class="row-inputs">
+            <div class="form-group">
+              <label for="custo">Custo *</label>
+              <input type="text" id="custo" inputmode="numeric" placeholder="R$ 0,00" required />
+              <p class="dica-campo">Use R$ 0,00 se foi na garantia.</p>
+            </div>
+            <div class="form-group">
+              <label for="data-liberacao">Liberado em *</label>
+              <input type="date" id="data-liberacao" required />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn-save" id="btn-salvar">Liberar veículo</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="../../compartilhado/formatos.js"></script>
+    <script src="./modalLiberarManutencao.js"></script>
+  </body>
+</html>

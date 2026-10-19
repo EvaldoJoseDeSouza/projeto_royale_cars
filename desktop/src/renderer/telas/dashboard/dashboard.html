@@ -22,6 +22,9 @@
         <a href="#" class="menu-item" data-target="view-frota">
           <i class="ri-car-line"></i> Frota de Veículos
         </a>
+        <a href="#" class="menu-item" data-target="view-manutencao">
+          <i class="ri-tools-line"></i> Manutenção
+        </a>
         <a href="#" class="menu-item" data-target="view-clientes">
           <i class="ri-team-line"></i> Clientes
         </a>
@@ -296,6 +299,27 @@
             <tbody id="tabela-locacoes-historico-body"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- MANUTENÇÃO: as mesmas abas da web e do celular -->
+      <div id="view-manutencao" class="content-view">
+        <div class="view-header-row">
+          <div class="abas-manutencao">
+            <button type="button" class="aba-manutencao ativa" data-aba="oficina">
+              <i class="ri-tools-line"></i> Na oficina <span id="contagem-oficina"></span>
+            </button>
+            <button type="button" class="aba-manutencao" data-aba="concluidas">
+              <i class="ri-history-line"></i> Concluídas
+            </button>
+          </div>
+
+          <button class="btn-primary-blue" id="btn-abrir-manutencao"
+            style="display: flex; align-items: center; gap: 8px">
+            <i class="ri-add-line" style="font-size: 1.1rem"></i> Enviar para oficina
+          </button>
+        </div>
+        <p id="resumo-manutencao" class="resumo-manutencao"></p>
+        <div class="vehicles-grid" id="container-manutencao"></div>
       </div>
 
       <!-- FINANCEIRO -->

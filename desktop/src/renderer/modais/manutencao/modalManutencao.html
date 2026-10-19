@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enviar para a oficina</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="../../estilos/modal.css" />
+    <style>
+      /* Estilos só desta janela */
+      .linha-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 6px 0 10px;
+        cursor: pointer;
+      }
+      .secao-titulo {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748b;
+        margin: 6px 0 8px;
+      }
+      /* A vistoria: 4 itens, cada um com a sua resposta */
+      .vistoria {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 14px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+      .vistoria label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #475569;
+        display: block;
+        margin-bottom: 4px;
+      }
+      .vistoria select {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-scroll-wrapper">
+      <div class="modal-header">
+        <h3>Enviar para a oficina</h3>
+        <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+          <i class="ri-close-line" style="font-size: 1.2rem; display: block"></i>
+        </button>
+      </div>
+
+      <form id="form-manutencao" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+        <div class="modal-scroll-body">
+          <div class="form-group">
+            <label for="select-veiculo">Veículo *</label>
+            <select id="select-veiculo" required>
+              <option value="">Carregando...</option>
+            </select>
+            <p class="dica-campo">Só aparecem carros disponíveis. O carro alugado vai para a oficina na devolução.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="defeito">Defeito ou motivo *</label>
+            <textarea id="defeito" rows="2" maxlength="1000" required
+              placeholder="Ex.: revisão dos 30 mil km, barulho no freio..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="oficina">Oficina</label>
+            <input type="text" id="oficina" maxlength="150" placeholder="Opcional" />
+          </div>
+
+          <div class="row-inputs">
+            <div class="form-group">
+              <label for="data-entrada">Entrada na oficina *</label>
+              <input type="date" id="data-entrada" required />
+            </div>
+            <div class="form-group">
+              <label for="previsao">Previsão de liberação</label>
+              <input type="date" id="previsao" />
+            </div>
+          </div>
+
+          <!-- Vistoria: o antigo "laudo" do celular, agora igual nas 3 plataformas -->
+          <label class="linha-check">
+            <input type="checkbox" id="fazer-vistoria" />
+            Fazer a vistoria agora (motor, freios, pneus e óleo)
+          </label>
+
+          <div id="bloco-vistoria" style="display: none;">
+            <p class="secao-titulo">Como está cada item?</p>
+            <div class="vistoria" id="vistoria"></div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" id="btn-cancelar">Cancelar</button>
+          <button type="submit" class="btn-save" id="btn-salvar">Enviar para a oficina</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="../../compartilhado/formatos.js"></script>
+    <script src="./modalManutencao.js"></script>
+  </body>
+</html>
