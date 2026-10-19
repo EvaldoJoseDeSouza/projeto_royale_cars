@@ -165,6 +165,36 @@ String mascaraPlaca(String valorAtual) {
   return v;
 }
 
+/// Deixa placa ou chassi como o banco guarda: maiúsculas, sem hífen,
+/// ponto ou espaço. "abc-1234" → "ABC1234"
+String limparCodigo(String valor) => valor.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+/// Chassi (a mesma regra do banco): 17 letras/números, sem I, O e Q
+/// (para não confundir com 1 e 0), e não pode ser tudo igual.
+bool chassiValido(String valor) {
+  final chassi = limparCodigo(valor);
+  return RegExp(r'^[A-HJ-NPR-Z0-9]{17}$').hasMatch(chassi) && !RegExp(r'^(.)\1{16}$').hasMatch(chassi);
+}
+
+/// Lê o dinheiro digitado: "1.234,56", "350,00" ou "350.00" → número.
+/// Devolve null se não der para entender.
+double? lerDinheiro(String valor) {
+  var texto = valor.replaceAll(RegExp(r'[^\d,\.]'), ''); // tira "R$" e espaços
+  if (texto.contains(',')) {
+    // Jeito brasileiro: ponto separa milhar e vírgula separa centavos
+    texto = texto.replaceAll('.', '').replaceAll(',', '.');
+  }
+  final numero = double.tryParse(texto);
+  return numero == null ? null : (numero * 100).round() / 100;
+}
+
+/// Dinheiro no formato brasileiro: 1234.5 → "R$ 1.234,50"
+String moeda(double valor) {
+  final partes = valor.abs().toStringAsFixed(2).split('.');
+  final inteiro = partes[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => '.');
+  return '${valor < 0 ? '-' : ''}R\$ $inteiro,${partes[1]}';
+}
+
 /// Aceita placa no padrão antigo (LLL-NNNN) ou Mercosul (LLLNLNN).
 bool placaValida(String valor) {
   final v = valor.replaceAll('-', '').toUpperCase();

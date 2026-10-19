@@ -38,7 +38,7 @@ class _LocacaoPageState extends State<LocacaoPage> {
       int dias = _dataDevolucao.difference(_dataRetirada).inDays;
       if (dias <= 0) dias = 1;
       setState(() {
-        _valorTotalEstimado = dias * veiculo.diaria;
+        _valorTotalEstimado = dias * veiculo.valorDiaria;
         if (_kmSaidaController.text.isEmpty) {
           _kmSaidaController.text = '${veiculo.quilometragem}';
         }

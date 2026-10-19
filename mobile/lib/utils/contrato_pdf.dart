@@ -62,7 +62,7 @@ class ContratoPdf {
 
               _secao('DADOS DO VEÍCULO'),
               _linha('Veículo', '${veiculo.marca} ${veiculo.modelo}'),
-              _linha('Placa', veiculo.placa),
+              _linha('Placa', veiculo.placaFormatada),
               _linha('Quilometragem na retirada', '${locacao.kmSaida ?? veiculo.quilometragem} km'),
               pw.SizedBox(height: 16),
 

@@ -3,30 +3,38 @@ import '../dependencies.dart';
 import '../models/veiculo.dart';
 import '../theme/colors.dart';
 import '../utils/permissoes.dart';
+import '../utils/validadores.dart';
 import '../widgets/animated_golden_title.dart';
+import '../widgets/foto_veiculo.dart';
 import '../widgets/royale_footer.dart';
+import '../widgets/selo_status_veiculo.dart';
 import 'cadastro_veiculo_page.dart';
+import 'frota_arquivada_page.dart';
 
-class FrotaPage extends StatelessWidget {
+/// A frota ativa, com foto, status e busca por marca, modelo ou placa.
+/// Os botões aparecem conforme as permissões de quem está logado.
+class FrotaPage extends StatefulWidget {
   const FrotaPage({super.key});
 
-  Color _corStatus(String status) {
-    switch (status) {
-      case Veiculo.statusDisponivel:
-        return RoyaleColors.statusDisponivel;
-      case Veiculo.statusManutencao:
-        return RoyaleColors.statusManutencao;
-      default:
-        return RoyaleColors.statusAlugado;
-    }
+  @override
+  State<FrotaPage> createState() => _FrotaPageState();
+}
+
+class _FrotaPageState extends State<FrotaPage> {
+  String _busca = '';
+
+  void _avisar(String mensagem, Color cor) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: cor, content: Text(mensagem)));
   }
 
-  Future<void> _arquivar(BuildContext context, Veiculo veiculo) async {
+  Future<void> _arquivar(Veiculo veiculo) async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Arquivar veículo?'),
-        content: Text('O ${veiculo.marca} ${veiculo.modelo} (${veiculo.placa}) deixará de aparecer na frota ativa.'),
+        content: Text('O ${veiculo.nomeCompleto} (${veiculo.placaFormatada}) deixará de aparecer na frota. '
+            'O histórico de locações continua guardado.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Arquivar')),
@@ -36,17 +44,22 @@ class FrotaPage extends StatelessWidget {
     if (confirmar != true) return;
 
     try {
-      await frotaController.arquivarVeiculo(veiculo.id!);
+      final mensagem = await frotaController.arquivarVeiculo(veiculo.id!);
+      _avisar(mensagem, RoyaleColors.statusDisponivel);
     } catch (erro) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: RoyaleColors.statusAlugado,
-            content: Text(erro.toString().replaceFirst('Exception: ', '')),
-          ),
-        );
-      }
+      // Ex.: "Só é possível arquivar veículos disponíveis. Este está: Alugado."
+      _avisar(erro.toString().replaceFirst('Exception: ', ''), RoyaleColors.statusAlugado);
     }
+  }
+
+  /// A busca aceita marca, modelo ou placa (com ou sem hífen).
+  bool _combina(Veiculo veiculo) {
+    final termo = _busca.trim().toLowerCase();
+    if (termo.isEmpty) return true;
+
+    final codigo = limparCodigo(termo);
+    return veiculo.nomeCompleto.toLowerCase().contains(termo) ||
+        (codigo.isNotEmpty && veiculo.placa.contains(codigo));
   }
 
   @override
@@ -54,7 +67,7 @@ class FrotaPage extends StatelessWidget {
     return ListenableBuilder(
       listenable: frotaController,
       builder: (context, child) {
-        final listaVeiculos = frotaController.veiculos;
+        final listaVeiculos = frotaController.veiculos.where(_combina).toList();
 
         // O que esta pessoa pode fazer aqui (o resto fica escondido)
         final podeEditar = authController.pode(Permissao.veiculosGerenciar);
@@ -64,11 +77,12 @@ class FrotaPage extends StatelessWidget {
           appBar: AppBar(
             title: const AnimatedGoldenTitle("Frota", fontSize: 24),
             actions: [
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Text("${listaVeiculos.length} veículo(s)",
-                      style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13)),
+              IconButton(
+                tooltip: 'Veículos arquivados',
+                icon: const Icon(Icons.inventory_2_outlined),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const FrotaArquivadaPage()),
                 ),
               ),
             ],
@@ -84,77 +98,95 @@ class FrotaPage extends StatelessWidget {
                   ),
                   child: const Icon(Icons.add),
                 ),
-          body: listaVeiculos.isEmpty
-              ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.directions_car_filled_outlined, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text("Nenhum veículo na frota.", style: TextStyle(color: Colors.grey, fontSize: 16)),
-                    ],
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por marca, modelo ou placa...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixText: '${listaVeiculos.length} veículo(s)',
                   ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: listaVeiculos.length,
-                  itemBuilder: (context, index) {
-                    final veiculo = listaVeiculos[index];
-                    final cor = _corStatus(veiculo.status);
-
-                    return Card(
-                      elevation: 3,
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: cor, shape: BoxShape.circle),
-                          child: const Icon(Icons.directions_car, color: Colors.white),
-                        ),
-                        title: Text("${veiculo.marca} ${veiculo.modelo}",
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 4.0),
-                          child: Text(
-                            "Placa: ${veiculo.placa}\n"
-                            "Diária: R\$ ${veiculo.diaria.toStringAsFixed(2)}  •  ${veiculo.quilometragem} km",
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(color: cor, borderRadius: BorderRadius.circular(20)),
-                              child: Text(veiculo.status,
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ),
-                            if (podeEditar || podeArquivar)
-                              PopupMenuButton<String>(
-                                onSelected: (valor) {
-                                  if (valor == 'editar') {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => CadastroVeiculoPage(veiculoParaEditar: veiculo)),
-                                    );
-                                  } else if (valor == 'arquivar') {
-                                    _arquivar(context, veiculo);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  if (podeEditar) const PopupMenuItem(value: 'editar', child: Text('Editar')),
-                                  if (podeArquivar) const PopupMenuItem(value: 'arquivar', child: Text('Arquivar')),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                  onChanged: (v) => setState(() => _busca = v),
                 ),
+              ),
+              Expanded(
+                // Puxar a lista para baixo recarrega do banco
+                child: RefreshIndicator(
+                  onRefresh: frotaController.carregarVeiculos,
+                  child: listaVeiculos.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            const SizedBox(height: 80),
+                            const Icon(Icons.directions_car_filled_outlined, size: 64, color: Colors.grey),
+                            const SizedBox(height: 16),
+                            Center(
+                              child: Text(
+                                frotaController.isLoading ? 'Carregando...' : 'Nenhum veículo encontrado.',
+                                style: const TextStyle(color: Colors.grey, fontSize: 16),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: listaVeiculos.length,
+                          itemBuilder: (context, index) {
+                            final veiculo = listaVeiculos[index];
+
+                            return Card(
+                              elevation: 3,
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.all(12),
+                                leading: FotoVeiculo(veiculo: veiculo),
+                                title: Text('${veiculo.nomeCompleto} ${veiculo.ano}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 4.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Placa: ${veiculo.placaFormatada}  •  ${veiculo.quilometragem} km'),
+                                      Text('Diária: ${moeda(veiculo.valorDiaria)}'),
+                                      const SizedBox(height: 6),
+                                      SeloStatusVeiculo(status: veiculo.status),
+                                    ],
+                                  ),
+                                ),
+                                trailing: !podeEditar && !podeArquivar
+                                    ? null
+                                    : PopupMenuButton<String>(
+                                        onSelected: (valor) {
+                                          if (valor == 'editar') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                  builder: (context) => CadastroVeiculoPage(veiculoParaEditar: veiculo)),
+                                            );
+                                          } else if (valor == 'arquivar') {
+                                            _arquivar(veiculo);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          if (podeEditar) const PopupMenuItem(value: 'editar', child: Text('Editar')),
+                                          // Só carro Disponível pode ser arquivado (regra do banco)
+                                          if (podeArquivar && veiculo.isDisponivel)
+                                            const PopupMenuItem(value: 'arquivar', child: Text('Arquivar')),
+                                        ],
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ],
+          ),
           bottomNavigationBar: const RoyaleFooter(),
         );
       },

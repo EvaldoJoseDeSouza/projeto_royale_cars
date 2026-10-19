@@ -171,50 +171,104 @@ class SupabaseService {
       senha.length >= 8 && RegExp(r'[A-Za-z]').hasMatch(senha) && RegExp(r'\d').hasMatch(senha);
 
   // ---------------------------------------------------------------------
-  // FROTA (veículos)
+  // FROTA (veículos) — as mesmas regras da web e do desktop:
+  //  - O status NÃO é escolhido no formulário: muda sozinho com os
+  //    aluguéis e as manutenções (o banco recusa mudança à mão).
+  //  - O banco confere placa, chassi, duplicados e só deixa arquivar
+  //    carro Disponível.
   // ---------------------------------------------------------------------
 
-  Future<List<Veiculo>> buscarFrota() async {
+  /// Frases para cada regra do banco (nomes em banco/01 e banco/02)
+  static const _mensagensVeiculos = {
+    'veiculos_marca_check': 'Informe a marca.',
+    'veiculos_modelo_check': 'Informe o modelo.',
+    'veiculos_ano_check': 'Ano inválido.',
+    'veiculos_placa_check': 'Placa inválida. Use o padrão antigo (ABC-1234) ou Mercosul (ABC1D23).',
+    'veiculos_chassi_check': 'Chassi inválido. São 17 letras/números, sem as letras I, O e Q.',
+    'veiculos_valor_diaria_check': 'Informe um valor de diária maior que zero.',
+    'veiculos_quilometragem_check': 'A quilometragem não pode ser negativa.',
+  };
+
+  static const _duplicadosVeiculos = {
+    'veiculos_placa_key': ('placa', 'Esta placa'),
+    'veiculos_chassi_key': ('chassi', 'Este chassi'),
+  };
+
+  Future<List<Veiculo>> buscarFrota({bool arquivados = false}) async {
     final dados = await _db
         .from('veiculos')
-        .select()
-        .eq('ativo', true)
-        .order('id');
+        .select(Veiculo.colunas)
+        .eq('arquivado', arquivados)
+        .order('marca')
+        .order('modelo');
     return dados.map((m) => Veiculo.fromMap(m)).toList();
   }
 
-  Future<List<Veiculo>> buscarFrotaArquivada() async {
-    final dados = await _db
-        .from('veiculos')
-        .select()
-        .eq('ativo', false)
-        .order('id');
-    return dados.map((m) => Veiculo.fromMap(m)).toList();
+  /// Endereço da foto do veículo. O bucket "veiculos" é público, então
+  /// basta montar o link (igual à web e ao desktop). Sem foto → null.
+  String? urlFoto(String? caminho) {
+    if (caminho == null || caminho.isEmpty) return null;
+    return _db.storage.from('veiculos').getPublicUrl(caminho);
   }
 
+  /// Cadastra (sem id) ou edita (com id).
   Future<void> salvarVeiculo(Veiculo veiculo) async {
-    if (veiculo.id != null) {
-      await _db.from('veiculos').update(veiculo.toMap()).eq('id', veiculo.id as Object);
-    } else {
-      await _db.from('veiculos').insert(veiculo.toMap());
+    final dados = veiculo.toMap();
+
+    try {
+      if (veiculo.id != null) {
+        await _db.from('veiculos').update(dados).eq('id', veiculo.id!);
+      } else {
+        await _db.from('veiculos').insert(dados);
+      }
+    } on PostgrestException catch (erro) {
+      debugPrint('[FROTA] Banco recusou: ${erro.code} ${erro.message}');
+      final duplicado = _duplicadosVeiculos[nomeDaRegra(erro)];
+
+      if (duplicado != null) {
+        throw Exception(await _veiculoDuplicado(duplicado.$1, duplicado.$2, dados[duplicado.$1], veiculo.id));
+      }
+      throw Exception(traduzirErroBanco(erro, _mensagensVeiculos));
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro));
     }
   }
 
-  Future<void> arquivarVeiculo(int idVeiculo) async {
-    final ativas = await _db
-        .from('locacoes')
-        .select('id')
-        .eq('id_veiculo', idVeiculo)
-        .eq('status', Locacao.statusAtivo);
-    if (ativas.isNotEmpty) {
-      throw Exception(
-          'Este veículo está com uma locação ativa. Finalize a locação antes de arquivá-lo.');
+  /// Placa ou chassi repetido: diz de qual carro é.
+  Future<String> _veiculoDuplicado(String coluna, String rotulo, Object? valor, int? idAtual) async {
+    try {
+      final dono = await _db
+          .from('veiculos')
+          .select('marca, modelo, arquivado')
+          .eq(coluna, valor ?? '')
+          .neq('id', idAtual ?? 0)
+          .maybeSingle();
+
+      if (dono == null) return '$rotulo já está cadastrado.';
+      final carro = '${dono['marca']} ${dono['modelo']}';
+      if (dono['arquivado'] == true) {
+        return '$rotulo pertence ao $carro, que está arquivado. Reative esse veículo em vez de cadastrar de novo.';
+      }
+      return '$rotulo já pertence ao $carro.';
+    } catch (_) {
+      return '$rotulo já está cadastrado.';
     }
-    await _db.from('veiculos').update({'ativo': false}).eq('id', idVeiculo);
   }
 
-  Future<void> reativarVeiculo(int idVeiculo) async {
-    await _db.from('veiculos').update({'ativo': true}).eq('id', idVeiculo);
+  /// Arquiva ou reativa. O banco só deixa arquivar carro Disponível
+  /// (não alugado nem na oficina) e, ao reativar, ele volta Disponível.
+  Future<Veiculo> mudarArquivadoVeiculo(int idVeiculo, bool arquivar) async {
+    try {
+      final dados = await _db
+          .from('veiculos')
+          .update({'arquivado': arquivar})
+          .eq('id', idVeiculo)
+          .select(Veiculo.colunas)
+          .single();
+      return Veiculo.fromMap(dados);
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro, _mensagensVeiculos));
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -394,7 +448,7 @@ class SupabaseService {
     return dados.map((m) => LaudoManutencao.fromMap(m)).toList();
   }
 
-  /// Salva o laudo e marca o veículo como "Em Manutenção" — assim o
+  /// Salva o laudo e marca o veículo como "Em manutenção" — assim o
   /// status do veículo fica consistente com o mesmo campo que o
   /// desktop usa (veiculos.status).
   Future<void> salvarLaudo(LaudoManutencao laudo) async {

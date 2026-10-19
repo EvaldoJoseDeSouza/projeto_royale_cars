@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/veiculo.dart';
 import '../services/supabase_service.dart';
 
+/// Guarda as listas da frota (ativa e arquivada) e avisa as telas
+/// quando elas mudam.
 class FrotaController extends ChangeNotifier {
   List<Veiculo> _veiculos = [];
   List<Veiculo> _veiculosArquivados = [];
@@ -9,8 +11,7 @@ class FrotaController extends ChangeNotifier {
 
   List<Veiculo> get veiculos => List.unmodifiable(_veiculos);
   List<Veiculo> get veiculosArquivados => List.unmodifiable(_veiculosArquivados);
-  List<Veiculo> get veiculosDisponiveis =>
-      _veiculos.where((v) => v.status == Veiculo.statusDisponivel).toList();
+  List<Veiculo> get veiculosDisponiveis => _veiculos.where((v) => v.isDisponivel).toList();
 
   Future<void> carregarVeiculos() async {
     isLoading = true;
@@ -24,27 +25,32 @@ class FrotaController extends ChangeNotifier {
   }
 
   Future<void> carregarVeiculosArquivados() async {
-    _veiculosArquivados = await SupabaseService.instance.buscarFrotaArquivada();
+    _veiculosArquivados = await SupabaseService.instance.buscarFrota(arquivados: true);
     notifyListeners();
   }
 
-  Future<void> salvarVeiculo(Veiculo veiculo) async {
+  /// Salva e devolve a frase para mostrar na tela.
+  Future<String> salvarVeiculo(Veiculo veiculo) async {
     await SupabaseService.instance.salvarVeiculo(veiculo);
     await carregarVeiculos();
+    return veiculo.id != null
+        ? 'O ${veiculo.nomeCompleto} foi atualizado.'
+        : 'O ${veiculo.nomeCompleto} entrou na frota como Disponível.';
   }
 
-  Future<void> arquivarVeiculo(int idVeiculo) async {
-    await SupabaseService.instance.arquivarVeiculo(idVeiculo);
+  Future<String> arquivarVeiculo(int idVeiculo) async {
+    final veiculo = await SupabaseService.instance.mudarArquivadoVeiculo(idVeiculo, true);
     await carregarVeiculos();
+    return 'O ${veiculo.nomeCompleto} saiu da frota. O histórico de locações continua guardado.';
   }
 
-  Future<void> reativarVeiculo(int idVeiculo) async {
-    await SupabaseService.instance.reativarVeiculo(idVeiculo);
-    await carregarVeiculosArquivados();
-    await carregarVeiculos();
+  Future<String> reativarVeiculo(int idVeiculo) async {
+    final veiculo = await SupabaseService.instance.mudarArquivadoVeiculo(idVeiculo, false);
+    await Future.wait([carregarVeiculosArquivados(), carregarVeiculos()]);
+    return 'O ${veiculo.nomeCompleto} voltou para a frota como Disponível.';
   }
 
-  /// Recarrega a frota silenciosamente (usado depois de registrar uma
-  /// locação/devolução/manutenção, pra refletir a mudança de status).
+  /// Recarrega a frota (usado depois de uma locação, devolução ou
+  /// manutenção, para mostrar o status novo).
   Future<void> recarregar() => carregarVeiculos();
 }

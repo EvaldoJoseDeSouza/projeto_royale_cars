@@ -105,7 +105,7 @@ class _RelatorioPageState extends State<RelatorioPage> {
           child: ListTile(
             leading: CircleAvatar(backgroundColor: cor, child: const Icon(Icons.directions_car, color: Colors.white)),
             title: Text('${v.marca} ${v.modelo}', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Placa: ${v.placa}  •  R\$ ${v.diaria.toStringAsFixed(2)}/dia  •  ${v.quilometragem} km'),
+            subtitle: Text('Placa: ${v.placaFormatada}  •  ${moeda(v.valorDiaria)}/dia  •  ${v.quilometragem} km'),
             trailing: Chip(label: Text(v.status), backgroundColor: cor.withValues(alpha: 0.15)),
           ),
         );
