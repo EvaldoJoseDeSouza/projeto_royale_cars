@@ -1,12 +1,12 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
 import '../theme/colors.dart';
 
-/// Tela de assinatura digital do cliente — usada na confirmação do
-/// contrato de locação. Devolve a assinatura como PNG em base64
-/// (mesmo formato salvo na coluna `assinatura_base64` da locação).
+/// Tela de assinatura digital do cliente, usada na confirmação do
+/// contrato de locação. Devolve a assinatura como imagem PNG (os bytes),
+/// que depois vai para o bucket privado "contratos" do Supabase.
+/// A web e o desktop mostram essa mesma imagem nos detalhes do aluguel.
 ///
 /// 🌟 Esta é a funcionalidade de "assinatura de contratos" apontada
 /// como faltante na avaliação da banca.
@@ -46,8 +46,7 @@ class _TelaAssinaturaDigitalState extends State<TelaAssinaturaDigital> {
     final Uint8List? bytesPng = await _controlador.toPngBytes();
     if (bytesPng == null) return;
 
-    final base64Assinatura = base64Encode(bytesPng);
-    if (mounted) Navigator.pop(context, base64Assinatura);
+    if (mounted) Navigator.pop(context, bytesPng);
   }
 
   @override

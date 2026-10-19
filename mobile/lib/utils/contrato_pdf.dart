@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -20,16 +19,13 @@ class ContratoPdf {
     required Locacao locacao,
     required Cliente cliente,
     required Veiculo veiculo,
+    Uint8List? assinaturaPng, // a imagem da assinatura (vem do bucket "contratos")
   }) async {
     final documento = pw.Document();
     final formatoData = DateFormat('dd/MM/yyyy');
     final formatoMoeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
-    pw.MemoryImage? imagemAssinatura;
-    if (locacao.assinaturaBase64 != null && locacao.assinaturaBase64!.isNotEmpty) {
-      final Uint8List bytes = base64Decode(locacao.assinaturaBase64!);
-      imagemAssinatura = pw.MemoryImage(bytes);
-    }
+    final imagemAssinatura = assinaturaPng == null ? null : pw.MemoryImage(assinaturaPng);
 
     documento.addPage(
       pw.Page(
@@ -67,8 +63,8 @@ class ContratoPdf {
               pw.SizedBox(height: 16),
 
               _secao('CONDIÇÕES DA LOCAÇÃO'),
-              _linha('Data de retirada', formatoData.format(locacao.dataInicio)),
-              _linha('Data de devolução prevista', formatoData.format(locacao.dataFim)),
+              _linha('Data de retirada', formatoData.format(locacao.dataRetirada)),
+              _linha('Data de devolução prevista', formatoData.format(locacao.dataPrevista)),
               _linha('Valor total', formatoMoeda.format(locacao.valorTotal)),
               pw.SizedBox(height: 24),
 

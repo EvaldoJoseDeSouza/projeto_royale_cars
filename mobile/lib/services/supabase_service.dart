@@ -6,6 +6,7 @@ import '../models/laudo_manutencao.dart';
 import '../models/locacao.dart';
 import '../models/usuario.dart';
 import '../models/veiculo.dart';
+import '../utils/validadores.dart';
 import 'erros_banco.dart';
 
 /// Camada única de acesso ao banco: fala com o MESMO projeto Supabase
@@ -368,72 +369,92 @@ class SupabaseService {
   }
 
   // ---------------------------------------------------------------------
-  // LOCAÇÕES
+  // LOCAÇÕES — o app não grava direto na tabela: chama as funções do
+  // banco, as MESMAS da web e do desktop. Cada função faz tudo de uma
+  // vez (tudo ou nada) e duas pessoas não conseguem alugar o mesmo carro.
   // ---------------------------------------------------------------------
-
-  static const _selectComJoin =
-      'id, id_cliente, id_veiculo, data_inicio, data_fim, valor_total, status, km_saida, km_retorno, assinatura_base64, clientes(nome), veiculos(modelo, placa)';
 
   Future<List<Locacao>> buscarLocacoesAtivas() async {
     final dados = await _db
-        .from('locacoes')
-        .select(_selectComJoin)
-        .eq('status', Locacao.statusAtivo)
-        .order('id', ascending: false);
+        .from('vw_locacoes')
+        .select(Locacao.colunas)
+        .eq('status', Locacao.statusEmAndamento)
+        .order('data_prevista');
     return dados.map((m) => Locacao.fromMap(m)).toList();
   }
 
   Future<List<Locacao>> buscarLocacoesHistorico() async {
     final dados = await _db
-        .from('locacoes')
-        .select(_selectComJoin)
-        .eq('status', Locacao.statusConcluido)
-        .order('data_fim', ascending: false);
+        .from('vw_locacoes')
+        .select(Locacao.colunas)
+        .eq('status', Locacao.statusFinalizada)
+        .order('data_devolucao', ascending: false)
+        .limit(100);
     return dados.map((m) => Locacao.fromMap(m)).toList();
   }
 
-  /// Registra a locação, confirma que o veículo ainda está disponível
-  /// (evita corrida entre dois usuários alugando o mesmo carro) e marca
-  /// o veículo como Alugado — igual ao desktop.
-  Future<void> salvarLocacao(Locacao locacao) async {
-    final veiculoAtual = await _db
-        .from('veiculos')
-        .select('status')
-        .eq('id', locacao.idVeiculo)
-        .single();
+  /// Envia a assinatura (PNG) para o bucket privado "contratos" e
+  /// devolve o caminho do arquivo, que vai junto para registrar_aluguel.
+  /// Ex.: "2026/10/1729340000000-cliente-12.png"
+  Future<String> enviarAssinatura(Uint8List png, int clienteId) async {
+    final agora = DateTime.now();
+    final mes = agora.month.toString().padLeft(2, '0');
+    final caminho = '${agora.year}/$mes/${agora.millisecondsSinceEpoch}-cliente-$clienteId.png';
 
-    if (veiculoAtual['status'] != Veiculo.statusDisponivel) {
-      throw Exception(
-          'Este veículo não está mais disponível (status atual: ${veiculoAtual['status']}). Atualize a lista e escolha outro.');
+    try {
+      await _db.storage.from('contratos').uploadBinary(
+            caminho,
+            png,
+            fileOptions: const FileOptions(contentType: 'image/png'),
+          );
+      return caminho;
+    } catch (erro) {
+      debugPrint('[ASSINATURA] Falha ao enviar: $erro');
+      throw Exception('Não foi possível guardar a assinatura. Verifique a internet e tente de novo.');
     }
-
-    await _db.from('locacoes').insert(locacao.toMap());
-    await _db.from('veiculos').update({'status': Veiculo.statusAlugado}).eq('id', locacao.idVeiculo);
   }
 
-  /// Finaliza a locação (devolução): marca como Concluído, libera o
-  /// veículo e — se informado — atualiza a quilometragem do veículo e
-  /// guarda a assinatura digital do cliente no contrato.
+  /// Registra a retirada pela função do banco. Ela confere tudo (cliente
+  /// ativo, CNH válida até o fim do aluguel, carro disponível, datas e
+  /// quilometragem), calcula o valor com a diária do carro, marca o carro
+  /// como Alugado e anota no histórico. Devolve o número do aluguel.
+  Future<int> registrarAluguel({
+    required int clienteId,
+    required int veiculoId,
+    required DateTime dataRetirada,
+    required DateTime dataPrevista,
+    required int kmSaida,
+    String? observacoes,
+    String? assinaturaPath,
+  }) async {
+    try {
+      final id = await _db.rpc('registrar_aluguel', params: {
+        'p_cliente_id': clienteId,
+        'p_veiculo_id': veiculoId,
+        'p_data_retirada': dataParaBanco(dataRetirada),
+        'p_data_prevista': dataParaBanco(dataPrevista),
+        'p_km_saida': kmSaida,
+        'p_observacoes': observacoes,
+        'p_assinatura_path': assinaturaPath,
+      });
+      return (id as num).toInt();
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro, {
+        // Duas pessoas tentaram alugar o mesmo carro no mesmo instante
+        'uk_locacao_ativa_por_veiculo': 'Este carro acabou de ser alugado por outra pessoa. Escolha outro.',
+      }));
+    }
+  }
+
+  /// A devolução pelo celular chega no pacote 4.6 (pela função
+  /// registrar_devolucao). Até lá, a devolução é feita na web ou no desktop.
   Future<void> finalizarLocacao({
     required int idLocacao,
     required int idVeiculo,
     int? kmRetorno,
-    String? assinaturaBase64,
     double? novoValorTotal,
   }) async {
-    final atualizacaoLocacao = <String, dynamic>{'status': Locacao.statusConcluido};
-    if (kmRetorno != null) atualizacaoLocacao['km_retorno'] = kmRetorno;
-    if (novoValorTotal != null) atualizacaoLocacao['valor_total'] = novoValorTotal;
-    if (assinaturaBase64 != null) {
-      atualizacaoLocacao['assinatura_base64'] = assinaturaBase64;
-      atualizacaoLocacao['contrato_gerado_em'] = DateTime.now().toIso8601String();
-    }
-
-    await _db.from('locacoes').update(atualizacaoLocacao).eq('id', idLocacao);
-
-    final atualizacaoVeiculo = <String, dynamic>{'status': Veiculo.statusDisponivel};
-    if (kmRetorno != null) atualizacaoVeiculo['quilometragem'] = kmRetorno;
-    await _db.from('veiculos').update(atualizacaoVeiculo).eq('id', idVeiculo);
+    throw Exception('A devolução pelo celular chega na próxima versão. Por enquanto, registre a devolução na web ou no desktop.');
   }
 
   // ---------------------------------------------------------------------
@@ -473,8 +494,8 @@ class SupabaseService {
   Future<Map<String, dynamic>> buscarDadosFinanceiros() async {
     final todasLocacoes = await _db
         .from('locacoes')
-        .select('id, data_fim, valor_total, status, clientes(nome), veiculos(modelo, placa)')
-        .order('data_fim', ascending: false);
+        .select('id, data_devolucao, valor_total, status, clientes(nome), veiculos(modelo, placa)')
+        .order('data_devolucao', ascending: false);
 
     final agora = DateTime.now();
     final mesAtual = agora.month;
@@ -492,10 +513,10 @@ class SupabaseService {
           ? (loc['valor_total'] as num).toDouble()
           : double.tryParse('${loc['valor_total']}') ?? 0;
 
-      if (loc['status'] == Locacao.statusConcluido) {
+      if (loc['status'] == Locacao.statusFinalizada) {
         totalConcluidos++;
         fluxoCaixa.add(loc);
-        final dataFim = DateTime.tryParse('${loc['data_fim']}');
+        final dataFim = DateTime.tryParse('${loc['data_devolucao']}');
         if (dataFim != null) {
           if (dataFim.month == mesAtual && dataFim.year == anoAtual) {
             faturamentoMesAtual += valor;
@@ -503,7 +524,7 @@ class SupabaseService {
             faturamentoMesAnterior += valor;
           }
         }
-      } else if (loc['status'] == Locacao.statusAtivo) {
+      } else if (loc['status'] == Locacao.statusEmAndamento) {
         recebimentoProjetado += valor;
       }
     }

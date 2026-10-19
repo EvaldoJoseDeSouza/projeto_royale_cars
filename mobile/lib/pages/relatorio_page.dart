@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../dependencies.dart';
+import '../models/locacao.dart';
 import '../models/veiculo.dart';
 import '../theme/colors.dart';
 import '../utils/validadores.dart';
@@ -113,12 +114,14 @@ class _RelatorioPageState extends State<RelatorioPage> {
     );
   }
 
-  Widget _relatorioLocacoes(List locacoes, String mensagemVazia) {
+  // List<Locacao> (e não só 'List'): com o tipo escrito, o Dart avisa na hora
+  // se algum campo mudar de nome, em vez de o app quebrar com a tela aberta.
+  Widget _relatorioLocacoes(List<Locacao> locacoes, String mensagemVazia) {
     if (locacoes.isEmpty) return _vazio(mensagemVazia);
 
     double total = 0;
     for (final l in locacoes) {
-      total += l.valorTotal as double;
+      total += l.valorTotal;
     }
 
     return Column(
@@ -129,22 +132,22 @@ class _RelatorioPageState extends State<RelatorioPage> {
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(color: RoyaleColors.azulMarinho, borderRadius: BorderRadius.circular(10)),
           child: Text(
-            '${locacoes.length} locação(ões)  •  Total: R\$ ${total.toStringAsFixed(2)}',
+            '${locacoes.length} locação(ões)  •  Total: ${moeda(total)}',
             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
         ...locacoes.map((l) {
-          final cliente = l.nomeCliente ?? 'Cliente #${l.idCliente}';
-          final veiculo = l.modeloVeiculo != null ? '${l.modeloVeiculo} (${l.placaVeiculo})' : 'Veículo #${l.idVeiculo}';
+          final cliente = l.nomeCliente;
+          final veiculo = '${l.nomeVeiculo} (${l.placaFormatada})';
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
               title: Text('$cliente — $veiculo'),
               subtitle: Text(
-                '${_formatoData.format(l.dataInicio)} até ${_formatoData.format(l.dataFim)}'
+                '${_formatoData.format(l.dataRetirada)} até ${_formatoData.format(l.dataDevolucao ?? l.dataPrevista)}'
                 '${l.kmRodados != null ? '  •  ${l.kmRodados} km rodados' : ''}',
               ),
-              trailing: Text('R\$ ${(l.valorTotal as double).toStringAsFixed(2)}',
+              trailing: Text(moeda(l.valorTotal),
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           );

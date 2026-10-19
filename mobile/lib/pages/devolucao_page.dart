@@ -40,7 +40,7 @@ class _DevolucaoPageState extends State<DevolucaoPage> {
   void _selecionarVeiculo(int? idVeiculo) {
     if (idVeiculo == null) return;
     final locacao = locacaoController.locacoesAtivas
-        .where((l) => l.idVeiculo == idVeiculo)
+        .where((l) => l.veiculoId == idVeiculo)
         .cast<Locacao?>()
         .firstWhere((_) => true, orElse: () => null);
 
@@ -61,7 +61,7 @@ class _DevolucaoPageState extends State<DevolucaoPage> {
     try {
       final kmRetorno = int.tryParse(_kmRetornoController.text);
       await locacaoController.finalizarLocacao(
-        idLocacao: _locacaoAtiva!.id!,
+        idLocacao: _locacaoAtiva!.id,
         idVeiculo: _veiculoSelecionadoId!,
         kmRetorno: kmRetorno,
         novoValorTotal: _valorTotalFechamento,
@@ -94,7 +94,7 @@ class _DevolucaoPageState extends State<DevolucaoPage> {
   Future<void> _gerarContrato() async {
     if (_locacaoAtiva == null || _veiculoSelecionadoId == null) return;
     try {
-      final cliente = clienteController.clientes.firstWhere((c) => c.id == _locacaoAtiva!.idCliente);
+      final cliente = clienteController.clientes.firstWhere((c) => c.id == _locacaoAtiva!.clienteId);
       final veiculo = frotaController.veiculos.firstWhere((v) => v.id == _veiculoSelecionadoId);
       await ContratoPdf.gerarEAbrir(locacao: _locacaoAtiva!, cliente: cliente, veiculo: veiculo);
     } catch (_) {
