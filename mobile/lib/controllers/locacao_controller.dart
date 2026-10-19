@@ -59,18 +59,36 @@ class LocacaoController extends ChangeNotifier {
     return _ativas.firstWhere((l) => l.id == id);
   }
 
-  /// A devolução pelo celular chega no pacote 4.6.
-  Future<void> finalizarLocacao({
-    required int idLocacao,
-    required int idVeiculo,
+  /// Lista de uma aba da tela de Locações ("Em andamento", "Atrasados"...).
+  Future<List<Locacao>> listar(String aba) => SupabaseService.instance.buscarLocacoes(aba);
+
+  /// Devolução pela função do banco. Devolve o resumo que o banco calculou.
+  Future<Map<String, dynamic>> devolver({
+    required int locacaoId,
+    required DateTime dataDevolucao,
     int? kmRetorno,
-    double? novoValorTotal,
+    double taxasExtras = 0,
+    String? taxasMotivo,
+    String? observacoes,
+    String? defeito,
+    String? oficina,
   }) async {
-    await SupabaseService.instance.finalizarLocacao(
-      idLocacao: idLocacao,
-      idVeiculo: idVeiculo,
+    final resumo = await SupabaseService.instance.registrarDevolucao(
+      locacaoId: locacaoId,
+      dataDevolucao: dataDevolucao,
       kmRetorno: kmRetorno,
-      novoValorTotal: novoValorTotal,
+      taxasExtras: taxasExtras,
+      taxasMotivo: taxasMotivo,
+      observacoes: observacoes,
+      defeito: defeito,
+      oficina: oficina,
     );
+    await carregarAtivas();
+    return resumo;
+  }
+
+  Future<void> cancelar(int locacaoId, String motivo) async {
+    await SupabaseService.instance.cancelarAluguel(locacaoId, motivo);
+    await carregarAtivas();
   }
 }

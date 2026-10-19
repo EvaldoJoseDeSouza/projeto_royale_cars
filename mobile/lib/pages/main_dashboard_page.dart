@@ -6,10 +6,10 @@ import '../widgets/animated_golden_title.dart';
 import '../widgets/royale_footer.dart';
 import 'cadastro_veiculo_page.dart';
 import 'clientes_page.dart';
-import 'devolucao_page.dart';
 import 'financas_page.dart';
 import 'frota_page.dart';
 import 'locacao_page.dart';
+import 'locacoes_page.dart';
 import 'login_page.dart';
 import 'manutencao_page.dart';
 import 'menu_relatorios_page.dart';
@@ -73,11 +73,12 @@ class _MainDashboardPageState extends State<MainDashboardPage> {
         "page": const LocacaoPage(),
       },
       {
-        "title": "Devoluções",
-        "permissoes": [Permissao.locacoesGerenciar],
-        "icon": Icons.assignment_return_rounded,
+        // A lista com abas: daqui saem a devolução, o cancelamento e o contrato
+        "title": "Locações",
+        "permissoes": [Permissao.locacoesVer],
+        "icon": Icons.assignment_rounded,
         "color": Colors.redAccent,
-        "page": const DevolucaoPage(),
+        "page": const LocacoesPage(),
       },
       {
         "title": "Relatórios",

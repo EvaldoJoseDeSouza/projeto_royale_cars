@@ -1,31 +1,28 @@
 import 'dart:typed_data';
-import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-import '../models/cliente.dart';
 import '../models/locacao.dart';
-import '../models/veiculo.dart';
+import 'validadores.dart';
 
-/// Gera o PDF do contrato de locação — com os dados do cliente, do
-/// veículo, do período, do valor e (se já tiver sido capturada) a
-/// assinatura digital do cliente.
+/// Gera o PDF do contrato de locação, com os dados do cliente, do
+/// veículo, do período, dos valores e a assinatura do cliente.
+///
+/// Tudo vem do próprio aluguel (a visão vw_locacoes já traz o cliente e
+/// o carro). Assim o contrato pode ser gerado a qualquer momento, até
+/// para um cliente ou carro que depois foi arquivado.
 ///
 /// 🌟 Esta é a peça central da funcionalidade de "assinatura de
 /// contratos" apontada como faltante na avaliação da banca.
 class ContratoPdf {
   static Future<void> gerarEAbrir({
     required Locacao locacao,
-    required Cliente cliente,
-    required Veiculo veiculo,
     Uint8List? assinaturaPng, // a imagem da assinatura (vem do bucket "contratos")
   }) async {
     final documento = pw.Document();
-    final formatoData = DateFormat('dd/MM/yyyy');
-    final formatoMoeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-
     final imagemAssinatura = assinaturaPng == null ? null : pw.MemoryImage(assinaturaPng);
+    final l = locacao;
 
     documento.addPage(
       pw.Page(
@@ -37,7 +34,7 @@ class ContratoPdf {
             children: [
               pw.Center(
                 child: pw.Text(
-                  'CONTRATO DE LOCAÇÃO DE VEÍCULO',
+                  'CONTRATO DE LOCAÇÃO DE VEÍCULO Nº ${l.id}',
                   style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
                 ),
               ),
@@ -48,31 +45,48 @@ class ContratoPdf {
               pw.SizedBox(height: 24),
 
               _secao('DADOS DO CLIENTE'),
-              _linha('Nome', cliente.nome),
-              _linha('CPF', cliente.cpfFormatado),
-              _linha('CNH', cliente.cnh),
-              _linha('Telefone', cliente.telefoneFormatado),
-              if (cliente.endereco != null && cliente.endereco!.isNotEmpty)
-                _linha('Endereço', cliente.endereco!),
+              _linha('Nome', l.nomeCliente),
+              _linha('CPF', mascaraCpf(l.cpfCliente)),
+              _linha('CNH', l.cnhCliente),
+              _linha('Telefone', mascaraTelefone(l.telefoneCliente)),
+              if (l.enderecoCliente != null && l.enderecoCliente!.isNotEmpty) _linha('Endereço', l.enderecoCliente!),
               pw.SizedBox(height: 16),
 
               _secao('DADOS DO VEÍCULO'),
-              _linha('Veículo', '${veiculo.marca} ${veiculo.modelo}'),
-              _linha('Placa', veiculo.placaFormatada),
-              _linha('Quilometragem na retirada', '${locacao.kmSaida ?? veiculo.quilometragem} km'),
+              _linha('Veículo', '${l.nomeVeiculo}${l.ano > 0 ? ' ${l.ano}' : ''}'),
+              _linha('Placa', l.placaFormatada),
+              // (No PDF, só caracteres comuns: a fonte padrão não tem o travessão "—")
+              _linha('Quilometragem na retirada', l.kmSaida == null ? '-' : '${l.kmSaida} km'),
               pw.SizedBox(height: 16),
 
               _secao('CONDIÇÕES DA LOCAÇÃO'),
-              _linha('Data de retirada', formatoData.format(locacao.dataRetirada)),
-              _linha('Data de devolução prevista', formatoData.format(locacao.dataPrevista)),
-              _linha('Valor total', formatoMoeda.format(locacao.valorTotal)),
+              _linha('Data de retirada', dataBr(l.dataRetirada)),
+              _linha('Devolução prevista', dataBr(l.dataPrevista)),
+              _linha('Diária combinada', moeda(l.valorDiaria)),
+              _linha('Valor previsto', '${moeda(l.valorPrevisto)} (${l.diasPrevistos} diária(s))'),
+
+              // Depois da devolução, o contrato mostra o fechamento
+              if (l.dataDevolucao != null) ...[
+                pw.SizedBox(height: 16),
+                _secao('FECHAMENTO'),
+                _linha('Data da devolução', dataBr(l.dataDevolucao!)),
+                if (l.kmRetorno != null) _linha('Quilometragem na devolução', '${l.kmRetorno} km (${l.kmRodados} km rodados)'),
+                if (l.diasAtraso > 0) _linha('Atraso', '${l.diasAtraso} dia(s): ${moeda(l.valorAtraso)}'),
+                if (l.taxasExtras > 0) _linha('Taxas extras', '${moeda(l.taxasExtras)} (${l.taxasMotivo ?? ''})'),
+                _linha('Valor total', moeda(l.valorTotal)),
+              ],
+              if (l.cancelada) ...[
+                pw.SizedBox(height: 16),
+                _secao('CONTRATO CANCELADO (sem cobrança)'),
+              ],
               pw.SizedBox(height: 24),
 
               pw.Text(
                 'O(A) locatário(a) acima identificado(a) declara estar de acordo com os termos '
                 'desta locação, comprometendo-se a devolver o veículo nas condições em que o '
                 'recebeu, na data prevista, e a ressarcir a locadora por quaisquer avarias '
-                'causadas durante o período de uso.',
+                'causadas durante o período de uso. Cada dia além da data prevista é cobrado '
+                'pela diária combinada.',
                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
                 textAlign: pw.TextAlign.justify,
               ),
@@ -85,19 +99,20 @@ class ContratoPdf {
               else
                 pw.Container(
                   height: 60,
-                  decoration: const pw.BoxDecoration(
-                    border: pw.Border(bottom: pw.BorderSide(width: 1)),
-                  ),
+                  decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(width: 1))),
                 ),
               pw.SizedBox(height: 4),
-              pw.Text(cliente.nome, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              pw.Text(l.nomeCliente, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
             ],
           );
         },
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (formato) => documento.save());
+    await Printing.layoutPdf(
+      name: 'contrato-${l.id}.pdf',
+      onLayout: (formato) => documento.save(),
+    );
   }
 
   static pw.Widget _secao(String titulo) {
@@ -116,8 +131,7 @@ class ContratoPdf {
       child: pw.Row(
         children: [
           pw.SizedBox(width: 160, child: pw.Text('$rotulo:', style: const pw.TextStyle(fontSize: 10.5))),
-          pw.Expanded(
-              child: pw.Text(valor, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold))),
+          pw.Expanded(child: pw.Text(valor, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold))),
         ],
       ),
     );

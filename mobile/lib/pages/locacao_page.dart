@@ -183,12 +183,7 @@ class _LocacaoPageState extends State<LocacaoPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => ContratoPdf.gerarEAbrir(
-              locacao: aluguel,
-              cliente: cliente,
-              veiculo: veiculo,
-              assinaturaPng: assinatura,
-            ),
+            onPressed: () => ContratoPdf.gerarEAbrir(locacao: aluguel, assinaturaPng: assinatura),
             child: const Text('Ver contrato (PDF)'),
           ),
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),

@@ -31,9 +31,16 @@ class Locacao {
 
   // Vêm "pendurados" pela visão (não são colunas da tabela locacoes)
   final String nomeCliente;
+  final String cpfCliente;
+  final String cnhCliente;
+  final String telefoneCliente;
+  final String? enderecoCliente;
   final String marca;
   final String modelo;
   final String placa;
+  final int ano;
+  final String? registradoPor; // quem fez a retirada
+  final String? encerradoPor; // quem fez a devolução ou o cancelamento
 
   // Os status, escritos EXATAMENTE como no banco (tipo status_locacao)
   static const statusEmAndamento = 'Em andamento';
@@ -44,7 +51,8 @@ class Locacao {
   static const colunas = 'id, cliente_id, veiculo_id, data_retirada, data_prevista, data_devolucao, '
       'valor_diaria, dias_previstos, valor_previsto, dias_atraso, valor_atraso, taxas_extras, taxas_motivo, '
       'valor_total, status, status_exibicao, observacoes, km_saida, km_retorno, assinatura_path, '
-      'cliente_nome, marca, modelo, placa';
+      'cliente_nome, cliente_cpf, cliente_cnh, cliente_telefone, cliente_endereco, '
+      'marca, modelo, placa, ano, registrado_por, encerrado_por';
 
   const Locacao({
     required this.id,
@@ -68,12 +76,20 @@ class Locacao {
     this.kmRetorno,
     this.assinaturaPath,
     required this.nomeCliente,
+    this.cpfCliente = '',
+    this.cnhCliente = '',
+    this.telefoneCliente = '',
+    this.enderecoCliente,
     required this.marca,
     required this.modelo,
     required this.placa,
+    this.ano = 0,
+    this.registradoPor,
+    this.encerradoPor,
   });
 
   bool get emAndamento => status == statusEmAndamento;
+  bool get cancelada => status == statusCancelada;
   bool get atrasada => statusExibicao == 'Atrasada';
   bool get temAssinatura => assinaturaPath != null && assinaturaPath!.isNotEmpty;
   String get nomeVeiculo => '$marca $modelo';
@@ -108,9 +124,16 @@ class Locacao {
       kmRetorno: _paraIntOuNulo(map['km_retorno']),
       assinaturaPath: map['assinatura_path'] as String?,
       nomeCliente: '${map['cliente_nome'] ?? ''}',
+      cpfCliente: '${map['cliente_cpf'] ?? ''}',
+      cnhCliente: '${map['cliente_cnh'] ?? ''}',
+      telefoneCliente: '${map['cliente_telefone'] ?? ''}',
+      enderecoCliente: map['cliente_endereco'] as String?,
       marca: '${map['marca'] ?? ''}',
       modelo: '${map['modelo'] ?? ''}',
       placa: '${map['placa'] ?? ''}',
+      ano: _paraIntOuNulo(map['ano']) ?? 0,
+      registradoPor: map['registrado_por'] as String?,
+      encerradoPor: map['encerrado_por'] as String?,
     );
   }
 }

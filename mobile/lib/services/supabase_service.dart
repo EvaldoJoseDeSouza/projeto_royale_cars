@@ -446,15 +446,91 @@ class SupabaseService {
     }
   }
 
-  /// A devolução pelo celular chega no pacote 4.6 (pela função
-  /// registrar_devolucao). Até lá, a devolução é feita na web ou no desktop.
-  Future<void> finalizarLocacao({
-    required int idLocacao,
-    required int idVeiculo,
+  /// As abas da lista de locações (as mesmas da web). "Em andamento" e
+  /// "Atrasados" usam o status_exibicao da visão, que já diz "Atrasada"
+  /// quando passou da data prevista.
+  static const abasLocacao = {
+    'Em andamento': ('status_exibicao', 'Em andamento'),
+    'Atrasados': ('status_exibicao', 'Atrasada'),
+    'Finalizados': ('status', 'Finalizada'),
+    'Cancelados': ('status', 'Cancelada'),
+  };
+
+  Future<List<Locacao>> buscarLocacoes(String aba) async {
+    final (coluna, valor) = abasLocacao[aba]!;
+    final emAberto = coluna == 'status_exibicao';
+
+    final dados = await _db
+        .from('vw_locacoes')
+        .select(Locacao.colunas)
+        .eq(coluna, valor)
+        // Abertos: o que vence primeiro em cima. Encerrados: o mais recente em cima.
+        .order(emAberto ? 'data_prevista' : 'id', ascending: emAberto)
+        .limit(200);
+    return dados.map((m) => Locacao.fromMap(m)).toList();
+  }
+
+  /// Um aluguel só (para atualizar a tela de detalhes).
+  Future<Locacao> buscarLocacao(int id) async {
+    final dados = await _db.from('vw_locacoes').select(Locacao.colunas).eq('id', id).single();
+    return Locacao.fromMap(dados);
+  }
+
+  /// Baixa a imagem da assinatura do bucket privado "contratos".
+  /// (Privado = só quem está logado e pode ver locações consegue baixar.)
+  Future<Uint8List?> baixarAssinatura(String? caminho) async {
+    if (caminho == null || caminho.isEmpty) return null;
+    try {
+      return await _db.storage.from('contratos').download(caminho);
+    } catch (erro) {
+      debugPrint('[ASSINATURA] Falha ao baixar: $erro');
+      return null; // sem a imagem, o contrato sai com a linha para assinar
+    }
+  }
+
+  /// Registra a devolução pela função do banco (a mesma da web e do
+  /// desktop). Ela fecha o aluguel, calcula dias, atraso e total, atualiza
+  /// a quilometragem e libera o carro, ou manda para a oficina se voltou
+  /// com defeito. Devolve o resumo calculado pelo banco, por exemplo:
+  /// {"dias": 3, "dias_atraso": 1, "valor_total": 1650.0, "status_veiculo": "Disponível", ...}
+  Future<Map<String, dynamic>> registrarDevolucao({
+    required int locacaoId,
+    required DateTime dataDevolucao,
     int? kmRetorno,
-    double? novoValorTotal,
+    double taxasExtras = 0,
+    String? taxasMotivo,
+    String? observacoes,
+    String? defeito,
+    String? oficina,
   }) async {
-    throw Exception('A devolução pelo celular chega na próxima versão. Por enquanto, registre a devolução na web ou no desktop.');
+    try {
+      final resumo = await _db.rpc('registrar_devolucao', params: {
+        'p_locacao_id': locacaoId,
+        'p_data_devolucao': dataParaBanco(dataDevolucao),
+        'p_km_retorno': kmRetorno,
+        'p_taxas_extras': taxasExtras,
+        'p_taxas_motivo': taxasMotivo,
+        'p_observacoes': observacoes,
+        'p_defeito': defeito,
+        'p_oficina': oficina,
+      });
+      return Map<String, dynamic>.from(resumo as Map);
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro, {
+        'km_retorno_valido': 'A quilometragem de retorno não pode ser menor que a de saída.',
+        'taxas_com_motivo': 'Informe o motivo das taxas extras (ex.: combustível, limpeza, avaria).',
+      }));
+    }
+  }
+
+  /// Cancela um aluguel em andamento, sem cobrar, e libera o carro.
+  /// Pede a permissão "locacoes_cancelar" (o banco confere).
+  Future<void> cancelarAluguel(int locacaoId, String motivo) async {
+    try {
+      await _db.rpc('cancelar_aluguel', params: {'p_locacao_id': locacaoId, 'p_motivo': motivo});
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro));
+    }
   }
 
   // ---------------------------------------------------------------------
