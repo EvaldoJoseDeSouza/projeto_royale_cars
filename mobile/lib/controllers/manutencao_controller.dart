@@ -1,31 +1,66 @@
 import 'package:flutter/material.dart';
-import '../models/laudo_manutencao.dart';
+import '../models/manutencao.dart';
 import '../services/supabase_service.dart';
 
+/// Guarda as manutenções (carros na oficina e o histórico) e avisa as
+/// telas quando elas mudam.
 class ManutencaoController extends ChangeNotifier {
-  List<LaudoManutencao> _laudos = [];
+  List<Manutencao> _naOficina = [];
+  List<Manutencao> _concluidas = [];
   bool isLoading = false;
 
-  List<LaudoManutencao> get laudos => List.unmodifiable(_laudos);
+  List<Manutencao> get naOficina => List.unmodifiable(_naOficina);
+  List<Manutencao> get concluidas => List.unmodifiable(_concluidas);
 
-  Future<void> carregarLaudos() async {
+  /// Carrega as duas listas de uma vez.
+  Future<void> carregar() async {
     isLoading = true;
     notifyListeners();
     try {
-      _laudos = await SupabaseService.instance.buscarLaudos();
+      final servico = SupabaseService.instance;
+      final listas = await Future.wait([
+        servico.buscarManutencoes(emAndamento: true),
+        servico.buscarManutencoes(emAndamento: false),
+      ]);
+      _naOficina = listas[0];
+      _concluidas = listas[1];
     } finally {
       isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> salvarLaudo(LaudoManutencao laudo) async {
-    await SupabaseService.instance.salvarLaudo(laudo);
-    await carregarLaudos();
+  Future<void> enviarParaOficina({
+    required int veiculoId,
+    required String defeito,
+    String? oficina,
+    required DateTime dataEntrada,
+    DateTime? previsao,
+    List<bool?> checklist = const [null, null, null, null],
+  }) async {
+    await SupabaseService.instance.abrirManutencao(
+      veiculoId: veiculoId,
+      defeito: defeito,
+      oficina: oficina,
+      dataEntrada: dataEntrada,
+      previsao: previsao,
+      checklist: checklist,
+    );
+    await carregar();
   }
 
-  Future<void> concluirManutencao(int idVeiculo) async {
-    await SupabaseService.instance.concluirManutencao(idVeiculo);
-    await carregarLaudos();
+  Future<void> liberar({
+    required int manutencaoId,
+    required DateTime dataLiberacao,
+    required String servico,
+    required double custo,
+  }) async {
+    await SupabaseService.instance.concluirManutencao(
+      manutencaoId: manutencaoId,
+      dataLiberacao: dataLiberacao,
+      servico: servico,
+      custo: custo,
+    );
+    await carregar();
   }
 }

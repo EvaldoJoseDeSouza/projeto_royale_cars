@@ -3,7 +3,6 @@ import '../dependencies.dart';
 import '../utils/permissoes.dart';
 import 'relatorio_page.dart';
 import 'manutencao_page.dart';
-import 'historico_manutencao_page.dart';
 import 'package:royale_cars_location/widgets/animated_golden_title.dart';
 import 'package:royale_cars_location/widgets/royale_footer.dart';
 
@@ -21,8 +20,7 @@ class MenuRelatoriosPage extends StatelessWidget {
       {"titulo": "Relatório de Locações", "tipo": "relatorio", "permissao": Permissao.relatorios},
       {"titulo": "Relatório de Devoluções", "tipo": "relatorio", "permissao": Permissao.relatorios},
       {"titulo": "Relatório de Desempenho", "tipo": "relatorio", "permissao": Permissao.relatorios},
-      // A manutenção também aparece aqui, para quem cuida da oficina
-      {"titulo": "Emitir Laudo Técnico", "tipo": "manutencao", "permissao": Permissao.manutencoes},
+      // O histórico de manutenções (com o checklist e o custo) também aparece aqui
       {"titulo": "Histórico de Manutenções", "tipo": "historico", "permissao": Permissao.manutencoes},
     ];
 
@@ -49,10 +47,7 @@ class MenuRelatoriosPage extends StatelessWidget {
             child: ListTile(
               // Define o ícone ideal dinamicamente com base no tipo do item
               leading: Icon(
-                tipo == "manutencao"
-                    ? Icons
-                          .build_rounded // Chave inglesa para preencher laudo
-                    : tipo == "historico"
+                tipo == "historico"
                     ? Icons
                           .history_edu_rounded // Prancheta/Histórico para ver salvos
                     : Icons.analytics, // Gráfico padrão para estatísticas
@@ -67,18 +62,12 @@ class MenuRelatoriosPage extends StatelessWidget {
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 // Navegação condicional segura baseada no tipo do item clicado
-                if (tipo == "manutencao") {
+                if (tipo == "historico") {
+                  // Abre a Manutenção direto na aba "Concluídas"
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ManutencaoPage(),
-                    ),
-                  );
-                } else if (tipo == "historico") {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HistoricoManutencaoPage(),
+                      builder: (context) => const ManutencaoPage(abaInicial: 1),
                     ),
                   );
                 } else {

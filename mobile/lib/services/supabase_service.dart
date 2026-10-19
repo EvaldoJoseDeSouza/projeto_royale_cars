@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/cliente.dart';
-import '../models/laudo_manutencao.dart';
 import '../models/locacao.dart';
+import '../models/manutencao.dart';
 import '../models/usuario.dart';
 import '../models/veiculo.dart';
 import '../utils/validadores.dart';
@@ -534,30 +534,72 @@ class SupabaseService {
   }
 
   // ---------------------------------------------------------------------
-  // MANUTENÇÃO (laudos) — exclusivo do app Flutter
+  // MANUTENÇÃO — pelas funções do banco, as MESMAS da web e do desktop:
+  //   abrir_manutencao    → registra a ida para a oficina (com a vistoria
+  //                         opcional) e marca o carro "Em manutenção"
+  //   concluir_manutencao → registra serviço, custo e data e libera o carro
+  // O custo entra no Financeiro das 3 plataformas.
   // ---------------------------------------------------------------------
 
-  Future<List<LaudoManutencao>> buscarLaudos() async {
+  Future<List<Manutencao>> buscarManutencoes({required bool emAndamento}) async {
     final dados = await _db
-        .from('laudos_manutencao')
-        .select()
-        .order('data_registro', ascending: false);
-    return dados.map((m) => LaudoManutencao.fromMap(m)).toList();
+        .from('manutencoes')
+        .select(Manutencao.colunas)
+        .eq('status', emAndamento ? Manutencao.statusEmAndamento : Manutencao.statusConcluida)
+        .order(emAndamento ? 'data_entrada' : 'data_liberacao', ascending: emAndamento)
+        .limit(200);
+    return dados.map((m) => Manutencao.fromMap(m)).toList();
   }
 
-  /// Salva o laudo e marca o veículo como "Em manutenção" — assim o
-  /// status do veículo fica consistente com o mesmo campo que o
-  /// desktop usa (veiculos.status).
-  Future<void> salvarLaudo(LaudoManutencao laudo) async {
-    await _db.from('laudos_manutencao').insert(laudo.toMap());
-    await _db
-        .from('veiculos')
-        .update({'status': Veiculo.statusManutencao}).eq('id', laudo.idVeiculo);
+  /// Envia o carro para a oficina. O banco só aceita carro Disponível
+  /// (o que volta de aluguel com defeito vai pela devolução). Devolve o id.
+  Future<int> abrirManutencao({
+    required int veiculoId,
+    required String defeito,
+    String? oficina,
+    required DateTime dataEntrada,
+    DateTime? previsao,
+    List<bool?> checklist = const [null, null, null, null], // motor, freios, pneus, óleo
+  }) async {
+    try {
+      final id = await _db.rpc('abrir_manutencao', params: {
+        'p_veiculo_id': veiculoId,
+        'p_defeito': defeito,
+        'p_oficina': oficina,
+        'p_data_entrada': dataParaBanco(dataEntrada),
+        'p_previsao': previsao == null ? null : dataParaBanco(previsao),
+        'p_motor_ok': checklist[0],
+        'p_freios_ok': checklist[1],
+        'p_pneus_ok': checklist[2],
+        'p_oleo_ok': checklist[3],
+      });
+      return (id as num).toInt();
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro, {
+        'manutencoes_defeito_check': 'Descreva o defeito (pelo menos 5 letras).',
+        'manutencoes_check': 'A previsão de liberação não pode ser antes da entrada.',
+        'uk_manutencao_aberta_por_veiculo': 'Este carro já está na oficina.',
+      }));
+    }
   }
 
-  /// Marca a manutenção como concluída, liberando o veículo de novo.
-  Future<void> concluirManutencao(int idVeiculo) async {
-    await _db.from('veiculos').update({'status': Veiculo.statusDisponivel}).eq('id', idVeiculo);
+  /// Libera o carro: serviço feito, custo (0 se foi na garantia) e data.
+  Future<void> concluirManutencao({
+    required int manutencaoId,
+    required DateTime dataLiberacao,
+    required String servico,
+    required double custo,
+  }) async {
+    try {
+      await _db.rpc('concluir_manutencao', params: {
+        'p_manutencao_id': manutencaoId,
+        'p_data_liberacao': dataParaBanco(dataLiberacao),
+        'p_servico': servico,
+        'p_custo': custo,
+      });
+    } catch (erro) {
+      throw Exception(traduzirErroBanco(erro));
+    }
   }
 
   // ---------------------------------------------------------------------

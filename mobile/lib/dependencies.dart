@@ -25,7 +25,7 @@ Future<void> carregarDados() async {
     _carregarComTolerancia('clientes', clienteController.carregarClientes),
     _carregarComTolerancia('veículos', frotaController.carregarVeiculos),
     _carregarComTolerancia('locações', locacaoController.carregarAtivas),
-    _carregarComTolerancia('manutenções', manutencaoController.carregarLaudos),
+    _carregarComTolerancia('manutenções', manutencaoController.carregar),
   ]);
 }
 
