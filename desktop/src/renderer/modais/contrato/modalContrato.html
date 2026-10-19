@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contrato de locação</title>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+    <link rel="stylesheet" href="../../estilos/modal.css" />
+    <style>
+      /* ------------------------------------------------ NA TELA
+         Fundo cinza e a "folha" branca no meio, como num leitor de PDF */
+      .modal-scroll-body { background: #e9edf2; padding: 20px; }
+
+      .folha {
+        background: #fff;
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 36px 40px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+        font-size: 0.88rem;
+        color: #1f2937;
+      }
+      .folha-carregando { text-align: center; color: #64748b; padding: 60px 0; }
+
+      .contrato-titulo { text-align: center; font-size: 1.15rem; font-weight: 700; color: var(--blue-dark); }
+      .contrato-empresa { text-align: center; color: #64748b; margin: 2px 0 6px; }
+      .contrato-emitido { text-align: center; color: #94a3b8; font-size: 0.75rem; margin-bottom: 18px; }
+
+      .contrato-aviso {
+        text-align: center;
+        font-weight: 700;
+        padding: 6px;
+        border-radius: 4px;
+        margin-bottom: 14px;
+      }
+      .contrato-aviso.cancelado { background: #fceae9; color: #b91c1c; }
+
+      .secao { margin-bottom: 16px; }
+      .secao h4 {
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        color: var(--blue-dark);
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 4px;
+        margin-bottom: 6px;
+      }
+      /* Cada linha: rótulo à esquerda, valor em negrito */
+      .linha { display: flex; padding: 2px 0; }
+      .linha span { width: 205px; flex-shrink: 0; color: #475569; }
+      .linha strong { flex: 1; }
+      .linha.total strong { font-size: 1rem; color: var(--blue-dark); }
+
+      .clausula { text-align: justify; color: #374151; font-size: 0.8rem; line-height: 1.5; margin: 18px 0 26px; }
+
+      .assinatura-area { margin-top: 10px; }
+      .assinatura-area img { max-height: 90px; max-width: 320px; display: block; }
+      .assinatura-linha { height: 60px; width: 320px; border-bottom: 1px solid #111; }
+      .assinatura-nome { margin-top: 4px; color: #475569; font-size: 0.8rem; }
+      .assinatura-nota { color: #94a3b8; font-size: 0.72rem; margin-top: 2px; }
+
+      .btn-imprimir {
+        background: var(--blue-dark);
+        color: #fff;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-imprimir:disabled { opacity: 0.5; cursor: default; }
+
+      /* ------------------------------------------ NA IMPRESSÃO
+         Só a folha: some o cabeçalho escuro, os botões e o fundo cinza.
+         A janela tem altura fixa na tela; no papel, a altura é livre. */
+      @page { size: A4; margin: 14mm; }
+      @media print {
+        body { border: none; width: auto; height: auto; overflow: visible; }
+        .modal-header, .modal-footer { display: none !important; }
+        .modal-scroll-wrapper { height: auto; display: block; }
+        .modal-scroll-body { background: #fff; padding: 0; overflow: visible; }
+        .folha { box-shadow: none; max-width: none; padding: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-scroll-wrapper">
+      <div class="modal-header">
+        <h3>Contrato de locação</h3>
+        <button class="btn-close-top" id="btn-fechar-topo" title="Fechar">
+          <i class="ri-close-line" style="font-size: 1.2rem; display: block"></i>
+        </button>
+      </div>
+
+      <div class="modal-scroll-body">
+        <!-- O JavaScript monta o contrato aqui dentro -->
+        <div class="folha" id="folha">
+          <p class="folha-carregando">Carregando o contrato...</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" id="btn-fechar">Fechar</button>
+        <button type="button" class="btn-imprimir" id="btn-pdf" disabled>
+          <i class="ri-file-pdf-2-line"></i> Salvar PDF
+        </button>
+        <button type="button" class="btn-save" id="btn-imprimir" disabled>
+          <i class="ri-printer-line"></i> Imprimir
+        </button>
+      </div>
+    </div>
+
+    <script src="../../compartilhado/formatos.js"></script>
+    <script src="./modalContrato.js"></script>
+  </body>
+</html>

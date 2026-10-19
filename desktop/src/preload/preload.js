@@ -45,6 +45,13 @@ contextBridge.exposeInMainWorld('apiAcesso', {
     fecharModalCancelarLocacao: () => ipcRenderer.send('fechar-modal-cancelar-locacao'),
     cancelarLocacao: (dados) => ipcRenderer.invoke('cancelar-locacao', dados),
 
+    // Contrato (com a assinatura colhida no celular)
+    abrirModalContrato: () => ipcRenderer.send('abrir-modal-contrato'),
+    fecharModalContrato: () => ipcRenderer.send('fechar-modal-contrato'),
+    pedirContrato: (locacaoId) => ipcRenderer.invoke('buscar-contrato', locacaoId),
+    imprimirContrato: () => ipcRenderer.invoke('imprimir-contrato'),
+    salvarContratoPdf: (locacaoId) => ipcRenderer.invoke('salvar-contrato-pdf', locacaoId),
+
     // ========================== MANUTENÇÃO ===========================
     pedirManutencoes: (emAndamento) => ipcRenderer.invoke('buscar-manutencoes', emAndamento),
     aoAtualizarManutencoes: (funcao) => ipcRenderer.on('manutencoes-atualizadas', () => funcao()),

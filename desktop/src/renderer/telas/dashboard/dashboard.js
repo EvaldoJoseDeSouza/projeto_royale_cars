@@ -604,6 +604,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return `<tr><td colspan="${colunas}" style="text-align: center; color: var(--text-muted); padding: 20px;">${texto}</td></tr>`;
   }
 
+  // O contrato só precisa do número do aluguel: o resto a janela busca
+  function abrirContrato(locacaoId) {
+    localStorage.setItem('locacaoParaContrato', String(locacaoId));
+    window.apiAcesso.abrirModalContrato();
+  }
+
   function renderizarLocacoesAtivas(listaLocacoes) {
     if (!tabelaLocacoesAtivasBody) return;
     tabelaLocacoesAtivasBody.innerHTML = '';
@@ -626,12 +632,15 @@ document.addEventListener('DOMContentLoaded', () => {
         <td><strong style="color: var(--blue-dark);">${formatarDinheiro(loc.valor_previsto)}</strong></td>
         <td>${etiquetaSituacao(loc.status_exibicao, loc.dias_atraso_atual)}</td>
         <td class="acoes-locacao">
+          <button class="btn-acao-tabela btn-contrato" title="Ver o contrato" aria-label="Ver o contrato"><i class="ri-file-text-line"></i></button>
           ${podeDevolver ? '<button class="btn-acao-tabela btn-devolver"><i class="ri-checkbox-circle-line"></i> Devolver</button>' : ''}
           ${podeCancelar ? '<button class="btn-acao-tabela btn-cancelar-locacao"><i class="ri-close-circle-line"></i> Cancelar</button>' : ''}
         </td>
       `;
 
       // Entrega os dados do aluguel ao modal (mesmo padrão dos outros modais)
+      tr.querySelector('.btn-contrato').addEventListener('click', () => abrirContrato(loc.id));
+
       const devolver = tr.querySelector('.btn-devolver');
       if (devolver) devolver.addEventListener('click', () => {
         localStorage.setItem('locacaoParaDevolver', JSON.stringify(loc));
@@ -653,7 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tabelaLocacoesHistoricoBody.innerHTML = '';
 
     if (listaLocacoes.length === 0) {
-      tabelaLocacoesHistoricoBody.innerHTML = linhaVazia(7, 'Nenhuma locação encerrada ainda.');
+      tabelaLocacoesHistoricoBody.innerHTML = linhaVazia(8, 'Nenhuma locação encerrada ainda.');
       return;
     }
 
@@ -675,7 +684,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${loc.km_rodados != null ? formatarKm(loc.km_rodados) : '-'}</td>
         <td><span class="valor-historico">${formatarDinheiro(loc.valor_total)}</span>${detalhes ? `<br><small>${detalhes}</small>` : ''}</td>
         <td>${etiquetaSituacao(loc.status)}</td>
+        <td class="acoes-locacao">
+          <button class="btn-acao-tabela btn-contrato" title="Ver o contrato"><i class="ri-file-text-line"></i> Contrato</button>
+        </td>
       `;
+      tr.querySelector('.btn-contrato').addEventListener('click', () => abrirContrato(loc.id));
       tabelaLocacoesHistoricoBody.appendChild(tr);
     });
   }

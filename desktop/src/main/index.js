@@ -10,6 +10,7 @@ const { registrarIpcColaboradores } = require("./ipc/colaboradores");
 const { registrarIpcClientes } = require("./ipc/clientes");
 const { registrarIpcFrota } = require("./ipc/frota");
 const { registrarIpcLocacoes } = require("./ipc/locacoes");
+const { registrarIpcContratos } = require("./ipc/contratos");
 const { registrarIpcPainel } = require("./ipc/painel");
 const { registrarIpcManutencoes } = require("./ipc/manutencoes");
 
@@ -488,6 +489,22 @@ ipcMain.on("abrir-modal-cancelar-locacao", (evento) => {
 ipcMain.on("fechar-modal-cancelar-locacao", () => {
   if (janelaModalCancelamento) janelaModalCancelamento.close();
 });
+
+// O contrato (ver, imprimir, salvar PDF) fica em main/ipc/contratos.js.
+// Janela maior que as outras: é uma folha A4 para ler.
+let janelaModalContrato;
+
+ipcMain.on("abrir-modal-contrato", (evento) => {
+  if (janelaModalContrato) return janelaModalContrato.focus();
+  janelaModalContrato = criarJanelaModal(BrowserWindow.fromWebContents(evento.sender), "contrato/modalContrato.html", 800, 720);
+  janelaModalContrato.on("closed", () => { janelaModalContrato = null; });
+});
+
+ipcMain.on("fechar-modal-contrato", () => {
+  if (janelaModalContrato) janelaModalContrato.close();
+});
+
+registrarIpcContratos({ mostrarAviso });
 
 registrarIpcLocacoes({
   mostrarAviso,

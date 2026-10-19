@@ -980,19 +980,33 @@ body { background-color: var(--bg-app); color: var(--text-main); height: 100vh; 
 /* Locações: botões da tabela e etiqueta de cancelada */
 .acoes-locacao {
   text-align: center;
-  white-space: nowrap;
+  /* Em tela estreita, os botões descem para a linha de baixo em vez de
+     empurrar a tabela para fora da caixa */
+  white-space: normal;
+}
+
+/* Tela de notebook (1366) para cima: cabe tudo numa linha só */
+@media (min-width: 1340px) {
+  .acoes-locacao { white-space: nowrap; }
 }
 
 .btn-acao-tabela {
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 4px;
   border: none;
   cursor: pointer;
   font-weight: 600;
   font-size: 0.8rem;
+  white-space: nowrap; /* o texto de cada botão não se parte */
   color: #fff;
   background: #198754;
   margin: 2px;
+}
+
+.btn-acao-tabela.btn-contrato {
+  background: #fff;
+  color: var(--blue-dark);
+  border: 1px solid var(--blue-dark);
 }
 
 .btn-acao-tabela.btn-cancelar-locacao {
