@@ -201,8 +201,8 @@ class SupabaseService {
         .from('veiculos')
         .select(Veiculo.colunas)
         .eq('arquivado', arquivados)
-        .order('marca')
-        .order('modelo');
+        .order('marca', ascending: true)
+        .order('modelo', ascending: true);
     return dados.map((m) => Veiculo.fromMap(m)).toList();
   }
 
@@ -304,7 +304,7 @@ class SupabaseService {
         .from('clientes')
         .select(Cliente.colunas)
         .eq('arquivado', arquivados)
-        .order('nome');
+        .order('nome', ascending: true);
     return dados.map((m) => Cliente.fromMap(m)).toList();
   }
 
@@ -380,7 +380,7 @@ class SupabaseService {
         .from('vw_locacoes')
         .select(Locacao.colunas)
         .eq('status', Locacao.statusEmAndamento)
-        .order('data_prevista');
+        .order('data_prevista', ascending: true);
     return dados.map((m) => Locacao.fromMap(m)).toList();
   }
 
@@ -619,7 +619,7 @@ class SupabaseService {
     final dados = await _db
         .from('vw_alertas')
         .select('tipo, referencia_id, titulo, detalhe, data')
-        .order('data')
+        .order('data', ascending: true)
         .limit(50);
     return dados.map((m) => Alerta.fromMap(m)).toList();
   }
@@ -629,7 +629,7 @@ class SupabaseService {
     final dados = await _db
         .from('vw_faturamento_mensal')
         .select('mes, faturamento, alugueis, manutencao')
-        .order('mes');
+        .order('mes', ascending: true);
     return dados.map((m) => MesFinanceiro.fromMap(m)).toList();
   }
 
