@@ -24,7 +24,7 @@ $tipos = [];
 
 if (pode('relatorios')) {
     $tipos += [
-        'locacoes'    => 'Aluguéis',
+        'locacoes'    => 'Locações',
         'clientes'    => 'Clientes',
         'veiculos'    => 'Veículos',
         'manutencoes' => 'Manutenções',

@@ -177,15 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const titulosPorView = {
     'view-resumo': 'Dashboard',
-    'view-frota': 'Frota de Veículos',
+    'view-frota': 'Frota',
     'view-manutencao': 'Manutenção',
-    'view-clientes': 'Gestão de Clientes',
-    'view-locacoes-ativas': 'Locações em Andamento',
-    'view-locacoes-historico': 'Histórico de Locações',
+    'view-clientes': 'Clientes',
+    'view-locacoes-ativas': 'Locações · Em andamento',
+    'view-locacoes-historico': 'Locações · Histórico',
     'view-financeiro': 'Financeiro',
-    'view-configuracoes': 'Configurações da Conta',
-    'view-colaboradores': 'Gerenciar Colaboradores',
-    'view-grupos-permissao': 'Modelos de Permissão'
+    'view-configuracoes': 'Minha conta',
+    'view-colaboradores': 'Administração · Colaboradores',
+    'view-grupos-permissao': 'Administração · Modelos de permissão'
   };
 
   // ============================== DASHBOARD ==============================

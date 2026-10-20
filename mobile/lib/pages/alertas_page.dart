@@ -63,8 +63,8 @@ class AlertasPage extends StatefulWidget {
         );
         return true;
 
-      default: // login_suspeito: o painel de segurança fica na web e no desktop
-        avisar('Veja os detalhes em Tentativas de login, no Painel Administrativo da web ou do desktop.');
+      default: // login_suspeito: a lista de tentativas fica só na web
+        avisar('Veja os detalhes em Tentativas de login, na Administração da web.');
         return false;
     }
   }

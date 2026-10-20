@@ -4,7 +4,7 @@
 | CARGOS E PERMISSÕES
 |--------------------------------------------------------------------------
 | O chefe tem acesso a tudo. Gerentes e funcionários só fazem o que o
-| chefe marcar para cada um no Painel Administrativo.
+| chefe marcar para cada um na Administração.
 */
 
 const CARGOS = [
@@ -25,7 +25,7 @@ const PERMISSOES = [
         'veiculos_gerenciar' => 'Cadastrar e editar veículos (inclui preço da diária)',
         'veiculos_arquivar'  => 'Arquivar e reativar veículos',
     ],
-    'Aluguéis' => [
+    'Locações' => [
         'locacoes_ver'       => 'Ver aluguéis',
         'locacoes_gerenciar' => 'Registrar retirada e devolução',
         'locacoes_cancelar'  => 'Cancelar aluguéis',

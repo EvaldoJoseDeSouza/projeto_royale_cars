@@ -35,7 +35,7 @@ foreach (sb_select('logs', ['select' => 'usuario_id', 'criado_em' => 'gte.' . da
     $acoes30d[$l['usuario_id']] = ($acoes30d[$l['usuario_id']] ?? 0) + 1;
 }
 
-$titulo = 'Painel Administrativo';
+$titulo = 'Administração';
 $subtitulo = 'Equipe, permissões e auditoria';
 $menu = 'admin';
 require RAIZ . '/includes/cabecalho.php';

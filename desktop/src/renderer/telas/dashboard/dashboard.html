@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>Royale Cars - ERP Dashboard</title>
+  <title>Royale Cars</title>
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
   <link rel="stylesheet" href="dashboard.css" />
 </head>
@@ -20,7 +20,7 @@
           <i class="ri-dashboard-3-line"></i> Dashboard
         </a>
         <a href="#" class="menu-item" data-target="view-frota">
-          <i class="ri-car-line"></i> Frota de Veículos
+          <i class="ri-car-line"></i> Frota
         </a>
         <a href="#" class="menu-item" data-target="view-manutencao">
           <i class="ri-tools-line"></i> Manutenção
@@ -51,7 +51,7 @@
               ">
             <a href="#" class="menu-item sub-item" data-target="view-locacoes-ativas"
               style="font-size: 0.9rem; padding: 8px 12px">
-              <i class="ri-play-list-add-line" style="font-size: 1rem"></i> Em Andamento
+              <i class="ri-play-list-add-line" style="font-size: 1rem"></i> Em andamento
             </a>
 
             <a href="#" class="menu-item sub-item" data-target="view-locacoes-historico"
@@ -92,7 +92,7 @@
 
             <a href="#" class="menu-item sub-item" data-target="view-grupos-permissao"
               style="font-size: 0.9rem; padding: 8px 12px">
-              <i class="ri-key-2-line" style="font-size: 1rem"></i> Modelos de Permissão
+              <i class="ri-key-2-line" style="font-size: 1rem"></i> Modelos de permissão
             </a>
           </div>
         </div>
@@ -102,7 +102,7 @@
         <!-- PERFIL -->
         <div class="profile-dropdown" id="user-dropdown">
           <button class="dropdown-item" id="btn-abrir-configuracoes" data-target="view-configuracoes">
-            <i class="ri-settings-3-line"></i> Configurações
+            <i class="ri-user-settings-line"></i> Minha conta
           </button>
           <div class="dropdown-divider"></div>
           <button class="dropdown-item text-danger" id="btn-sair">
@@ -252,7 +252,7 @@
       <!-- LOCAÇÕES ATIVAS -->
       <div id="view-locacoes-ativas" class="content-view">
         <div class="view-header-row">
-          <h2>Locações em Andamento</h2>
+          <h2>Locações em andamento</h2>
           <button class="btn-primary-blue" id="btn-abrir-cadastro-locacao"
             style="display: flex; align-items: center; gap: 8px">
             <i class="ri-add-line" style="font-size: 1.1rem"></i> Nova Locação
@@ -280,7 +280,7 @@
       <!-- LOCAÇÕES HISTÓRICO -->
       <div id="view-locacoes-historico" class="content-view">
         <div class="view-header-row">
-          <h2>Histórico de Locações</h2>
+          <h2>Histórico de locações</h2>
         </div>
         <div class="table-container"
           style="background: #fff; border-radius: 8px; border: 1px solid var(--border-color); padding: 15px; margin-top: 20px;">
@@ -454,7 +454,7 @@
       <!-- CONFIGURAÇÕES -->
       <div id="view-configuracoes" class="content-view">
         <div class="view-header-row">
-          <h2>Configurações da Conta</h2>
+          <h2>Minha conta</h2>
         </div>
 
         <div class="config-container">
@@ -463,7 +463,7 @@
                quem muda é o chefe, na Administração (o banco garante isso). -->
           <div class="config-card">
             <div class="config-card-header">
-              <h3>Minha conta</h3>
+              <h3>Meus dados</h3>
               <p>Seus dados de acesso ao sistema.</p>
             </div>
 

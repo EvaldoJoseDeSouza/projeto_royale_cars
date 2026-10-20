@@ -35,7 +35,7 @@ unset($_SESSION['senha_temporaria']);
 $totalPermissoes = count(todas_permissoes());
 
 $titulo = 'Funcionários';
-$subtitulo = 'Painel Administrativo';
+$subtitulo = 'Administração';
 $menu = 'admin';
 require RAIZ . '/includes/cabecalho.php';
 ?>

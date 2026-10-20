@@ -36,7 +36,7 @@ usort($veiculos, fn ($a, $b) => array_search($a['status'], STATUS_VEICULO) <=> a
 $voltas = devolucoes_previstas();
 $totalArquivados = sb_contar('veiculos', ['arquivado' => 'eq.true']);
 
-$titulo = 'Frota de veículos';
+$titulo = 'Frota';
 $subtitulo = 'Disponíveis, alugados e em manutenção';
 $menu = 'veiculos';
 require RAIZ . '/includes/cabecalho.php';

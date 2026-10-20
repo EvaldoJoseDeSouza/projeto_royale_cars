@@ -83,7 +83,7 @@ require RAIZ . '/includes/cabecalho.php';
         <h4 style="color: var(--azul); margin-bottom: 8px;">O que você pode fazer</h4>
 
         <?php if ($usuario['cargo'] === 'chefe'): ?>
-            <p>Acesso total ao sistema, incluindo o Painel Administrativo.</p>
+            <p>Acesso total ao sistema, incluindo a Administração.</p>
         <?php elseif (!$usuario['permissoes']): ?>
             <p class="texto-fraco">Nenhuma permissão liberada ainda.</p>
         <?php else: ?>

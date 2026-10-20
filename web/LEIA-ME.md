@@ -58,7 +58,7 @@ Por isso a web, o desktop e o celular se comportam igual.
 - Status **Disponível / Alugado / Em manutenção** muda sozinho com os aluguéis e
   as manutenções (o banco não deixa mudar à mão).
 
-### Aluguéis
+### Locações
 - Retirada, devolução e cancelamento pelas **funções do banco** (as mesmas do
   desktop e do celular): tudo ou nada, e duas pessoas não alugam o mesmo carro.
 - Quilometragem de saída e de volta; **taxas extras com motivo** (combustível,
@@ -76,7 +76,7 @@ Por isso a web, o desktop e o celular se comportam igual.
 - Relatórios de clientes, veículos, aluguéis, manutenções e faturamento, com
   filtros, **impressão** e **CSV** (abre direto no Excel).
 
-### Painel Administrativo (só o chefe)
+### Administração (só o chefe)
 - Cadastrar funcionários e gerentes com **login próprio**, usando os **modelos
   de permissão** (Gerente, Vendedor, Financeiro) ou marcando uma a uma.
 - **Ativar/desativar** (a pessoa perde o acesso na hora), **redefinir senha**
@@ -145,7 +145,7 @@ web/
    taxa extra, marcando "voltou com defeito" → o carro vai para a manutenção.
 5. Liberar o carro na Manutenção, informando o custo → aparece no Financeiro
    (na web e no desktop, com os mesmos números).
-6. Painel Administrativo → cadastrar um funcionário com o modelo "Vendedor",
+6. Administração → cadastrar um funcionário com o modelo "Vendedor",
    mostrar a senha temporária e o **Histórico de ações**.
 7. Errar a senha 5 vezes → bloqueio → aparece em **Tentativas de login**.
 

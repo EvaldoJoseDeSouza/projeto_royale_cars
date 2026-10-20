@@ -41,7 +41,7 @@ $locacoes = sb_select('vw_locacoes', $filtro + ABAS_LOCACAO[$aba]['filtro'] + [
     'offset' => $offset,
 ]);
 
-$titulo = 'Aluguéis';
+$titulo = 'Locações';
 $subtitulo = 'Retiradas, devoluções e atrasos';
 $menu = 'locacoes';
 require RAIZ . '/includes/cabecalho.php';
@@ -51,7 +51,7 @@ $filtrosAtuais = array_filter(['busca' => $busca, 'de' => $de, 'ate' => $ate]);
 
 <div class="page-header">
     <div>
-        <h2>Aluguéis</h2>
+        <h2>Locações</h2>
         <p>Ao registrar um aluguel o carro fica indisponível; na devolução ele é liberado.</p>
     </div>
 

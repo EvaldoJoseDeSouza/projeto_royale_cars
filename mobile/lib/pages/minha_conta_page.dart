@@ -9,7 +9,7 @@ import 'trocar_senha_page.dart';
 
 /// Minha conta (o mesmo nome da web e do desktop, decisão 12).
 /// Cada pessoa muda o próprio NOME e a SENHA. E-mail, cargo e permissões
-/// só o chefe muda, no Painel Administrativo (o banco garante isso).
+/// só o chefe muda, na Administração (o banco garante isso).
 class MinhaContaPage extends StatefulWidget {
   const MinhaContaPage({super.key});
 

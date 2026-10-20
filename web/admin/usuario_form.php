@@ -187,7 +187,7 @@ require RAIZ . '/includes/cabecalho.php';
 
             <div class="permissoes-grupo" style="background: #f8f9fc;">
                 <h4>Somente o chefe</h4>
-                <p class="texto-fraco">Painel Administrativo: cadastrar pessoas, mudar permissões, redefinir senhas e ver o histórico de ações.</p>
+                <p class="texto-fraco">Administração: cadastrar pessoas, mudar permissões, redefinir senhas e ver o histórico de ações.</p>
             </div>
         </div>
 

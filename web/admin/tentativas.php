@@ -52,7 +52,7 @@ usort($suspeitos, fn ($a, $b) => $b['falhas'] <=> $a['falhas']);
 $suspeitos = array_slice($suspeitos, 0, 10);
 
 $titulo = 'Tentativas de login';
-$subtitulo = 'Painel Administrativo';
+$subtitulo = 'Administração';
 $menu = 'admin';
 require RAIZ . '/includes/cabecalho.php';
 ?>

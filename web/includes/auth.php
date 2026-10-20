@@ -165,7 +165,7 @@ function acesso_negado(): void
     ?>
     <div class="estado-vazio">
         <h2>Você não tem permissão para acessar esta página.</h2>
-        <p>Se precisar deste acesso, peça ao chefe para liberar no Painel Administrativo.</p>
+        <p>Se precisar deste acesso, peça ao chefe para liberar na Administração.</p>
         <a href="<?= e(url('dashboard.php')) ?>" class="btn-primary">Voltar ao início</a>
     </div>
     <?php

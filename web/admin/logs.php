@@ -16,7 +16,7 @@ exigir_chefe();
 $modulos = [
     'clientes'    => 'Clientes',
     'veiculos'    => 'Veículos',
-    'locacoes'    => 'Aluguéis',
+    'locacoes'    => 'Locações',
     'manutencoes' => 'Manutenção',
     'usuarios'    => 'Usuários',
     'relatorios'  => 'Relatórios',
@@ -73,7 +73,7 @@ $nomesAcoes = [
 $alertaAcoes = ['login_bloqueado', 'login_desativado', 'acesso_negado', 'csrf_invalido'];
 
 $titulo = 'Histórico de ações';
-$subtitulo = 'Painel Administrativo';
+$subtitulo = 'Administração';
 $menu = 'admin';
 require RAIZ . '/includes/cabecalho.php';
 ?>

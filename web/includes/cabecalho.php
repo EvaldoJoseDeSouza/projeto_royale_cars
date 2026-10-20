@@ -17,8 +17,8 @@ $itensMenu = [
     ['chave' => 'dashboard',   'texto' => 'Dashboard',         'link' => 'dashboard.php',            'icone' => 'inicio',     'mostrar' => true],
     ['chave' => 'alertas',     'texto' => 'Alertas',           'link' => 'alertas.php',              'icone' => 'alerta',     'mostrar' => true],
     ['chave' => 'clientes',    'texto' => 'Clientes',          'link' => 'clientes/index.php',       'icone' => 'clientes',   'mostrar' => pode('clientes_ver')],
-    ['chave' => 'veiculos',    'texto' => 'Frota de veículos', 'link' => 'veiculos/index.php',       'icone' => 'veiculos',   'mostrar' => pode('veiculos_ver')],
-    ['chave' => 'locacoes',    'texto' => 'Aluguéis',          'link' => 'locacoes/index.php',       'icone' => 'locacoes',   'mostrar' => pode('locacoes_ver')],
+    ['chave' => 'veiculos',    'texto' => 'Frota',             'link' => 'veiculos/index.php',       'icone' => 'veiculos',   'mostrar' => pode('veiculos_ver')],
+    ['chave' => 'locacoes',    'texto' => 'Locações',          'link' => 'locacoes/index.php',       'icone' => 'locacoes',   'mostrar' => pode('locacoes_ver')],
     ['chave' => 'manutencoes', 'texto' => 'Manutenção',        'link' => 'manutencoes/index.php',    'icone' => 'manutencao', 'mostrar' => pode('manutencoes')],
     ['chave' => 'financeiro',  'texto' => 'Financeiro',        'link' => 'financeiro/index.php',     'icone' => 'financeiro', 'mostrar' => pode('financeiro')],
     ['chave' => 'relatorios',  'texto' => 'Relatórios',        'link' => 'relatorios/index.php',     'icone' => 'relatorios', 'mostrar' => pode('relatorios') || pode('relatorios_financeiros')],
@@ -60,7 +60,7 @@ $totalAlertas = $usuarioAtual ? contar_alertas() : 0;
             <p class="menu-secao">Exclusivo do chefe</p>
             <a href="<?= e(url('admin/index.php')) ?>" class="<?= $menu === 'admin' ? 'active' : '' ?>">
                 <?= icone('admin') ?>
-                <span>Painel Administrativo</span>
+                <span>Administração</span>
             </a>
         <?php endif; ?>
 
