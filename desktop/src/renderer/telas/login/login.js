@@ -22,9 +22,14 @@ function mostrarEstadoDoBotao(estado) {
   if (btnCheck) btnCheck.style.display = estado === 'ok' ? 'inline-block' : 'none';
 }
 
+// Evita dois logins de uma vez (ex.: Enter apertado duas vezes)
+let loginEmAndamento = false;
+
 if (formLogin) {
   formLogin.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (loginEmAndamento) return;
+    loginEmAndamento = true;
 
     const dados = new FormData(formLogin);
     const email = String(dados.get('email') || '').trim();
@@ -32,21 +37,30 @@ if (formLogin) {
 
     mostrarEstadoDoBotao('carregando');
 
-    // Se der errado, o processo principal já mostra o aviso com o motivo
-    const resposta = await window.apiAcesso.enviarLogin(email, senha);
+    try {
+      // Se der errado, o processo principal já mostra o aviso com o motivo
+      const resposta = await window.apiAcesso.enviarLogin(email, senha);
 
-    if (resposta.sucesso && resposta.trocarSenha) {
-      // Primeiro acesso (ou senha redefinida pelo chefe): antes de entrar,
-      // a pessoa precisa criar uma senha só dela. O modal abre no modo
-      // obrigatório e, quando a troca der certo, o processo principal
-      // avisa por 'senha-obrigatoria-trocada' e aí sim entramos.
+      if (resposta.sucesso && resposta.trocarSenha) {
+        // Primeiro acesso (ou senha redefinida pelo chefe): antes de entrar,
+        // a pessoa precisa criar uma senha só dela. O modal abre no modo
+        // obrigatório e, quando a troca der certo, o processo principal
+        // avisa por 'senha-obrigatoria-trocada' e aí sim entramos.
+        mostrarEstadoDoBotao('normal');
+        loginEmAndamento = false;
+        window.apiAcesso.abrirModalTrocarSenha();
+      } else if (resposta.sucesso) {
+        mostrarEstadoDoBotao('ok');
+        setTimeout(() => window.apiAcesso.mudarDeTela(), 1500);
+      } else {
+        mostrarEstadoDoBotao('normal');
+        loginEmAndamento = false;
+      }
+    } catch (erro) {
+      // O botão não pode ficar girando para sempre
+      console.error('Erro no login:', erro);
       mostrarEstadoDoBotao('normal');
-      window.apiAcesso.abrirModalTrocarSenha();
-    } else if (resposta.sucesso) {
-      mostrarEstadoDoBotao('ok');
-      setTimeout(() => window.apiAcesso.mudarDeTela(), 1500);
-    } else {
-      mostrarEstadoDoBotao('normal');
+      loginEmAndamento = false;
     }
   });
 }

@@ -1,7 +1,6 @@
 const { app, BrowserWindow, ipcMain, Menu, Tray, dialog, clipboard } = require("electron");
 const path = require("path");
 
-// Conexão com o banco, sessão e conversas (IPC) do login ficam em arquivos próprios
 const supabase = require("./supabase");
 const { sessao, temPermissao, limparSessao } = require("./sessao");
 const { registrarIpcSessao } = require("./ipc/sessao");
@@ -14,7 +13,6 @@ const { registrarIpcContratos } = require("./ipc/contratos");
 const { registrarIpcPainel } = require("./ipc/painel");
 const { registrarIpcManutencoes } = require("./ipc/manutencoes");
 
-// Retorna true (e mostra o aviso padrão) quando o usuário NÃO tem a permissão.
 async function negarSemPermissao(janelaAlvo, chave) {
   if (temPermissao(chave)) return false;
   await mostrarAviso(janelaAlvo, {
@@ -32,8 +30,6 @@ let janelaModalVeiculo;
 let janelaModalCliente;
 let janelaModalLocacao;
 let janelaModalTrocarSenha;
-let janelaModalConfirmacao;
-let resolverConfirmacao = null;
 let janelaModalGrupoPermissao;
 let janelaModalColaborador;
 let janelaModalSenhaTemporaria;
@@ -182,9 +178,6 @@ ipcMain.on("abrir-modal-trocar-senha", (evento) => {
     },
   });
 
-  // Se a pessoa entrou com senha temporária, o modal abre no modo
-  // obrigatório. Quem decide é o processo principal (ele sabe o que o banco
-  // disse), e não a tela: assim ninguém consegue "pular" a troca.
   const obrigatoria = Boolean(sessao.usuario && sessao.usuario.trocar_senha);
   janelaModalTrocarSenha.loadFile(
     path.join(__dirname, "../renderer/modais/trocar-senha/modalTrocarSenha.html"),
@@ -203,9 +196,14 @@ ipcMain.on("fechar-modal-trocar-senha", () => {
 });
 
 ipcMain.on("login-sucesso", () => {
-  // Trava de segurança: só abre o sistema para quem está logado e já
-  // criou a própria senha (não dá para pular a troca obrigatória).
+
   if (!sessao.usuario || sessao.usuario.trocar_senha) return;
+
+  // Já está aberto (o aviso chegou duas vezes): só mostra
+  if (janelaDashboard && !janelaDashboard.isDestroyed()) {
+    janelaDashboard.show();
+    return;
+  }
 
   janelaDashboard = new BrowserWindow({
     width: 1200,
@@ -228,30 +226,35 @@ ipcMain.on("login-sucesso", () => {
     }
   });
 
-  janelaPrincipal.removeAllListeners("close");
-  if (janelaPrincipal) janelaPrincipal.close();
+  if (janelaPrincipal && !janelaPrincipal.isDestroyed()) {
+    janelaPrincipal.removeAllListeners("close");
+    janelaPrincipal.close();
+  }
 });
 
-ipcMain.on("fechar", () => {
+// Sem esta marca, o dashboard só se escondia na bandeja e o programa não fechava
+app.on("before-quit", () => {
+  app.isQuitting = true;
+});
+
+// Botão "Sair": encerra o login e fecha o programa
+ipcMain.on("fechar", async () => {
+  app.isQuitting = true;
+  try {
+    await supabase.auth.signOut();
+  } catch (erro) {
+    console.error("Erro ao sair do Supabase:", erro);
+  }
+  limparSessao();
   app.quit();
 });
 
 // ===================== SAÍDA POR INATIVIDADE ====================
-// O dashboard conta o tempo sem uso (mouse e teclado). Passou do limite,
-// ele pede para sair: encerramos o login, fechamos o sistema e voltamos
-// para a tela de login. Igual à web, que sai depois de 30 minutos parada.
 ipcMain.on("sair-por-inatividade", async () => {
   await supabase.auth.signOut();
   limparSessao();
-
-  // A ordem importa: PRIMEIRO abrimos o login, DEPOIS fechamos o resto.
-  // Se fechássemos tudo antes, por um instante não haveria nenhuma janela
-  // e o Electron encerraria o programa (evento "window-all-closed").
   criarJanela();
   const janelaLogin = janelaPrincipal;
-
-  // Fecha o dashboard e qualquer modal aberto. O dashboard normalmente só
-  // se esconde ao fechar (bandeja); destroy() fecha de verdade.
   BrowserWindow.getAllWindows().forEach((janela) => {
     if (janela !== janelaLogin && !janela.isDestroyed()) janela.destroy();
   });
@@ -267,11 +270,13 @@ ipcMain.on("sair-por-inatividade", async () => {
 });
 
 // ===================== MODAL DE CONFIRMAÇÃO ====================
+// Cada aviso guarda a sua própria resposta, pelo número da janela.
+// Antes era uma variável só: com dois avisos abertos, um deles travava.
+const confirmacoesAbertas = new Map();
+
 function abrirJanelaConfirmacao(janelaMae, dadosConfimacao) {
   return new Promise((resolve) => {
-    resolverConfirmacao = resolve;
-
-    janelaModalConfirmacao = new BrowserWindow({
+    const janelaModalConfirmacao = new BrowserWindow({
       width: 420,
       height: 370,
       parent: janelaMae,
@@ -301,12 +306,14 @@ function abrirJanelaConfirmacao(janelaMae, dadosConfimacao) {
       janelaModalConfirmacao.show(),
     );
 
+    const idJanela = janelaModalConfirmacao.webContents.id;
+    confirmacoesAbertas.set(idJanela, { janela: janelaModalConfirmacao, responder: resolve });
+
+    // Fechou sem responder: conta como "não"
     janelaModalConfirmacao.on("closed", () => {
-      janelaModalConfirmacao = null;
-      if (resolverConfirmacao) {
-        resolverConfirmacao(false);
-        resolverConfirmacao = null;
-      }
+      const pendente = confirmacoesAbertas.get(idJanela);
+      confirmacoesAbertas.delete(idJanela);
+      if (pendente) pendente.responder(false);
     });
   });
 }
@@ -319,12 +326,13 @@ ipcMain.handle("abrir-modal-confirmacao", (evento, dadosConfimacao) => {
   });
 });
 
+// Responde e fecha só a janela que foi clicada
 ipcMain.on("responder-confirmacao", (evento, resposta) => {
-  if (resolverConfirmacao) {
-    resolverConfirmacao(resposta);
-    resolverConfirmacao = null;
-  }
-  if (janelaModalConfirmacao) janelaModalConfirmacao.close();
+  const pendente = confirmacoesAbertas.get(evento.sender.id);
+  if (!pendente) return;
+  confirmacoesAbertas.delete(evento.sender.id);
+  pendente.responder(resposta);
+  if (!pendente.janela.isDestroyed()) pendente.janela.close();
 });
 
 function mostrarAviso(janelaMae, { tipo, titulo, mensagem, textoConfirmar }) {
@@ -338,8 +346,6 @@ function mostrarAviso(janelaMae, { tipo, titulo, mensagem, textoConfirmar }) {
 }
 
 // =========================== FROTAS ======================
-// Listar, salvar, arquivar e reativar ficam em main/ipc/frota.js.
-// Aqui ficam só a abertura e o fechamento do modal.
 ipcMain.on("abrir-modal-veiculo", (evento) => {
   if (janelaModalVeiculo) {
     janelaModalVeiculo.focus();
@@ -384,8 +390,6 @@ registrarIpcFrota({
 
 
 // =============== CLIENTES ===================
-// Listar, salvar, arquivar e reativar ficam em main/ipc/clientes.js.
-// Aqui ficam só a abertura e o fechamento do modal.
 ipcMain.on("abrir-modal-cliente", (evento) => {
   if (janelaModalCliente) {
     janelaModalCliente.focus();
@@ -430,13 +434,6 @@ registrarIpcClientes({
 
 
 // ============================= LOCAÇÕES =======================
-// Retirada, devolução e cancelamento ficam em main/ipc/locacoes.js
-// (pelas funções do banco). Aqui ficam só as janelas.
-
-// Molde para abrir uma janela de modal. Todas as janelas de modal são
-// iguais (sem moldura, presas na janela de trás, com o preload); só mudam
-// o arquivo e o tamanho. Em vez de copiar 20 linhas a cada janela nova,
-// chamamos esta função.
 function criarJanelaModal(janelaMae, arquivoHtml, largura, altura) {
   const janela = new BrowserWindow({
     width: largura,
@@ -489,9 +486,6 @@ ipcMain.on("abrir-modal-cancelar-locacao", (evento) => {
 ipcMain.on("fechar-modal-cancelar-locacao", () => {
   if (janelaModalCancelamento) janelaModalCancelamento.close();
 });
-
-// O contrato (ver, imprimir, salvar PDF) fica em main/ipc/contratos.js.
-// Janela maior que as outras: é uma folha A4 para ler.
 let janelaModalContrato;
 
 ipcMain.on("abrir-modal-contrato", (evento) => {
@@ -515,8 +509,6 @@ registrarIpcLocacoes({
 });
 
 // ============================== MANUTENÇÃO ==============================
-// Enviar para a oficina e liberar ficam em main/ipc/manutencoes.js (pelas
-// funções do banco). Aqui ficam só as duas janelas, no mesmo molde.
 let janelaModalManutencao;
 let janelaModalLiberarManutencao;
 
@@ -548,7 +540,6 @@ registrarIpcManutencoes({
 });
 
 // ============================== PAINEL E FINANÇAS =======================
-// Resumo do Dashboard e Financeiro: main/ipc/painel.js (pelas visões do banco)
 registrarIpcPainel();
 
 // =========================== GRUPOS DE PERMISSÃO ======================
@@ -618,9 +609,6 @@ ipcMain.on('fechar-modal-colaborador', () => {
 });
 
 // =========================== SENHA TEMPORÁRIA ======================
-// Janela que mostra a senha gerada ao cadastrar alguém ou redefinir a
-// senha. A senha fica guardada aqui só até a janela pedir; depois de
-// entregue, é apagada da memória (ela aparece uma única vez).
 let senhaTemporariaParaMostrar = null;
 
 function mostrarSenhaTemporaria(dados) {
@@ -654,7 +642,7 @@ function mostrarSenhaTemporaria(dados) {
 
 ipcMain.handle("pedir-senha-temporaria", () => {
   const dados = senhaTemporariaParaMostrar;
-  senhaTemporariaParaMostrar = null; // entregou, apagou
+  senhaTemporariaParaMostrar = null; 
   return dados;
 });
 
@@ -662,15 +650,11 @@ ipcMain.on("fechar-modal-senha-temporaria", () => {
   if (janelaModalSenhaTemporaria) janelaModalSenhaTemporaria.close();
 });
 
-// O botão "Copiar" da janela da senha. Quem mexe na área de transferência
-// do Windows é o processo principal (a tela não tem acesso direto a ela).
 ipcMain.on("copiar-texto", (evento, texto) => {
   clipboard.writeText(String(texto || ""));
 });
 
 // =========================== COLABORADORES ======================
-// Listar, cadastrar, editar, redefinir senha, desativar e ativar:
-// tudo em main/ipc/colaboradores.js.
 registrarIpcColaboradores({
   mostrarAviso,
   obterJanelaDashboard: () => janelaDashboard,
