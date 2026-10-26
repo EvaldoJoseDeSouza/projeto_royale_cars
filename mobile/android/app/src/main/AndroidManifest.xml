@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
-        android:label="royale_cars_location"
+        android:label="Royale Cars"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

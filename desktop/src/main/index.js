@@ -36,10 +36,14 @@ let janelaModalSenhaTemporaria;
 
 let tray = null;
 
+// Ícone da janela e da barra de tarefas
+const ICONE_APP = path.join(__dirname, "../imagens/icone-app.png");
+
 function criarJanela() {
   janelaPrincipal = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: ICONE_APP,
     autoHideMenuBar: false,
     show: false,
     webPreferences: {
@@ -208,6 +212,7 @@ ipcMain.on("login-sucesso", () => {
   janelaDashboard = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: ICONE_APP,
     autoHideMenuBar: false,
     webPreferences: {
       nodeIntegration: false,

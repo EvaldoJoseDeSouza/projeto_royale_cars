@@ -1,19 +1,45 @@
 {
   "name": "royale-cars-desktop",
   "version": "1.0.0",
-  "description": "",
+  "description": "Royale Cars - sistema de gestão de locadora (versão desktop)",
   "main": "src/main/index.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "instalador": "electron-builder --win nsis"
   },
   "keywords": [],
-  "author": "",
+  "author": "Caio Andrade Campos",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^42.9.0"
+    "electron": "^42.9.0",
+    "electron-builder": "26.0.12"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1"
+  },
+  "build": {
+    "appId": "br.cotil.royalecars",
+    "productName": "Royale Cars",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Royale Cars",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
   }
 }
