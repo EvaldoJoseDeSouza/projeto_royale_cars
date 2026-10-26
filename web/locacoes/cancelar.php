@@ -1,11 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | CANCELAR ALUGUEL
-|--------------------------------------------------------------------------
-| Para aluguel registrado por engano ou desistência. Quem faz é a função
-| cancelar_aluguel do banco (a mesma do desktop e do celular): nada é
-| cobrado, o veículo é liberado e o motivo fica registrado.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

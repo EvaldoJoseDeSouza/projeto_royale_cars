@@ -1,16 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | ENVIAR VEÍCULO PARA MANUTENÇÃO
-|--------------------------------------------------------------------------
-| Quem grava é a função abrir_manutencao do banco (a mesma do desktop e do
-| celular): confere se o carro está Disponível, trava-o, registra a ida à
-| oficina e marca o carro "Em manutenção" — tudo de uma vez.
-| (Carro alugado vai para a manutenção na DEVOLUÇÃO, marcando
-| "voltou com defeito".)
-|
-| Vistoria (opcional): o mesmo checklist do celular (motor, freios, pneus,
-| óleo). Se a caixa "Fiz a vistoria" não for marcada, vai vazio (null).
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -62,8 +52,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'p_previsao'     => $dados['previsao_liberacao'] !== '' ? $dados['previsao_liberacao'] : null,
         ];
 
-        // Cada item: marcado = OK (true), desmarcado = com problema (false).
-        // Sem vistoria, os 4 ficam null ("não foi verificado").
         foreach (array_keys(CHECKLIST_MANUTENCAO) as $item) {
             $parametros['p_' . $item] = $dados['fez_vistoria'] ? $dados[$item] : null;
         }

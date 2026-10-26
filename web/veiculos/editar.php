@@ -1,10 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | EDITAR VEÍCULO
-|--------------------------------------------------------------------------
-| Mudanças de preço ficam no histórico de ações. Aluguéis já feitos
-| guardam a diária da época e não mudam.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -49,12 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!empty($_POST['remover_imagem'])) {
             $dados['imagem'] = null;
         }
-
-        // O banco grava no histórico o que mudou ("diária de R$ ... para R$ ...")
         [$gravado, $erros] = salvar_veiculo($dados, $id);
 
         if ($gravado) {
-            // Trocou ou tirou a foto: a antiga não serve mais
             if ($dados['imagem'] !== $veiculo['imagem']) {
                 apagar_foto_veiculo($veiculo['imagem']);
             }

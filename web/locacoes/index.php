@@ -21,7 +21,6 @@ $busca = trim($_GET['busca'] ?? '');
 $de = $_GET['de'] ?? '';
 $ate = $_GET['ate'] ?? '';
 
-// A visão vw_locacoes já junta aluguel + cliente + veículo
 $filtro = filtro_locacoes($busca, $de, $ate);
 
 $contagem = [];
@@ -35,7 +34,6 @@ foreach (ABAS_LOCACAO as $chave => $info) {
 $locacoes = sb_select('vw_locacoes', $filtro + ABAS_LOCACAO[$aba]['filtro'] + [
     'select' => 'id,cliente_nome,cliente_telefone,marca,modelo,placa,data_retirada,data_prevista,data_devolucao,'
               . 'valor_previsto,valor_total,status,status_exibicao,dias_atraso_atual',
-    // Em andamento e atrasados: quem vence primeiro aparece primeiro
     'order'  => in_array($aba, ['andamento', 'atrasadas'], true) ? 'data_prevista.asc,id.asc' : 'id.desc',
     'limit'  => $limite,
     'offset' => $offset,

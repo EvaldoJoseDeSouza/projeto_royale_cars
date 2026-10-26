@@ -1,7 +1,6 @@
 <?php
 /*
-| Campos do formulário de cliente (usado em cadastrar e editar).
-| Espera as variáveis $dados e $erros.
+| Campos do formulário de cliente
 */
 ?>
 <div class="form-grid">

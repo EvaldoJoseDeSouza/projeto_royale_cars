@@ -1,29 +1,10 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | REGRAS DE ALUGUEL
-|--------------------------------------------------------------------------
-| A web NÃO grava direto nas tabelas de aluguel. Ela chama as funções do
-| banco, as mesmas que o desktop e o celular usam:
-|
-|   registrar_aluguel   → cria o aluguel e marca o carro como Alugado
-|   registrar_devolucao → fecha o aluguel, calcula tudo e libera o carro
-|                         (ou manda para a oficina, se voltou com defeito)
-|   cancelar_aluguel    → cancela sem cobrar e libera o carro
-|
-| Cada função faz tudo de uma vez: ou dá tudo certo, ou nada é gravado
-| (transação). E a conta é feita num lugar só, igual nas 3 plataformas:
-|  - mínimo de 1 diária;
-|  - na devolução, cobra os dias realmente usados × diária combinada
-|    (devolução adiantada cobra só os dias usados — decisão 10);
-|  - dias depois da data prevista aparecem como atraso (já estão somados);
-|  - taxas extras (combustível, limpeza, avaria) somam ao total, com motivo.
 */
 
-const MAX_DIAS_RETROATIVO = 30; // Pode registrar uma retirada de até 30 dias atrás (regra do banco)
+const MAX_DIAS_RETROATIVO = 30; 
 
-// Abas da lista. "Em andamento" e "Atrasados" usam o status_exibicao da
-// visão vw_locacoes, que já diz "Atrasada" quando passou da data prevista.
 const ABAS_LOCACAO = [
     'andamento'   => ['texto' => 'Em andamento', 'filtro' => ['status_exibicao' => 'eq.Em andamento']],
     'atrasadas'   => ['texto' => 'Atrasados',    'filtro' => ['status_exibicao' => 'eq.Atrasada']],
@@ -32,11 +13,6 @@ const ABAS_LOCACAO = [
     'todas'       => ['texto' => 'Todos',        'filtro' => []],
 ];
 
-/**
- * Filtros da busca na lista: cliente, veículo, placa ou nº do aluguel,
- * e o período da retirada. (Mesmo cuidado dos clientes: tira a
- * "pontuação de comando" do que foi digitado.)
- */
 function filtro_locacoes(string $busca, string $de, string $ate): array
 {
     $filtros = [];
@@ -47,7 +23,7 @@ function filtro_locacoes(string $busca, string $de, string $ate): array
         $condicoes = ["cliente_nome.ilike.*{$texto}*", "marca.ilike.*{$texto}*", "modelo.ilike.*{$texto}*", "placa.ilike.*{$codigo}*"];
 
         if (ctype_digit(ltrim($texto, '#'))) {
-            $condicoes[] = 'id.eq.' . (int) ltrim($texto, '#'); // "#15" ou "15"
+            $condicoes[] = 'id.eq.' . (int) ltrim($texto, '#'); 
         }
 
         $filtros['or'] = '(' . implode(',', $condicoes) . ')';
@@ -70,12 +46,6 @@ function filtro_locacoes(string $busca, string $de, string $ate): array
     return $filtros;
 }
 
-/**
- * Um aluguel com tudo para a tela de detalhes: cliente, veículo e o nome
- * de quem registrou e de quem encerrou ("pendurados" no mesmo pedido).
- * As duas ligações com perfis precisam de nome, porque a tabela locacoes
- * aponta para perfis duas vezes (usuario_id e finalizado_por).
- */
 function buscar_locacao(int $id): ?array
 {
     if ($id <= 0) {
@@ -95,7 +65,6 @@ function buscar_locacao(int $id): ?array
         return null;
     }
 
-    // Tira das "caixinhas" para as funções da tela (nome_veiculo, formatar_cpf...)
     $c = $l['clientes'] ?? [];
     $l += $l['veiculos'] ?? [];
     $l['cliente'] = $c['nome'] ?? '—';
@@ -108,10 +77,6 @@ function buscar_locacao(int $id): ?array
     return $l;
 }
 
-/**
- * O banco responde com frases prontas em português (ex.: "A CNH de Ana
- * venceu em..."). Aqui decidimos ao lado de qual campo cada frase aparece.
- */
 function campo_do_erro_locacao(string $mensagem): string
 {
     $m = mb_strtolower($mensagem);
@@ -130,13 +95,11 @@ function campo_do_erro_locacao(string $mensagem): string
     };
 }
 
-/** Chama uma função do banco e devolve [resultado, erros por campo]. */
 function chamar_funcao_locacao(string $funcao, array $parametros): array
 {
     try {
         return [sb_rpc($funcao, $parametros), []];
     } catch (SupabaseErro $e) {
-        // Regras CHECK da tabela (segunda barreira, caso a função deixe passar)
         $frases = [
             'km_retorno_valido' => ['km_retorno', 'A quilometragem de retorno não pode ser menor que a de saída.'],
             'taxas_com_motivo'  => ['taxas_extras', 'Informe o motivo das taxas extras (ex.: combustível, limpeza, avaria).'],
@@ -154,7 +117,6 @@ function chamar_funcao_locacao(string $funcao, array $parametros): array
     }
 }
 
-/** Assinatura do contrato (bucket privado "contratos"): link que vale 10 minutos. */
 function url_assinatura(?string $caminho): ?string
 {
     if (!$caminho) {

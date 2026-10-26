@@ -1,9 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | REATIVAR CLIENTE
-|--------------------------------------------------------------------------
-| Volta o cliente para a lista de ativos com todos os dados anteriores.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

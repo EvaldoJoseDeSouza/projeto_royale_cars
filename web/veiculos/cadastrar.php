@@ -1,9 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | CADASTRAR VEÍCULO
-|--------------------------------------------------------------------------
-| Todo veículo novo entra como "Disponível".
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -28,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$erros) {
-        // O banco põe o status "Disponível" e grava o histórico sozinho
         [$veiculo, $erros] = salvar_veiculo($dados + ['imagem' => $foto]);
 
         if ($veiculo) {
@@ -36,7 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirecionar('veiculos/ver.php?id=' . $veiculo['id']);
         }
 
-        // O banco recusou: a foto que já subiu ficaria "órfã" no Storage
         apagar_foto_veiculo($foto);
     }
 }

@@ -1,7 +1,6 @@
 <?php
 /*
-| Campos do formulário de veículo (usado em cadastrar e editar).
-| Espera as variáveis $dados e $erros (e $veiculo, na edição).
+| Campos do formulário de veículo
 */
 
 $alugado = isset($veiculo) && $veiculo['status'] === 'Alugado';

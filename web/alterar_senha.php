@@ -1,15 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | ALTERAR SENHA
-|--------------------------------------------------------------------------
-| Usada de dois jeitos (igual ao desktop):
-|  1) Obrigatória: a pessoa entrou com uma senha temporária (o chefe acabou
-|     de criar a conta ou redefinir a senha). Não pede a senha atual, porque
-|     ela acabou de entrar com a temporária.
-|  2) Voluntária, pela "Minha conta": pede a senha atual para conferir.
-|
-| A senha fica no Supabase Auth, não no nosso banco (ver includes/auth.php).
 */
 
 require __DIR__ . '/includes/bootstrap.php';
@@ -33,8 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erros['confirmar_senha'] = 'As senhas não são iguais.';
     }
 
-    // Só confere a senha atual se o resto estiver certo (cada conferência
-    // é uma tentativa de login no Supabase).
     if (!$erros && !$obrigatoria && !senha_atual_confere($usuario['email'], $atual)) {
         $erros['senha_atual'] = 'A senha atual está incorreta.';
     }

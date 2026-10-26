@@ -1,8 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| DETALHES DO ALUGUEL (também serve como comprovante para imprimir)
-|--------------------------------------------------------------------------
+| DETALHES DO ALUGUE
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -21,7 +19,6 @@ if (!$l) {
 $status = status_locacao($l);
 $hoje = date('Y-m-d');
 
-// Para aluguel em andamento, mostra quanto daria se devolvesse hoje
 $seDevolverHoje = null;
 
 if ($l['status'] === 'Em andamento') {

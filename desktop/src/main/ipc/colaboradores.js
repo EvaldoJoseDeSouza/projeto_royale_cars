@@ -1,30 +1,7 @@
-// =====================================================================
-//  IPC dos colaboradores (a equipe da locadora)
-// ---------------------------------------------------------------------
-//  Só o chefe mexe aqui. É o mesmo funcionamento da web:
-//
-//  - CADASTRAR: o chefe informa nome, e-mail, cargo e permissões. O
-//    sistema gera uma SENHA TEMPORÁRIA, que aparece uma única vez. No
-//    primeiro acesso a pessoa é obrigada a criar a própria senha.
-//  - REDEFINIR SENHA: gera outra senha temporária (a antiga para de valer).
-//  - DESATIVAR / ATIVAR: corta ou devolve o acesso. Nada é apagado, o
-//    histórico continua no banco.
-//
-//  Por que a Edge Function "admin-usuarios"?
-//  Criar um login no Supabase Auth, trocar a senha de OUTRA pessoa ou
-//  bloquear um login precisa da chave de serviço (service_role). Essa
-//  chave abre tudo, então ela NUNCA pode ficar dentro do app. Ela fica
-//  guardada no servidor do Supabase, dentro da função. O app só pede:
-//  "cria esta pessoa", e a função confere se quem pediu é o chefe.
-// =====================================================================
-
 const { ipcMain, BrowserWindow } = require("electron");
 const supabase = require("../supabase");
 const { temPermissao } = require("../sessao");
 
-// As 13 permissões e o que cada uma liga junto. É a mesma lista da tela
-// (renderer/compartilhado/permissoes.js), escrita de novo de propósito:
-// o processo principal é o "fiscal" e não confia no que a tela mandou.
 const PERMISSOES = [
   "clientes_ver", "clientes_gerenciar", "clientes_arquivar",
   "veiculos_ver", "veiculos_gerenciar", "veiculos_arquivar",
@@ -43,7 +20,6 @@ const DEPENDENCIAS = {
   relatorios_financeiros: ["relatorios"],
 };
 
-// Joga fora chaves que não existem e liga as dependências que faltarem
 function limparPermissoes(lista) {
   const marcadas = (Array.isArray(lista) ? lista : []).filter((p) => PERMISSOES.includes(p));
   const todas = new Set(marcadas);
@@ -51,16 +27,10 @@ function limparPermissoes(lista) {
   return [...todas];
 }
 
-// Chama a Edge Function. Devolve { dados } quando deu certo ou { erro }
-// com a mensagem que a função escreveu (ex.: "Já existe um usuário com
-// este e-mail."). O token do chefe logado vai junto automaticamente.
 async function chamarAdmin(corpo) {
   const { data, error } = await supabase.functions.invoke("admin-usuarios", { body: corpo });
 
   if (error) {
-    // Quando a função responde com erro (400, 403...), a mensagem vem
-    // dentro da resposta. Se nem isso der para ler, a internet caiu ou
-    // a função não está publicada.
     let mensagem = "Não foi possível falar com o servidor. Verifique a internet e tente de novo.";
     try {
       const corpoErro = await error.context.json();
@@ -75,13 +45,8 @@ async function chamarAdmin(corpo) {
   return { dados: data };
 }
 
-// "deps" vem do index.js:
-//   mostrarAviso, obterJanelaDashboard, obterJanelaColaborador,
-//   mostrarSenhaTemporaria({ nome, email, senha })
 function registrarIpcColaboradores(deps) {
   const { mostrarAviso, obterJanelaDashboard, obterJanelaColaborador, mostrarSenhaTemporaria } = deps;
-
-  // Avisa todas as janelas abertas que a lista da equipe mudou
   function avisarQueEquipeMudou() {
     BrowserWindow.getAllWindows().forEach((janela) => {
       if (!janela.isDestroyed()) janela.webContents.send("colaboradores-atualizados");
@@ -99,12 +64,8 @@ function registrarIpcColaboradores(deps) {
   }
 
   // ---------------------------------------------------------- LISTAR
-  // ativos = true → equipe ativa. ativos = false → desativados.
   async function listarEquipe(ativos) {
     if (!temPermissao("administracao")) return [];
-
-    // "usuario_permissoes(permissao)" pede ao Supabase para trazer junto as
-    // permissões de cada pessoa (as duas tabelas são ligadas pelo id).
     const { data, error } = await supabase
       .from("perfis")
       .select("id, nome, email, cargo, ativo, trocar_senha, ultimo_acesso, usuario_permissoes(permissao)")
@@ -116,7 +77,6 @@ function registrarIpcColaboradores(deps) {
       return [];
     }
 
-    // Transforma [{permissao:'clientes_ver'}, ...] em ['clientes_ver', ...]
     return data.map(({ usuario_permissoes, ...pessoa }) => ({
       ...pessoa,
       permissoes: (usuario_permissoes || []).map((linha) => linha.permissao),
@@ -168,14 +128,12 @@ function registrarIpcColaboradores(deps) {
 
         avisarQueEquipeMudou();
 
-        // Fecha o cadastro e mostra a senha (ela só aparece agora)
         if (janela && !janela.isDestroyed()) janela.close();
         mostrarSenhaTemporaria({ nome, email, senha: criado.senha_temporaria });
         return { sucesso: true };
       }
 
       // ---------- EDITAR
-      // 1) E-mail de login mudou? Isso mexe no Supabase Auth: Edge Function.
       const { data: antes, error: erroBusca } = await supabase
         .from("perfis")
         .select("email, cargo, usuario_permissoes(permissao)")
@@ -195,7 +153,6 @@ function registrarIpcColaboradores(deps) {
         }
       }
 
-      // 2) Nome e cargo: o chefe pode gravar direto (o banco confere)
       const { error: erroPerfil } = await supabase
         .from("perfis")
         .update({ nome, cargo })
@@ -207,9 +164,6 @@ function registrarIpcColaboradores(deps) {
         return { sucesso: false };
       }
 
-      // 3) Permissões: tira as desmarcadas e coloca as novas.
-      //    (Só mexe no que mudou: assim o histórico do banco registra
-      //    exatamente "Liberou X" e "Retirou Y".)
       const tinha = (antes.usuario_permissoes || []).map((linha) => linha.permissao);
       const tirar = tinha.filter((p) => !permissoes.includes(p));
       const colocar = permissoes.filter((p) => !tinha.includes(p));
@@ -245,7 +199,6 @@ function registrarIpcColaboradores(deps) {
   });
 
   // -------------------------------------------------- REDEFINIR SENHA
-  // A confirmação ("Gerar nova senha para Fulano?") já foi feita na tela.
   ipcMain.handle("redefinir-senha-colaborador", async (event, { id, nome }) => {
     const janela = obterJanelaDashboard();
     if (await negarSeNaoForChefe(janela)) return { sucesso: false };
@@ -256,7 +209,7 @@ function registrarIpcColaboradores(deps) {
       return { sucesso: false };
     }
 
-    avisarQueEquipeMudou(); // o cartão passa a mostrar "aguardando troca de senha"
+    avisarQueEquipeMudou(); 
     mostrarSenhaTemporaria({ nome, senha: dados.senha_temporaria });
     return { sucesso: true };
   });

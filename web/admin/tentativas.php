@@ -1,11 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| TENTATIVAS DE LOGIN (exclusivo do chefe)
-|--------------------------------------------------------------------------
-| Mostra entradas com sucesso e com erro, para identificar tentativas
-| suspeitas (muitas senhas erradas, e-mails que não existem, usuários
-| desativados tentando entrar).
+TENTATIVAS DE LOGIN (exclusivo do chefe)
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -35,7 +30,6 @@ $tentativas = sb_select('login_tentativas', $filtros + [
     'offset' => $offset,
 ]);
 
-// IPs com 3 ou mais falhas nos últimos 7 dias (agrupados aqui no PHP)
 $porIp = [];
 
 foreach (sb_select('login_tentativas', ['select' => 'ip,email,criado_em', 'sucesso' => 'eq.false',

@@ -1,8 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | FROTA DE VEÍCULOS
-|--------------------------------------------------------------------------
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -17,8 +15,6 @@ if (!in_array($status, STATUS_VEICULO, true)) {
     $status = '';
 }
 
-// Uma pergunta ao banco traz a frota (com a busca). As abas e o filtro
-// por status são feitos aqui mesmo, sem voltar ao banco.
 $frota = listar_veiculos(false, $busca);
 
 $contagem = ['' => count($frota)] + array_fill_keys(STATUS_VEICULO, 0);
@@ -29,8 +25,6 @@ foreach ($frota as $v) {
 
 $veiculos = $status === '' ? $frota : array_values(array_filter($frota, fn ($v) => $v['status'] === $status));
 
-// Ordem da tela: disponíveis primeiro, depois alugados, depois na oficina
-// (dentro de cada grupo, a ordem de marca e modelo que veio do banco)
 usort($veiculos, fn ($a, $b) => array_search($a['status'], STATUS_VEICULO) <=> array_search($b['status'], STATUS_VEICULO));
 
 $voltas = devolucoes_previstas();

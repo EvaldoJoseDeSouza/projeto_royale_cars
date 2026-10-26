@@ -1,18 +1,12 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | INICIALIZAÇÃO
-|--------------------------------------------------------------------------
-| Toda página começa com:  require __DIR__ . '/../includes/bootstrap.php';
-| Isso abre a sessão e carrega as funções do sistema. O banco é o
-| Supabase (o mesmo do desktop e do celular): não precisa de MySQL.
 */
 
 date_default_timezone_set('America/Sao_Paulo');
 
 define('RAIZ', dirname(__DIR__));
 
-// Sessão mais segura: o cookie não pode ser lido por JavaScript
 if (session_status() === PHP_SESSION_NONE) {
     session_name('ROYALECARS');
     session_set_cookie_params([
@@ -26,23 +20,17 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Cabeçalhos de segurança do navegador
 header('X-Frame-Options: DENY');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 
-require RAIZ . '/includes/supabase.php';     // Supabase: a ponte entre o PHP e o banco unificado
+require RAIZ . '/includes/supabase.php';     
 require RAIZ . '/includes/validacoes.php';
 require RAIZ . '/includes/funcoes.php';
 require RAIZ . '/includes/permissoes.php';
 require RAIZ . '/includes/auth.php';
 require RAIZ . '/includes/alertas.php';
 
-
-/*
-| Endereço base do sistema (ex.: "/royale-cars-web").
-| É calculado sozinho, então o sistema funciona em qualquer pasta do htdocs.
-*/
 function calcular_base_url(): string
 {
     $raiz   = str_replace('\\', '/', realpath(RAIZ));

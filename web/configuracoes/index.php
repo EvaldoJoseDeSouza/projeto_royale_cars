@@ -1,18 +1,13 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | MINHA CONTA
-|--------------------------------------------------------------------------
-| Cada usuário muda o próprio nome e vê suas permissões. Igual ao desktop:
-| cargo, e-mail de acesso e permissões só o chefe muda (decisão 11 do
-| plano), e o banco garante isso mesmo se alguém tentar burlar a tela.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
 
 $usuario = exigir_login();
 $erros = [];
-$dados = $usuario; // já vem do banco em usuario_logado()
+$dados = $usuario; 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verificar_csrf();
@@ -20,7 +15,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $dados['nome'] = trim(preg_replace('/\s+/', ' ', $_POST['nome'] ?? ''));
     $tamanho = mb_strlen($dados['nome']);
 
-    // Mesma regra do banco (tabela perfis) e do desktop
     if ($tamanho < 3 || $tamanho > 100) {
         $erros['nome'] = 'O nome precisa ter entre 3 e 100 caracteres.';
     }

@@ -1,7 +1,6 @@
 <?php
 /*
-| Reativa um veículo arquivado: ele volta para a frota como Disponível
-| (o banco acerta o status sozinho).
+| Reativa um veículo arquivado
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

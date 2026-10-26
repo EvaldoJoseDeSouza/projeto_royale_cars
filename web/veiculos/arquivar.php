@@ -1,11 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | ARQUIVAR VEÍCULO
-|--------------------------------------------------------------------------
-| Só veículos "Disponível" podem ser arquivados: um carro alugado ou na
-| oficina precisa voltar antes. Quem confere é o banco (a mesma regra vale
-| no desktop e no celular); se não puder, ele recusa com a frase pronta.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

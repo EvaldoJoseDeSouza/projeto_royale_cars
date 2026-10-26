@@ -1,17 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | RELATÓRIOS COM FILTROS, IMPRESSÃO E EXPORTAÇÃO CSV
-|--------------------------------------------------------------------------
-| Tipos: clientes, veículos, aluguéis, manutenções e faturamento.
-| - "relatorios" libera os relatórios operacionais.
-| - "relatorios_financeiros" libera o faturamento e as colunas de valores.
-| O banco deixa quem tem essas permissões LER clientes, veículos, aluguéis
-| e manutenções (script banco/06, decisão do grupo de 16/10) — só ler.
-|
-| Os dados vêm do Supabase. As somas (aluguéis por cliente, faturado por
-| carro...) são feitas aqui no PHP: a frota de uma locadora é pequena.
-| O CSV usa ";" e acentos UTF-8, para abrir certinho no Excel em português.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -41,8 +30,6 @@ if (!isset($tipos[$tipo])) {
     acesso_negado();
 }
 
-// ---------- Filtros comuns ----------
-// O funcionário agora é um código uuid do Supabase (ex.: "3f2a...-..."), não um número
 $usuarioId = (string) ($_GET['usuario_id'] ?? '');
 
 $f = [
@@ -58,8 +45,6 @@ if ($tipo === 'faturamento' && $f['de'] === '' && $f['ate'] === '' && !isset($_G
     $f['de'] = date('Y-m-01');
     $f['ate'] = date('Y-m-d');
 }
-
-/** Filtro de período do Supabase: and=(coluna.gte.de,coluna.lte.ate) */
 function filtro_periodo(string $coluna, string $de, string $ate, bool $comHora = false): array
 {
     $partes = [];
@@ -69,14 +54,12 @@ function filtro_periodo(string $coluna, string $de, string $ate, bool $comHora =
     }
 
     if ($ate) {
-        // Coluna com hora (ex.: criado_em): "até 15/10" vai até o fim do dia 15
         $partes[] = $comHora ? "{$coluna}.lt." . date('Y-m-d', strtotime($ate . ' +1 day')) : "{$coluna}.lte.{$ate}";
     }
 
     return $partes ? ['and' => '(' . implode(',', $partes) . ')'] : [];
 }
 
-/** Soma um campo por grupo: [id => total]. Ex.: faturado por carro. */
 function somar_por(array $linhas, string $grupo, ?string $campo = null): array
 {
     $totais = [];
@@ -88,12 +71,6 @@ function somar_por(array $linhas, string $grupo, ?string $campo = null): array
     return $totais;
 }
 
-/*
-| Cada relatório monta:
-|   $colunas = [['rotulo', 'tipo'], ...]   tipo: texto | data | moeda | numero | status
-|   $linhas  = [[valor, valor, ...], ...]
-|   $resumo  = ['Rótulo' => 'valor já formatado', ...]
-*/
 $colunas = [];
 $linhas = [];
 $resumo = [];
@@ -113,7 +90,6 @@ switch ($tipo) {
 
         $dados = sb_select('clientes', $filtros);
 
-        // Quantos aluguéis cada cliente fez e quanto pagou (só os finalizados contam como pago)
         $locacoes = sb_select('locacoes', ['select' => 'cliente_id,status,valor_total']);
         $alugueis = somar_por($locacoes, 'cliente_id');
         $gasto = somar_por(array_filter($locacoes, fn ($l) => $l['status'] === 'Finalizada'), 'cliente_id', 'valor_total');
@@ -210,7 +186,6 @@ switch ($tipo) {
 
     case 'locacoes':
     case 'faturamento':
-        // A visão vw_locacoes já traz cliente, veículo, atraso e quem registrou
         $campoData = $tipo === 'faturamento' ? 'data_devolucao' : 'data_retirada';
         $filtros = [
             'select' => 'id,cliente_nome,marca,modelo,placa,data_retirada,data_prevista,data_devolucao,dias_atraso,'
@@ -245,7 +220,6 @@ switch ($tipo) {
         $porFuncionario = [];
 
         foreach ($dados as $d) {
-            // Em andamento mostra o atraso de hoje; finalizado, o atraso cobrado
             $atraso = $d['status'] === 'Em andamento' ? $d['dias_atraso_atual'] : $d['dias_atraso'];
 
             $linha = [(int) $d['id'], $d['cliente_nome'], nome_veiculo($d), formatar_placa($d['placa']),
@@ -341,7 +315,7 @@ if (($_GET['formato'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename="royale-cars-' . $tipo . '-' . date('Y-m-d') . '.csv"');
 
     $saida = fopen('php://output', 'w');
-    fwrite($saida, "\xEF\xBB\xBF"); // Faz o Excel reconhecer os acentos
+    fwrite($saida, "\xEF\xBB\xBF"); 
 
     fputcsv($saida, array_column($colunas, 0), ';');
 

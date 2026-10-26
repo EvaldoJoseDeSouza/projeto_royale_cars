@@ -6,9 +6,6 @@
 | Abra http://localhost/<pasta-da-web>/diagnostico.php para conferir se este
 | computador consegue falar com o Supabase. Não precisa de login e não
 | mostra nenhum dado da locadora: só faz uma pergunta "inofensiva" ao banco.
-|
-| Não usa o bootstrap.php de propósito: assim funciona mesmo se o resto do
-| sistema estiver com problema (é justamente quando mais precisamos dele).
 */
 
 define('RAIZ', __DIR__);
@@ -16,7 +13,6 @@ require RAIZ . '/includes/supabase.php';
 
 $verificacoes = [];
 
-// 1. A extensão curl (o "navegador" do PHP) está ligada?
 $temCurl = function_exists('curl_init');
 $verificacoes[] = [
     'Extensão curl do PHP',
@@ -24,12 +20,10 @@ $verificacoes[] = [
     $temCurl ? 'Ligada.' : 'Desligada. No XAMPP: Config (do Apache) → PHP (php.ini) → procure ";extension=curl", tire o ";" e reinicie o Apache.',
 ];
 
-// 2. Qual configuração está valendo?
 $arquivoConfig = is_file(RAIZ . '/config/config.local.php') ? 'config.local.php' : 'config.exemplo.php';
 $config = sb_config();
 $verificacoes[] = ['Configuração', true, "Usando config/$arquivoConfig → " . htmlspecialchars($config['supabase_url'])];
 
-// 3. Certificado SSL encontrado?
 $certificado = sb_certificado();
 $verificacoes[] = [
     'Certificado SSL',
@@ -37,9 +31,6 @@ $verificacoes[] = [
     $certificado ? 'Usando ' . htmlspecialchars($certificado) : 'Usando os certificados do sistema operacional.',
 ];
 
-// 4. O teste de verdade: uma pergunta ao banco sem login.
-//    login_bloqueado diz se um e-mail está bloqueado por senhas erradas
-//    (é uma das poucas funções que o banco libera para quem não entrou).
 if ($temCurl) {
     $inicio = microtime(true);
     try {

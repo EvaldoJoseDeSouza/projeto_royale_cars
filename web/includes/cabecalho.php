@@ -1,12 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| CABEÇALHO + MENU LATERAL (usado por todas as páginas internas)
-|--------------------------------------------------------------------------
-| Antes de incluir, defina:
-|   $titulo    → título da página
-|   $subtitulo → (opcional) texto menor abaixo do título
-|   $menu      → item do menu que fica destacado
+| CABEÇALHO + MENU LATERAL
 */
 
 $usuarioAtual = usuario_logado();

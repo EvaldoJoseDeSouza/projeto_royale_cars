@@ -1,17 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| NOVO ALUGUEL (registrar retirada)
-|--------------------------------------------------------------------------
-| Quem decide se pode alugar é a função registrar_aluguel do banco (a
-| mesma do desktop e do celular). Ela confere, numa transação só:
-|  - cliente ativo, com CNH válida até o fim do aluguel;
-|  - veículo "Disponível" (e o "trava": se duas pessoas tentarem alugar o
-|    mesmo carro ao mesmo tempo, só a primeira consegue);
-|  - datas (retirada de até 30 dias atrás, no máximo 365 dias);
-|  - quilometragem de saída não menor que a atual do carro.
-| Se algo não passar, ela responde com a frase pronta, que mostramos ao
-| lado do campo certo. Aqui só conferimos o básico (campos preenchidos).
+| NOVO ALUGUEL 
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -61,11 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'p_data_retirada' => $dados['data_retirada'],
             'p_data_prevista' => $dados['data_prevista'],
             'p_observacoes'   => $dados['observacoes'] !== '' ? $dados['observacoes'] : null,
-            // Vazio = o banco usa a quilometragem atual do carro
             'p_km_saida'      => $dados['km_saida'] !== '' ? (int) $dados['km_saida'] : null,
         ]);
 
-        // Nesta tela, "devolução" só pode ser a prevista
         if (isset($erros['data_devolucao'])) {
             $erros['data_prevista'] = $erros['data_devolucao'];
             unset($erros['data_devolucao']);
@@ -78,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Listas dos campos de escolha
 $clientes = sb_select('clientes', [
     'select'    => 'id,nome,cpf,cnh_validade',
     'arquivado' => 'eq.false',

@@ -1,19 +1,12 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | FUNÇÕES DE APOIO
-|--------------------------------------------------------------------------
-| Funções usadas em várias páginas: segurança (CSRF), mensagens,
-| formatação e endereços. (O banco agora é o Supabase: as funções que
-| falam com ele estão em includes/supabase.php.)
 */
 
 
 /* ========================================================================
    ENDEREÇOS E REDIRECIONAMENTO
    ======================================================================== */
-
-/** Monta um link a partir da raiz do sistema. Ex.: url('clientes/index.php') */
 function url(string $caminho = ''): string
 {
     return BASE_URL . '/' . ltrim($caminho, '/');
@@ -25,7 +18,6 @@ function redirecionar(string $caminho): void
     exit;
 }
 
-/** Escapa texto para mostrar no HTML (evita XSS). */
 function e($texto): string
 {
     return htmlspecialchars((string) $texto, ENT_QUOTES, 'UTF-8');
@@ -39,9 +31,6 @@ function ip_cliente(): string
 
 /* ========================================================================
    PROTEÇÃO CSRF
-   Cada formulário leva um código secreto da sessão. Se outro site tentar
-   enviar um formulário em nome do usuário, o código não bate e a ação
-   é recusada.
    ======================================================================== */
 
 function csrf_token(): string
@@ -70,7 +59,6 @@ function verificar_csrf(): void
     }
 }
 
-/** Ações que mudam dados (arquivar, finalizar...) só aceitam POST + CSRF. */
 function exigir_post(): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -81,7 +69,6 @@ function exigir_post(): void
     verificar_csrf();
 }
 
-/** Formulário de um botão só, para ações como Arquivar ou Reativar. */
 function botao_acao(string $acao, array $campos, string $texto, string $classe = 'btn-small', string $confirmar = ''): string
 {
     $html = '<form method="POST" action="' . e(url($acao)) . '" class="form-inline"';
@@ -123,7 +110,6 @@ function mostrar_flash(): string
     return $html;
 }
 
-/** Mostra a lista de erros de validação de um formulário. */
 function mostrar_erros(array $erros): string
 {
     if (!$erros) {
@@ -139,7 +125,6 @@ function mostrar_erros(array $erros): string
     return $html . '</ul></div>';
 }
 
-/** Erro de um campo específico, embaixo do input. */
 function erro_campo(array $erros, string $campo): string
 {
     return isset($erros[$campo]) ? '<small class="campo-erro">' . e($erros[$campo]) . '</small>' : '';
@@ -194,7 +179,6 @@ function formatar_telefone(?string $telefone): string
     return (string) $telefone;
 }
 
-/** Placa antiga aparece com hífen (ABC-1234); Mercosul sem (ABC1D23). */
 function formatar_placa(?string $placa): string
 {
     $placa = (string) $placa;
@@ -209,7 +193,6 @@ function nome_veiculo(array $v): string
     return trim(($v['marca'] ?? '') . ' ' . ($v['modelo'] ?? ''));
 }
 
-/** Etiqueta colorida de status. */
 function badge_status(string $status): string
 {
     $classes = [
@@ -229,7 +212,6 @@ function badge_status(string $status): string
     return '<span class="status ' . ($classes[$status] ?? 'status-cinza') . '">' . e($status) . '</span>';
 }
 
-/** Status da locação levando em conta o atraso. */
 function status_locacao(array $locacao): string
 {
     if ($locacao['status'] === 'Em andamento' && $locacao['data_prevista'] < date('Y-m-d')) {
@@ -244,7 +226,6 @@ function dias_entre(string $inicio, string $fim): int
     return (int) (new DateTime($inicio))->diff(new DateTime($fim))->format('%r%a');
 }
 
-/** Nome do mês abreviado em português. */
 function mes_abreviado(int $mes): string
 {
     return ['', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][$mes];
@@ -253,12 +234,7 @@ function mes_abreviado(int $mes): string
 
 /* ========================================================================
    ANOTAÇÕES DE SEGURANÇA NO SERVIDOR
-   O histórico de ações do sistema (tabela logs) é escrito SÓ pelo banco:
-   ele anota sozinho cada cadastro, edição, aluguel... com o nome de quem
-   fez. Os aplicativos não podem escrever lá (assim ninguém inventa um
-   registro falso). Os avisos que só a web percebe (acesso negado,
-   formulário inválido) vão para o log de erros do Apache (no XAMPP:
-   apache/logs/error.log).
+   O histórico de ações do sistema (tabela logs)
    ======================================================================== */
 
 function anotar_no_servidor(string $descricao): void
@@ -267,13 +243,11 @@ function anotar_no_servidor(string $descricao): void
     error_log("[Royale Cars] {$descricao} (usuário: {$quem}, IP: " . ip_cliente() . ')');
 }
 
-/** Valor enviado no formulário (para manter o que foi digitado após um erro). */
 function campo(array $dados, string $nome, string $padrao = ''): string
 {
     return e($dados[$nome] ?? $padrao);
 }
 
-/** Paginação simples. Devolve [limite, offset, pagina, totalPaginas]. */
 function paginar(int $total, int $porPagina = 20): array
 {
     $totalPaginas = max(1, (int) ceil($total / $porPagina));
@@ -301,7 +275,7 @@ function links_paginacao(int $pagina, int $totalPaginas): string
 
 
 /* ========================================================================
-   ÍCONES (desenhos em SVG, funcionam sem internet)
+   ÍCONES
    ======================================================================== */
 
 function icone(string $nome): string

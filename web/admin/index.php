@@ -1,8 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| PAINEL ADMINISTRATIVO (exclusivo do chefe)
-|--------------------------------------------------------------------------
+PAINEL ADMINISTRATIVO (exclusivo do chefe)
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -15,12 +13,10 @@ $equipe = listar_equipe();
 $usuariosAtivos = count(array_filter($equipe, fn ($u) => $u['ativo'] && $u['cargo'] !== 'chefe'));
 $usuariosInativos = count(array_filter($equipe, fn ($u) => !$u['ativo']));
 
-// Horários do banco com o fuso de Brasília (-03:00), para "hoje" e "24 h" baterem com o relógio daqui
 $inicioDeHoje = date('Y-m-d') . 'T00:00:00-03:00';
 $acoesHoje = sb_contar('logs', ['criado_em' => 'gte.' . $inicioDeHoje]);
 $falhas24h = sb_contar('login_tentativas', ['sucesso' => 'eq.false', 'criado_em' => 'gte.' . date('c', time() - 86400)]);
 
-// As 10 últimas ações, sem as entradas no sistema (que são muitas)
 $ultimasAcoes = sb_select('logs', [
     'select' => 'id,descricao,criado_em,perfis(nome)',
     'or'     => '(modulo.neq.seguranca,acao.neq.login)',
@@ -28,7 +24,6 @@ $ultimasAcoes = sb_select('logs', [
     'limit'  => 10,
 ]);
 
-// Quantas ações cada pessoa fez nos últimos 30 dias
 $acoes30d = [];
 
 foreach (sb_select('logs', ['select' => 'usuario_id', 'criado_em' => 'gte.' . date('c', time() - 30 * 86400)]) as $l) {

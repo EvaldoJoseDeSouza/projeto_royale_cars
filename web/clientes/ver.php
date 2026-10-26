@@ -1,9 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | FICHA DO CLIENTE + HISTÓRICO DE ALUGUÉIS
-|--------------------------------------------------------------------------
-| Funciona também para clientes arquivados: o histórico nunca é apagado.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -19,15 +16,12 @@ if (!$cliente) {
     redirecionar('clientes/index.php');
 }
 
-// Os aluguéis do cliente, com o veículo "pendurado" em cada um.
-// Quem não tem permissão de ver aluguéis recebe a lista vazia (regra do banco).
 $locacoes = sb_select('locacoes', [
     'select'     => 'id,status,data_retirada,data_prevista,data_devolucao,valor_total,veiculos(marca,modelo,placa)',
     'cliente_id' => 'eq.' . $id,
     'order'      => 'data_retirada.desc,id.desc',
 ]);
 
-// Tira o veículo da "caixinha" para as funções nome_veiculo() e formatar_placa()
 foreach ($locacoes as &$l) {
     $l += $l['veiculos'] ?? [];
 }

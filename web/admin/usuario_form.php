@@ -1,16 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| CADASTRAR / EDITAR FUNCIONÁRIO OU GERENTE (exclusivo do chefe)
-|--------------------------------------------------------------------------
-| Cadastrar: tudo pela Edge Function (ela cria o login, o perfil e as
-| permissões, e devolve a senha temporária, que aparece uma única vez).
-| No primeiro login a pessoa é obrigada a criar a própria senha.
-|
-| Editar (igual ao desktop):
-|  1) e-mail mudou → Edge Function (mexe no login);
-|  2) nome e cargo → direto na tabela perfis (o banco confere se é o chefe);
-|  3) permissões   → tira as desmarcadas, coloca as novas.
+CADASTRAR / EDITAR FUNCIONÁRIO OU GERENTE (exclusivo do chefe)
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -53,7 +43,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erros['email'] = 'Digite um e-mail válido.';
     }
 
-    // O cargo de chefe não pode ser dado por aqui (o banco também barra)
     if (!in_array($dados['cargo'], ['gerente', 'funcionario'], true)) {
         $erros['cargo'] = 'Escolha o cargo.';
     }
@@ -74,7 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($erro) {
             $erros[str_contains($erro, 'e-mail') ? 'email' : 'geral'] = $erro;
         } else {
-            // A senha aparece uma única vez, na lista (depois some da sessão)
             $_SESSION['senha_temporaria'] = ['nome' => $dados['nome'], 'senha' => $criado['senha_temporaria']];
             flash('sucesso', "{$dados['nome']} cadastrado(a). Login: {$dados['email']}");
             redirecionar('admin/usuarios.php');
@@ -82,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$erros && $editando) {
-        // 1) E-mail de login (mexe no Supabase Auth: Edge Function)
         if ($dados['email'] !== $usuario['email']) {
             [, $erro] = chamar_admin(['acao' => 'alterar_email', 'usuario_id' => $id, 'email' => $dados['email']]);
 
@@ -93,7 +80,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$erros) {
             try {
-                // 2) Nome e cargo  3) Permissões (o banco anota tudo no histórico)
                 sb_atualizar('perfis', ['id' => 'eq.' . $id], ['nome' => $dados['nome'], 'cargo' => $dados['cargo']]);
                 salvar_permissoes($id, $usuario['permissoes'], $dados['permissoes']);
 

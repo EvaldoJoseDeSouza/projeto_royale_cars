@@ -1,26 +1,10 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| REGRAS DE CLIENTES (usadas pelas telas da pasta clientes/)
-|--------------------------------------------------------------------------
-| Quem confere o quê (as mesmas regras do desktop e do celular):
-|
-| - A TELA ajuda quem digita: máscara no CPF e no telefone (js/app.js).
-| - ESTE ARQUIVO limpa os dados (só números no CPF, CNH e telefone) e
-|   confere tudo antes de enviar, para mostrar o erro ao lado do campo.
-| - O BANCO (Supabase) é o juiz final: confere de novo, barra CPF, CNH e
-|   e-mail repetidos, impede arquivar quem tem aluguel em andamento e
-|   grava o histórico sozinho (quem cadastrou, o que mudou na edição).
-|
-| Nada é apagado: "arquivar" só tira o cliente da lista. O histórico de
-| aluguéis continua.
+| REGRAS DE CLIENTES 
 */
 
-// As colunas que as telas usam (nunca "select *": só o que precisa)
 const COLUNAS_CLIENTE = 'id,nome,cpf,cnh,cnh_validade,email,telefone,endereco,arquivado,arquivado_em,criado_em';
 
-// Frases para cada regra do banco (nomes em banco/01 e banco/02).
-// A chave do 2º nível diz em qual campo do formulário o erro aparece.
 const REGRAS_CLIENTE = [
     'clientes_nome_check'     => ['nome', 'Informe o nome completo (nome e sobrenome).'],
     'clientes_cpf_check'      => ['cpf', 'CPF inválido. Confira os números digitados.'],
@@ -30,17 +14,12 @@ const REGRAS_CLIENTE = [
     'clientes_endereco_check' => ['endereco', 'O endereço pode ter no máximo 200 caracteres.'],
 ];
 
-// Para o aviso de repetido: qual coluna cada regra UNIQUE protege
 const DUPLICADOS_CLIENTE = [
     'clientes_cpf_key'   => ['cpf', 'Este CPF'],
     'clientes_cnh_key'   => ['cnh', 'Esta CNH'],
     'clientes_email_key' => ['email', 'Este e-mail'],
 ];
 
-/**
- * Lê e confere os dados do formulário.
- * Devolve [dados limpos, erros por campo].
- */
 function validar_cliente(array $entrada): array
 {
     $dados = [
@@ -50,7 +29,6 @@ function validar_cliente(array $entrada): array
         'cnh_validade' => trim((string) ($entrada['cnh_validade'] ?? '')),
         'email'        => mb_strtolower(trim((string) ($entrada['email'] ?? ''))),
         'telefone'     => so_digitos($entrada['telefone'] ?? ''),
-        // Endereço é opcional (decisão 8): vazio vira null no banco
         'endereco'     => trim(preg_replace('/\s+/', ' ', (string) ($entrada['endereco'] ?? ''))) ?: null,
     ];
 
@@ -90,14 +68,6 @@ function validar_cliente(array $entrada): array
     return [$dados, $erros];
 }
 
-/**
- * Grava o cliente no Supabase: sem $id cadastra, com $id edita.
- * Devolve [cliente gravado ou null, erros por campo].
- *
- * Não conferimos repetidos antes (seriam 3 perguntas a mais ao banco):
- * tentamos gravar e, se o banco recusar por repetido, aí sim
- * descobrimos de quem é o CPF/CNH/e-mail para dar uma mensagem útil.
- */
 function salvar_cliente(array $dados, ?int $id = null): array
 {
     try {
@@ -123,7 +93,6 @@ function salvar_cliente(array $dados, ?int $id = null): array
     }
 }
 
-/** "Este CPF já pertence ao cliente Ana..." (ou sugere reativar, se arquivado). */
 function mensagem_duplicado_cliente(string $campo, string $rotulo, string $valor, ?int $idAtual): string
 {
     $dono = sb_linha('clientes', [
@@ -144,17 +113,11 @@ function mensagem_duplicado_cliente(string $campo, string $rotulo, string $valor
     return "{$rotulo} já pertence ao cliente {$dono['nome']}.";
 }
 
-/** Busca um cliente pelo id (ou null se não existir). */
 function buscar_cliente(int $id): ?array
 {
     return $id > 0 ? sb_linha('clientes', ['select' => COLUNAS_CLIENTE, 'id' => 'eq.' . $id]) : null;
 }
 
-/**
- * Arquiva ou reativa. Quem confere se o cliente tem aluguel em andamento
- * é o banco (tg_clientes_antes): se tiver, ele recusa com a frase pronta.
- * Devolve [cliente atualizado ou null, mensagem de erro ou null].
- */
 function mudar_arquivado_cliente(int $id, bool $arquivar): array
 {
     try {
@@ -170,7 +133,6 @@ function mudar_arquivado_cliente(int $id, bool $arquivar): array
     }
 }
 
-/** Situação da CNH para mostrar na tela. */
 function situacao_cnh(string $validade): string
 {
     $dias = dias_entre(date('Y-m-d'), $validade);
@@ -186,17 +148,10 @@ function situacao_cnh(string $validade): string
     return '';
 }
 
-/**
- * Filtros do Supabase para a lista de clientes (ativos ou arquivados).
- * A busca procura no nome e no e-mail; se tiver números, também no CPF,
- * no telefone e na CNH. Ex.: "ana" → or=(nome.ilike.*ana*,email.ilike.*ana*)
- */
 function filtro_clientes(bool $arquivados, string $busca): array
 {
     $filtros = ['arquivado' => 'eq.' . ($arquivados ? 'true' : 'false')];
 
-    // Vírgula, parênteses e asterisco têm significado especial no filtro "or"
-    // do Supabase: tiramos da busca para ninguém "quebrar" a pesquisa.
     $texto = trim(str_replace([',', '(', ')', '*', '"', '\\'], ' ', $busca));
 
     if ($texto !== '') {
@@ -213,11 +168,6 @@ function filtro_clientes(bool $arquivados, string $busca): array
     return $filtros;
 }
 
-/**
- * Quantos aluguéis cada cliente da página tem, por situação.
- * Devolve [id do cliente => ['Em andamento' => 1, 'Finalizada' => 4]].
- * (Quem não tem permissão de ver aluguéis recebe tudo zerado: regra do banco.)
- */
 function contar_alugueis_clientes(array $ids): array
 {
     if (!$ids) {
@@ -238,7 +188,6 @@ function contar_alugueis_clientes(array $ids): array
     return $contagem;
 }
 
-/** Página da lista: [clientes, total, pagina, totalPaginas]. */
 function listar_clientes(bool $arquivados, string $busca, string $ordem): array
 {
     $filtros = filtro_clientes($arquivados, $busca);

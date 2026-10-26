@@ -1,9 +1,3 @@
-/* =====================================================================
-   ROYALE CARS - Estilo geral
-   Um único arquivo organizado por seções. As cores ficam em variáveis
-   para facilitar ajustes.
-   ===================================================================== */
-
 :root {
     --azul:         #010d3d;
     --azul-2:       #0b1d5c;
@@ -840,8 +834,6 @@ tr.linha-alerta td {
     font-size: 12px;
 }
 
-/* Gráfico de barras feito só com HTML e CSS (funciona sem internet) */
-
 .grafico {
     display: flex;
     align-items: flex-end;
@@ -1248,7 +1240,6 @@ tr.linha-alerta td {
     }
 }
 
-/* Assinatura do contrato (colhida no celular, mostrada na web) */
 .assinatura-contrato {
     display: block;
     max-width: 320px;
@@ -1260,7 +1251,6 @@ tr.linha-alerta td {
     padding: 6px;
 }
 
-/* Vistoria da manutenção (checklist: motor, freios, pneus, óleo) */
 .checklist {
     display: flex;
     flex-wrap: wrap;

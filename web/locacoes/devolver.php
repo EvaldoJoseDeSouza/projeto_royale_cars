@@ -1,16 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | REGISTRAR DEVOLUÇÃO
-|--------------------------------------------------------------------------
-| Quem calcula e grava é a função registrar_devolucao do banco (a mesma do
-| desktop e do celular), numa transação só:
-|  - dias usados × diária (mínimo 1), com o atraso já somado;
-|  - taxas extras com motivo (combustível, limpeza, avaria);
-|  - quilometragem de retorno (atualiza a do carro);
-|  - libera o carro, ou manda direto para a oficina se voltou com defeito.
-| Ela devolve um resumo (dias, atraso, taxas, km rodados, total), que
-| mostramos na tela como comprovante.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -75,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'p_locacao_id'     => $id,
             'p_data_devolucao' => $dados['data_devolucao'],
             'p_observacoes'    => $dados['observacoes'] !== '' ? $dados['observacoes'] : null,
-            // Só manda o defeito se a caixinha estiver marcada
             'p_defeito'        => $dados['enviar_manutencao'] ? $dados['defeito'] : null,
             'p_oficina'        => $dados['enviar_manutencao'] && $dados['oficina'] !== '' ? $dados['oficina'] : null,
             'p_km_retorno'     => (int) $dados['km_retorno'],
@@ -84,7 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         if ($resumo) {
-            // O comprovante, com os números que o BANCO calculou
             $partes = [$resumo['dias'] . ' diária(s): ' . moeda($resumo['valor_diarias'])];
 
             if ($resumo['dias_atraso'] > 0) {

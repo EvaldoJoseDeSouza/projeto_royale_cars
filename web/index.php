@@ -1,17 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | LOGIN
-|--------------------------------------------------------------------------
-| Quem confere a senha é o Supabase (o mesmo login do desktop e do
-| celular). O roteiro completo está em includes/auth.php:
-| entrar_no_sistema().
-|
-| - Após 5 senhas erradas no mesmo e-mail, o banco bloqueia por 15 minutos.
-| - Usuário desativado pelo chefe não consegue entrar.
-| - Toda tentativa fica registrada para o chefe consultar.
-|
-| Não existe "Criar uma conta" aqui: só o chefe cadastra usuários.
 */
 
 require __DIR__ . '/includes/bootstrap.php';
@@ -37,7 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erro = entrar_no_sistema($email, $senha) ?? '';
 
         if ($erro === '') {
-            // Senha temporária? O exigir_login() do dashboard manda para a troca.
             redirecionar('dashboard.php');
         }
     }

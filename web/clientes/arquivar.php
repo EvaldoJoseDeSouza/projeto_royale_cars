@@ -1,14 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| ARQUIVAR CLIENTE
-|--------------------------------------------------------------------------
-| Não apaga nada: só marca como arquivado. O histórico de aluguéis
-| continua guardado e o cliente pode ser reativado depois.
-|
-| Cliente com aluguel em andamento não pode ser arquivado: quem confere é
-| o banco (a mesma regra vale no desktop e no celular). Se tiver, ele
-| recusa com a frase pronta, que mostramos na tela.
+ARQUIVAR CLIENTE
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

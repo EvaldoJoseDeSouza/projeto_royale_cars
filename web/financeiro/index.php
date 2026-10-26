@@ -1,9 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | FINANCEIRO
-|--------------------------------------------------------------------------
-| Restrito a quem tem a permissão "financeiro".
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -14,10 +11,6 @@ exigir_permissao('financeiro');
 $mensal = dados_mensais(12);
 $mesAtual = $mensal[date('Y-m')];
 
-// Todos os aluguéis finalizados, com cliente e carro "pendurados".
-// Uma pergunta só ao banco: dela saem os totais e os dois rankings.
-// (Quem só tem a permissão financeiro pode não ver nomes de clientes
-//  ou carros — regra do banco. Nesse caso aparece "—", mas os valores sim.)
 $finalizadas = sb_select('locacoes', [
     'select' => 'cliente_id,veiculo_id,data_devolucao,valor_total,valor_atraso,clientes(nome),veiculos(marca,modelo,placa)',
     'status' => 'eq.Finalizada',
@@ -38,7 +31,6 @@ foreach ($finalizadas as $l) {
         $faturamentoAno += $valor;
     }
 
-    // Soma por carro e por cliente (para os rankings)
     $porVeiculo[$l['veiculo_id']] ??= ($l['veiculos'] ?? ['marca' => '—', 'modelo' => '', 'placa' => '']) + ['alugueis' => 0, 'faturado' => 0.0];
     $porVeiculo[$l['veiculo_id']]['alugueis']++;
     $porVeiculo[$l['veiculo_id']]['faturado'] += $valor;
@@ -48,7 +40,6 @@ foreach ($finalizadas as $l) {
     $porCliente[$l['cliente_id']]['gasto'] += $valor;
 }
 
-// Os 5 maiores (usort: ordena do maior para o menor)
 usort($porVeiculo, fn ($a, $b) => $b['faturado'] <=> $a['faturado']);
 usort($porCliente, fn ($a, $b) => $b['gasto'] <=> $a['gasto']);
 $rankingVeiculos = array_slice($porVeiculo, 0, 5);

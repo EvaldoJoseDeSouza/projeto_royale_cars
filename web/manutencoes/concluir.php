@@ -1,11 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| CONCLUIR MANUTENÇÃO (liberar o veículo)
-|--------------------------------------------------------------------------
-| Quem grava é a função concluir_manutencao do banco: registra o serviço,
-| o custo e a data, e devolve o carro para "Disponível" (se não houver
-| outro reparo aberto para ele) — tudo de uma vez.
+| CONCLUIR MANUTENÇÃO 
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

@@ -1,10 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | MANUTENÇÃO DE VEÍCULOS
-|--------------------------------------------------------------------------
-| Enquanto a manutenção estiver "Em andamento", o veículo fica com status
-| "Em manutenção" e não aparece para aluguel.
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -24,7 +20,6 @@ foreach (ABAS_MANUTENCAO as $chave => $info) {
     $contagem[$chave] = sb_contar('manutencoes', $info['filtro']);
 }
 
-// Os carros na oficina primeiro; dentro de cada grupo, a entrada mais recente primeiro
 $manutencoes = array_map('preparar_manutencao', sb_select('manutencoes', ABAS_MANUTENCAO[$aba]['filtro'] + [
     'select' => COLUNAS_MANUTENCAO,
     'order'  => 'status.asc,data_entrada.desc,id.desc',

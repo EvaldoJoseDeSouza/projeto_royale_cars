@@ -1,16 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | ALERTAS AUTOMÁTICOS
-|--------------------------------------------------------------------------
-| Lidos da visão vw_alertas (a mesma do desktop e do celular):
-| - Aluguéis atrasados
-| - Devoluções nos próximos dias
-| - Veículos na oficina (e previsão de liberação vencida)
-| - Clientes com CNH vencida ou vencendo
-| - Tentativas suspeitas de login (só o chefe vê)
-| Cada tipo é desenhado pelo mesmo trecho de HTML, a partir da lista
-| TIPOS_ALERTA (includes/alertas.php).
 */
 
 require __DIR__ . '/includes/bootstrap.php';
@@ -20,7 +10,6 @@ exigir_login();
 $alertas = buscar_alertas();
 $total = contar_alertas();
 
-// Palavras que pedem destaque em vermelho no detalhe
 $urgente = fn (string $texto) => (bool) preg_match('/atraso|venceu|vencida|tentativa/i', $texto);
 
 $titulo = 'Alertas';

@@ -1,24 +1,8 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | DADOS MENSAIS E GRÁFICO DE BARRAS
-|--------------------------------------------------------------------------
-| O gráfico é feito só com HTML e CSS (sem biblioteca externa), então
-| funciona mesmo sem internet na hora da apresentação.
-|
-| Os números vêm das visões do banco, as mesmas do desktop:
-|   vw_faturamento_mensal → faturamento, aluguéis e manutenção, mês a mês
-|                           (só aparece para quem tem a permissão financeiro)
-|   vw_situacao_frota     → quantos carros em cada situação
-|
-| O faturamento entra no mês em que o carro foi DEVOLVIDO (quando o valor
-| final é conhecido). O custo de manutenção entra no mês da liberação.
 */
 
-/**
- * Últimos $meses meses: ['2026-05' => ['faturamento' =>, 'alugueis' =>, 'manutencao' =>], ...]
- * Quem não tem "financeiro" recebe só a quantidade de aluguéis (sem valores).
- */
 function dados_mensais(int $meses = 6): array
 {
     $inicio = date('Y-m-01', strtotime('-' . ($meses - 1) . ' months', strtotime(date('Y-m-01'))));
@@ -30,7 +14,6 @@ function dados_mensais(int $meses = 6): array
     }
 
     if (pode('financeiro')) {
-        // A visão já soma tudo: só copiamos os meses que interessam
         foreach (sb_select('vw_faturamento_mensal', ['select' => 'mes,faturamento,alugueis,manutencao']) as $linha) {
             $chave = substr($linha['mes'], 0, 7);
 
@@ -43,7 +26,6 @@ function dados_mensais(int $meses = 6): array
             }
         }
     } else {
-        // Sem financeiro: contamos só as devoluções de cada mês (sem valores)
         $devolvidas = sb_select('locacoes', [
             'select'         => 'data_devolucao',
             'status'         => 'eq.Finalizada',
@@ -69,7 +51,6 @@ function rotulo_mes(string $anoMes): string
     return mes_abreviado((int) $mes) . '/' . substr($ano, 2);
 }
 
-/** Valor curto para cima da barra: 12.500 → "12,5 mil" */
 function valor_curto(float $valor): string
 {
     if ($valor >= 1000000) {
@@ -83,10 +64,6 @@ function valor_curto(float $valor): string
     return number_format($valor, 0, ',', '.');
 }
 
-/**
- * Desenha o gráfico de barras.
- * $valores: ['2026-05' => 1234.5, ...]   $dinheiro: formata como R$
- */
 function grafico_barras(array $valores, bool $dinheiro = true): string
 {
     $maximo = max(1, max($valores ?: [0]));
@@ -112,7 +89,6 @@ function grafico_barras(array $valores, bool $dinheiro = true): string
          . '<div class="grafico-rotulos">' . $rotulos . '</div>';
 }
 
-/** Situação da frota agora (só veículos não arquivados), pela visão do banco. */
 function situacao_frota(): array
 {
     $v = sb_linha('vw_situacao_frota') ?? [];

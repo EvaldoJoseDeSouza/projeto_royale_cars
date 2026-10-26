@@ -1,9 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| FUNCIONÁRIOS E GERENTES (exclusivo do chefe)
-|--------------------------------------------------------------------------
-| Cadastrar, editar permissões, ativar/desativar e redefinir senha.
+FUNCIONÁRIOS E GERENTES (exclusivo do chefe)
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -28,7 +25,6 @@ if ($situacao === 'ativos') {
 
 $usuarios = listar_equipe($filtros);
 
-// Senha temporária recém-criada (aparece uma única vez)
 $senhaNova = $_SESSION['senha_temporaria'] ?? null;
 unset($_SESSION['senha_temporaria']);
 

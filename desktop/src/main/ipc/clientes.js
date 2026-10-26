@@ -1,28 +1,10 @@
-// =====================================================================
-//  IPC dos clientes
-// ---------------------------------------------------------------------
-//  Quem confere o quê (as mesmas regras da web e do celular):
-//
-//  - A TELA ajuda quem digita: máscara no CPF e no telefone.
-//  - ESTE ARQUIVO limpa os dados (só números no CPF, CNH e telefone),
-//    confere o que é simples (campos vazios, data da CNH) e, se o banco
-//    recusar, traduz o motivo para português.
-//  - O BANCO é o juiz final: confere os dígitos do CPF e da CNH, o DDD
-//    do telefone, e-mail, duplicados e se dá para arquivar.
-//
-//  Nada é apagado: "arquivar" só esconde o cliente das listas. O
-//  histórico de locações continua.
-// =====================================================================
-
 const { ipcMain, BrowserWindow } = require("electron");
 const supabase = require("../supabase");
 const { temPermissao } = require("../sessao");
 const { traduzirErroBanco, nomeDaRegra } = require("../erros-banco");
 
-// As colunas que a tela usa (nunca "select *": só o que precisa)
 const COLUNAS = "id, nome, cpf, cnh, cnh_validade, email, telefone, endereco, arquivado";
 
-// Frases para cada regra do banco (nomes em banco/01 e banco/02)
 const MENSAGENS_DO_BANCO = {
   clientes_nome_check: "Informe o nome completo (nome e sobrenome).",
   clientes_cpf_check: "CPF inválido. Confira os números digitados.",
@@ -32,7 +14,6 @@ const MENSAGENS_DO_BANCO = {
   clientes_endereco_check: "O endereço pode ter no máximo 200 caracteres.",
 };
 
-// Para o aviso de duplicado: qual coluna cada regra UNIQUE protege
 const DUPLICADOS = {
   clientes_cpf_key: { coluna: "cpf", rotulo: "Este CPF" },
   clientes_cnh_key: { coluna: "cnh", rotulo: "Esta CNH" },
@@ -41,9 +22,6 @@ const DUPLICADOS = {
 
 const soDigitos = (texto) => String(texto || "").replace(/\D/g, "");
 
-// "AAAA-MM-DD" de hoje no horário do computador, mais ou menos N anos.
-// (toISOString sozinho dá a data de Londres: depois das 21h no Brasil
-// ele já diria "amanhã". Por isso descontamos o fuso antes.)
 function dataDaqui(anos = 0) {
   const d = new Date();
   d.setFullYear(d.getFullYear() + anos);
@@ -51,7 +29,6 @@ function dataDaqui(anos = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-// Limpa os dados e confere o que é simples. Devolve { cliente, erro }.
 function prepararCliente(dados) {
   const cliente = {
     nome: String(dados.nome || "").trim().replace(/\s+/g, " "),
@@ -78,8 +55,6 @@ function prepararCliente(dados) {
   return { cliente };
 }
 
-// CPF/CNH/e-mail repetido: diz DE QUEM é (igual à web). Se o dono estiver
-// arquivado, sugere reativar em vez de cadastrar de novo.
 async function mensagemDeDuplicado(regra, cliente, idAtual) {
   const { coluna, rotulo } = DUPLICADOS[regra];
   const { data: dono } = await supabase
@@ -96,13 +71,10 @@ async function mensagemDeDuplicado(regra, cliente, idAtual) {
   return `${rotulo} já pertence ao cliente ${dono.nome}.`;
 }
 
-// Quantos dias faltam para a data (negativo = já passou)
 function diasAte(dataTexto) {
-  // As duas datas no mesmo formato "AAAA-MM-DD": a conta fica exata
   return Math.round((new Date(dataTexto) - new Date(dataDaqui())) / 86400000);
 }
 
-// "deps" vem do index.js: mostrarAviso, obterJanelaDashboard, obterJanelaCliente
 function registrarIpcClientes(deps) {
   const { mostrarAviso, obterJanelaDashboard, obterJanelaCliente } = deps;
 
@@ -154,7 +126,6 @@ function registrarIpcClientes(deps) {
         return { sucesso: false };
       }
 
-      // Com id = editar. Sem id = cadastrar. Os dois mandam TODOS os campos.
       const { error } = dados.id
         ? await supabase.from("clientes").update(cliente).eq("id", dados.id)
         : await supabase.from("clientes").insert(cliente);
@@ -171,8 +142,6 @@ function registrarIpcClientes(deps) {
 
       avisarQueClientesMudaram();
 
-      // Salva mesmo com a CNH vencida (o cliente pode estar renovando),
-      // mas avisa: o banco não deixa alugar enquanto não atualizar.
       const dias = diasAte(cliente.cnh_validade);
       const avisoCnh = dias < 0
         ? " Atenção: a CNH está vencida. Ele só poderá alugar depois de atualizar a validade."
@@ -194,8 +163,6 @@ function registrarIpcClientes(deps) {
   });
 
   // ------------------------------------------- ARQUIVAR / REATIVAR
-  // Quem confere se o cliente tem aluguel em andamento é o banco
-  // (tg_clientes_antes). Se tiver, ele recusa com uma frase pronta.
   async function mudarArquivado(id, arquivar) {
     const janela = obterJanelaDashboard();
     if (await negarSemPermissao(janela, "clientes_arquivar")) return { sucesso: false };

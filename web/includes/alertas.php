@@ -1,25 +1,11 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | ALERTAS AUTOMÁTICOS
-|--------------------------------------------------------------------------
-| Vêm prontos da visão vw_alertas do banco — a MESMA que o desktop e o
-| celular usam, então o número de alertas é igual nas 3 plataformas:
-|   atraso             aluguel que passou da data prevista
-|   devolucao_proxima  devolução hoje ou nos próximos 2 dias
-|   manutencao         carro na oficina (avisa se a previsão venceu)
-|   cnh                cliente com CNH vencida ou vencendo em 30 dias
-|   login_suspeito     3+ senhas erradas do mesmo e-mail em 24 h
-|
-| Cada pessoa vê só os alertas do que pode ver: a visão respeita as
-| regras de acesso do banco (RLS). Ex.: login suspeito só o chefe vê.
 */
 
-const DIAS_AVISO_DEVOLUCAO = 2;  // Devoluções nos próximos 2 dias (regra da visão)
-const DIAS_AVISO_CNH       = 30; // CNH que vence em até 30 dias (regra da visão)
+const DIAS_AVISO_DEVOLUCAO = 2;  
+const DIAS_AVISO_CNH       = 30;
 
-// Como cada tipo aparece na tela: título, cor da etiqueta, texto da
-// etiqueta, para onde o botão leva e quem pode clicar nele.
 const TIPOS_ALERTA = [
     'atraso' => [
         'titulo' => 'Aluguéis atrasados', 'etiqueta' => 'Atraso', 'cor' => 'status-vermelho',
@@ -48,10 +34,6 @@ const TIPOS_ALERTA = [
     ],
 ];
 
-/**
- * Os alertas agrupados por tipo: ['atraso' => [...], 'cnh' => [...], ...].
- * Uma pergunta só ao banco por página (o resultado fica guardado).
- */
 function buscar_alertas(): array
 {
     static $grupos = null;
@@ -66,7 +48,7 @@ function buscar_alertas(): array
         $lista = sb_select('vw_alertas', ['select' => 'tipo,referencia_id,titulo,detalhe,data', 'order' => 'data.asc']);
     } catch (SupabaseErro $e) {
         error_log('Não foi possível buscar os alertas: ' . $e->getMessage());
-        $lista = []; // sem alertas é melhor do que travar a página inteira
+        $lista = []; 
     }
 
     foreach ($lista as $alerta) {
@@ -78,13 +60,11 @@ function buscar_alertas(): array
     return $grupos;
 }
 
-/** Total de alertas (aparece no menu lateral). */
 function contar_alertas(): int
 {
     return array_sum(array_map('count', buscar_alertas()));
 }
 
-/** Pode clicar no botão deste tipo de alerta? */
 function pode_abrir_alerta(string $tipo): bool
 {
     $permissao = TIPOS_ALERTA[$tipo]['permissao'];
@@ -92,7 +72,6 @@ function pode_abrir_alerta(string $tipo): bool
     return $permissao === 'chefe' ? eh_chefe() : pode($permissao);
 }
 
-/** Endereço do botão de um alerta. */
 function link_alerta(array $alerta): string
 {
     $link = TIPOS_ALERTA[$alerta['tipo']]['link'];

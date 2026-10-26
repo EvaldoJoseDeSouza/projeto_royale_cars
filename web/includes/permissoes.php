@@ -1,10 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | CARGOS E PERMISSÕES
-|--------------------------------------------------------------------------
-| O chefe tem acesso a tudo. Gerentes e funcionários só fazem o que o
-| chefe marcar para cada um na Administração.
 */
 
 const CARGOS = [
@@ -13,7 +9,6 @@ const CARGOS = [
     'funcionario' => 'Funcionário',
 ];
 
-/** Permissões agrupadas por módulo (é assim que aparecem no formulário). */
 const PERMISSOES = [
     'Clientes' => [
         'clientes_ver'       => 'Ver clientes',
@@ -40,10 +35,6 @@ const PERMISSOES = [
     ],
 ];
 
-/**
- * Quem pode fazer algo também precisa poder ver.
- * Ex.: marcar "cadastrar clientes" adiciona "ver clientes" automaticamente.
- */
 const PERMISSOES_DEPENDENTES = [
     'clientes_gerenciar'     => ['clientes_ver'],
     'clientes_arquivar'      => ['clientes_ver'],
@@ -77,7 +68,6 @@ function nome_permissao(string $chave): string
     return $chave;
 }
 
-/** Remove permissões desconhecidas e acrescenta as dependências. */
 function limpar_permissoes(array $marcadas): array
 {
     $validas = array_values(array_intersect($marcadas, todas_permissoes()));

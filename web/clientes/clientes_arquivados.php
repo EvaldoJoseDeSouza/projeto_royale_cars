@@ -1,10 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| CLIENTES ARQUIVADOS
-|--------------------------------------------------------------------------
-| Lista exclusiva dos clientes arquivados. Daqui é possível consultar o
-| histórico e reativar o cadastro.
+CLIENTES ARQUIVADOS
 */
 
 require __DIR__ . '/../includes/bootstrap.php';

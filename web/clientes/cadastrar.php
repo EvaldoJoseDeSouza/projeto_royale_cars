@@ -1,8 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| CADASTRAR CLIENTE
-|--------------------------------------------------------------------------
+CADASTRAR CLIENTE
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -19,7 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     [$dados, $erros] = validar_cliente($_POST);
 
     if (!$erros) {
-        // O banco grava o histórico ("Cadastrou o cliente...") sozinho
         [$cliente, $erros] = salvar_cliente($dados);
 
         if ($cliente) {

@@ -1,9 +1,4 @@
 <?php
-/*
-| Ativar ou desativar o acesso de um funcionário/gerente (Edge Function).
-| Quem é desativado perde o acesso na hora, mesmo que esteja logado: o
-| banco para de entregar os dados e o login fica bloqueado.
-*/
 
 require __DIR__ . '/../includes/bootstrap.php';
 require RAIZ . '/includes/usuarios.php';

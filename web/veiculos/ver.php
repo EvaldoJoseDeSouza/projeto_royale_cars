@@ -1,8 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | FICHA DO VEÍCULO + HISTÓRICO DE ALUGUÉIS E MANUTENÇÕES
-|--------------------------------------------------------------------------
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -18,8 +16,6 @@ if (!$veiculo) {
     redirecionar('veiculos/index.php');
 }
 
-// Aluguéis do carro com o nome do cliente "pendurado" em cada um.
-// (O banco só entrega o que a pessoa pode ver: sem permissão, vem vazio.)
 $locacoes = sb_select('locacoes', [
     'select'     => 'id,status,data_retirada,data_prevista,data_devolucao,valor_total,clientes(nome)',
     'veiculo_id' => 'eq.' . $id,

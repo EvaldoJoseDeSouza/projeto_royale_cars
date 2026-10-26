@@ -1,10 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
 | DASHBOARD GERENCIAL
-|--------------------------------------------------------------------------
-| Cada pessoa vê os indicadores dos módulos a que tem acesso. Valores
-| financeiros só aparecem para quem tem a permissão "financeiro".
 */
 
 require __DIR__ . '/includes/bootstrap.php';
@@ -21,7 +17,6 @@ $frota = situacao_frota();
 $totalFrota = array_sum($frota);
 $ocupacao = $totalFrota ? round($frota['Alugado'] / $totalFrota * 100) : 0;
 
-// Contagens: o banco devolve só o número (não baixa as linhas)
 $alugueisAtivos = sb_contar('locacoes', ['status' => 'eq.Em andamento']);
 $atrasados = sb_contar('locacoes', ['status' => 'eq.Em andamento', 'data_prevista' => 'lt.' . $hoje]);
 $devolucoesHoje = sb_contar('locacoes', ['status' => 'eq.Em andamento', 'data_prevista' => 'eq.' . $hoje]);

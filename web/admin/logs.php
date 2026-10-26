@@ -1,12 +1,6 @@
 <?php
 /*
-|--------------------------------------------------------------------------
-| HISTÓRICO DE AÇÕES (exclusivo do chefe)
-|--------------------------------------------------------------------------
-| Quem cadastrou um cliente, mudou o preço de um carro, arquivou um
-| cadastro, finalizou um aluguel... com data, hora e IP.
-| Quem escreve o histórico é o próprio banco (nenhum aplicativo consegue
-| escrever, editar ou apagar): é o mesmo histórico do desktop e do celular.
+HISTÓRICO DE AÇÕES (exclusivo do chefe)
 */
 
 require __DIR__ . '/../includes/bootstrap.php';
@@ -38,14 +32,12 @@ $filtros = [];
 if ($f['usuario_id']) { $filtros['usuario_id'] = 'eq.' . $f['usuario_id']; }
 if ($f['modulo']) { $filtros['modulo'] = 'eq.' . $f['modulo']; }
 
-// Período no fuso de Brasília: "até 15/10" vai até o fim do dia 15
 $periodo = [];
 if ($f['de']) { $periodo[] = 'criado_em.gte.' . $f['de'] . 'T00:00:00-03:00'; }
 if ($f['ate']) { $periodo[] = 'criado_em.lt.' . date('Y-m-d', strtotime($f['ate'] . ' +1 day')) . 'T00:00:00-03:00'; }
 if ($periodo) { $filtros['and'] = '(' . implode(',', $periodo) . ')'; }
 
 if ($f['busca'] !== '') {
-    // Tira a "pontuação de comando" do filtro (ver filtro_clientes)
     $texto = trim(str_replace([',', '(', ')', '*', '"', '\\'], ' ', $f['busca']));
     $filtros['descricao'] = 'ilike.*' . $texto . '*';
 }

@@ -1,10 +1,4 @@
 <?php
-/*
-| Redefinir a senha de um funcionário/gerente (Edge Function admin-usuarios).
-| Gera uma senha temporária (mostrada uma única vez ao chefe), obriga a
-| pessoa a criar uma senha nova no próximo login e libera o login caso
-| ela estivesse bloqueada por errar a senha. O banco anota no histórico.
-*/
 
 require __DIR__ . '/../includes/bootstrap.php';
 require RAIZ . '/includes/usuarios.php';
