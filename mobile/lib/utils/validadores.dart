@@ -81,7 +81,7 @@ String mascaraTelefone(String valorAtual) {
     return digitos.replaceAllMapped(
         RegExp(r'^(\d{2})(\d{1,4})$'), (m) => '(${m[1]}) ${m[2]}');
   } else if (digitos.isNotEmpty) {
-    return '(${digitos}';
+    return '($digitos';
   }
   return digitos;
 }

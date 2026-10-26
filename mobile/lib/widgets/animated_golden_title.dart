@@ -4,8 +4,7 @@ class AnimatedGoldenTitle extends StatefulWidget {
   final String text;
   final double fontSize;
 
-  const AnimatedGoldenTitle(this.text, {this.fontSize = 24, Key? key})
-    : super(key: key);
+  const AnimatedGoldenTitle(this.text, {this.fontSize = 24, super.key});
 
   @override
   State<AnimatedGoldenTitle> createState() => _AnimatedGoldenTitleState();
