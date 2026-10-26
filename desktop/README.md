@@ -5,8 +5,9 @@ Versão desktop do Royale Cars, para Windows. Feita em Electron (JavaScript, HTM
 ## Como rodar
 
 ```
-npm install   (só na primeira vez)
-npm start
+npm install            (só na primeira vez)
+npm start              abre o sistema
+npm run instalador     gera o instalador do Windows em dist/Royale Cars Setup 1.0.0.exe
 ```
 
 ## Como o código está organizado
@@ -32,9 +33,11 @@ src/
 │       ├── clientes.js       clientes
 │       ├── frota.js          veículos
 │       ├── locacoes.js       retirada, devolução e cancelamento (funções do banco)
+│       ├── contratos.js      contrato com a assinatura: ver, imprimir e salvar PDF
+│       ├── manutencoes.js    enviar para a oficina e liberar (funções do banco)
 │       └── painel.js         números do Dashboard e Financeiro (visões do banco)
 ├── preload/preload.js        a ponte entre as telas e o processo principal
-├── imagens/                  ícone do sistema (bandeja e telas)
+├── imagens/                  logo e ícone do sistema (bandeja, janelas e telas)
 └── renderer/                 as telas, organizadas por tela
     ├── telas/
     │   ├── login/            login.html + login.js + login.css
@@ -45,6 +48,9 @@ src/
     │   ├── locacao/          retirada (nova locação)
     │   ├── devolucao/
     │   ├── cancelar-locacao/
+    │   ├── contrato/         contrato com a assinatura do cliente
+    │   ├── manutencao/       enviar para a oficina (com vistoria)
+    │   ├── liberar-manutencao/
     │   ├── colaborador/
     │   ├── grupo-permissao/  (modelos de permissão)
     │   ├── confirmacao/
