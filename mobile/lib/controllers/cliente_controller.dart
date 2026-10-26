@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/cliente.dart';
 import '../services/supabase_service.dart';
+import '../utils/atualizar_sem_falhar.dart';
 
 /// Guarda as listas de clientes (ativos e arquivados) e avisa as telas
 /// quando elas mudam (é o "notifyListeners").
@@ -33,7 +34,7 @@ class ClienteController extends ChangeNotifier {
   /// deixa alugar enquanto a validade não for atualizada.
   Future<String> salvarCliente(Cliente cliente) async {
     await SupabaseService.instance.salvarCliente(cliente);
-    await carregarClientes();
+    await atualizarSemFalhar(carregarClientes);
 
     final dias = cliente.diasParaVencerCnh;
     final aviso = dias < 0
@@ -47,13 +48,13 @@ class ClienteController extends ChangeNotifier {
 
   Future<String> arquivarCliente(int idCliente) async {
     final cliente = await SupabaseService.instance.mudarArquivadoCliente(idCliente, true);
-    await carregarClientes();
+    await atualizarSemFalhar(carregarClientes);
     return '${cliente.nome} saiu da lista de clientes. O histórico de locações continua guardado.';
   }
 
   Future<String> reativarCliente(int idCliente) async {
     final cliente = await SupabaseService.instance.mudarArquivadoCliente(idCliente, false);
-    await Future.wait([carregarClientesArquivados(), carregarClientes()]);
+    await atualizarSemFalhar(() => Future.wait([carregarClientesArquivados(), carregarClientes()]));
     return '${cliente.nome} voltou para a lista de clientes.'
         '${cliente.cnhVencida ? ' A CNH está vencida: atualize a validade antes de um novo aluguel.' : ''}';
   }

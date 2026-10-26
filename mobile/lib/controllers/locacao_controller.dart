@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/locacao.dart';
 import '../services/supabase_service.dart';
+import '../utils/atualizar_sem_falhar.dart';
 
 /// Guarda os aluguéis (em andamento e o histórico) e avisa as telas
 /// quando eles mudam.
@@ -55,8 +56,11 @@ class LocacaoController extends ChangeNotifier {
       assinaturaPath: caminho,
     );
 
-    await carregarAtivas();
-    return _ativas.firstWhere((l) => l.id == id);
+    // Já gravou: se a lista não recarregar, busca só este aluguel
+    await atualizarSemFalhar(carregarAtivas);
+    final daLista = _ativas.where((l) => l.id == id);
+    if (daLista.isNotEmpty) return daLista.first;
+    return servico.buscarLocacao(id);
   }
 
   /// Lista de uma aba da tela de Locações ("Em andamento", "Atrasados"...).
@@ -83,12 +87,12 @@ class LocacaoController extends ChangeNotifier {
       defeito: defeito,
       oficina: oficina,
     );
-    await carregarAtivas();
+    await atualizarSemFalhar(carregarAtivas);
     return resumo;
   }
 
   Future<void> cancelar(int locacaoId, String motivo) async {
     await SupabaseService.instance.cancelarAluguel(locacaoId, motivo);
-    await carregarAtivas();
+    await atualizarSemFalhar(carregarAtivas);
   }
 }

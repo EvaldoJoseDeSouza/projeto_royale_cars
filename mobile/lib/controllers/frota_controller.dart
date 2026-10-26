@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/veiculo.dart';
 import '../services/supabase_service.dart';
+import '../utils/atualizar_sem_falhar.dart';
 
 /// Guarda as listas da frota (ativa e arquivada) e avisa as telas
 /// quando elas mudam.
@@ -32,7 +33,7 @@ class FrotaController extends ChangeNotifier {
   /// Salva e devolve a frase para mostrar na tela.
   Future<String> salvarVeiculo(Veiculo veiculo) async {
     await SupabaseService.instance.salvarVeiculo(veiculo);
-    await carregarVeiculos();
+    await atualizarSemFalhar(carregarVeiculos);
     return veiculo.id != null
         ? 'O ${veiculo.nomeCompleto} foi atualizado.'
         : 'O ${veiculo.nomeCompleto} entrou na frota como Disponível.';
@@ -40,17 +41,17 @@ class FrotaController extends ChangeNotifier {
 
   Future<String> arquivarVeiculo(int idVeiculo) async {
     final veiculo = await SupabaseService.instance.mudarArquivadoVeiculo(idVeiculo, true);
-    await carregarVeiculos();
+    await atualizarSemFalhar(carregarVeiculos);
     return 'O ${veiculo.nomeCompleto} saiu da frota. O histórico de locações continua guardado.';
   }
 
   Future<String> reativarVeiculo(int idVeiculo) async {
     final veiculo = await SupabaseService.instance.mudarArquivadoVeiculo(idVeiculo, false);
-    await Future.wait([carregarVeiculosArquivados(), carregarVeiculos()]);
+    await atualizarSemFalhar(() => Future.wait([carregarVeiculosArquivados(), carregarVeiculos()]));
     return 'O ${veiculo.nomeCompleto} voltou para a frota como Disponível.';
   }
 
   /// Recarrega a frota (usado depois de uma locação, devolução ou
-  /// manutenção, para mostrar o status novo).
-  Future<void> recarregar() => carregarVeiculos();
+  /// manutenção, para mostrar o status novo). Não mostra erro: já gravou.
+  Future<void> recarregar() => atualizarSemFalhar(carregarVeiculos);
 }

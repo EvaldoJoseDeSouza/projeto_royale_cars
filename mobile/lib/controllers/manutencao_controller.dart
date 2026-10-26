@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/manutencao.dart';
 import '../services/supabase_service.dart';
+import '../utils/atualizar_sem_falhar.dart';
 
 /// Guarda as manutenções (carros na oficina e o histórico) e avisa as
 /// telas quando elas mudam.
@@ -46,7 +47,7 @@ class ManutencaoController extends ChangeNotifier {
       previsao: previsao,
       checklist: checklist,
     );
-    await carregar();
+    await atualizarSemFalhar(carregar);
   }
 
   Future<void> liberar({
@@ -61,6 +62,6 @@ class ManutencaoController extends ChangeNotifier {
       servico: servico,
       custo: custo,
     );
-    await carregar();
+    await atualizarSemFalhar(carregar);
   }
 }
