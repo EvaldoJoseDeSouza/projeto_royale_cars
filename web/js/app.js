@@ -1,9 +1,5 @@
 /* =====================================================================
    ROYALE CARS - JavaScript da interface
-   ---------------------------------------------------------------------
-   Aqui ficam as máscaras e as validações que avisam o usuário na hora.
-   As mesmas regras são conferidas de novo no PHP (includes/validacoes.php)
-   e no banco, porque o JavaScript pode ser desligado pelo usuário.
    ===================================================================== */
 
 (function () {
@@ -56,7 +52,6 @@
         var d = cnh.split('').map(Number);
         var soma, i, resto, dv1, dv2;
 
-        // Versão 1
         soma = 0;
         for (i = 0; i < 9; i++) {
             soma += d[i] * (9 - i);
@@ -82,7 +77,6 @@
             return true;
         }
 
-        // Versão 2 (Detran-PR)
         soma = 0;
         for (i = 0; i < 9; i++) {
             soma += d[i] * (i + 2);
@@ -263,7 +257,6 @@
         });
     });
 
-    // Confirmação de senha
     document.querySelectorAll('[data-confirma]').forEach(function (campo) {
         var original = document.getElementById(campo.dataset.confirma);
 
@@ -287,7 +280,24 @@
 
             if (form.dataset.confirmar && !window.confirm(form.dataset.confirmar)) {
                 evento.preventDefault();
+                return;
             }
+
+            // Clique duplo: não envia o mesmo formulário duas vezes
+            if (form.method.toLowerCase() === 'post') {
+                if (form.dataset.enviando) {
+                    evento.preventDefault();
+                    return;
+                }
+                form.dataset.enviando = '1';
+            }
+        });
+    });
+
+    // Voltou pelo navegador: libera o formulário de novo
+    window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-enviando]').forEach(function (form) {
+            delete form.dataset.enviando;
         });
     });
 
@@ -366,7 +376,6 @@
             });
         });
 
-        // Escolher um modelo marca exatamente as permissões dele
         document.querySelectorAll('[data-aplicar-modelo]').forEach(function (seletor) {
             seletor.addEventListener('change', function () {
                 var lista = modelos[seletor.value];
@@ -429,8 +438,6 @@
 
         atualizarLocacao();
 
-        // Quilometragem de saída: ao escolher o carro, vem a km dele.
-        // Só troca se a pessoa ainda não digitou outra coisa no campo.
         var campoKm = formLocacao.querySelector('#km_saida');
 
         if (campoKm) {
@@ -453,7 +460,6 @@
         }
     }
 
-    // Manutenção: os 4 itens da vistoria só aparecem se "Fiz a vistoria" estiver marcada
     var caixaVistoria = document.getElementById('fez_vistoria');
     var areaVistoria = document.getElementById('area-vistoria');
 
@@ -475,7 +481,6 @@
         var campoKmRetorno = formDevolucao.querySelector('#km_retorno');
         var kmSaida = Number(formDevolucao.dataset.kmSaida || 0);
 
-        // A mesma conta que o banco faz (é só uma prévia: quem grava é o banco)
         var atualizarDevolucao = function () {
             if (!campoDevolucao.value) {
                 return;
